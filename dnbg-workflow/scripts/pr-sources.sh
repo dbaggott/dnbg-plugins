@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# Find every PR that might resolve an issue. Three sources, because each misses
+# something the others catch — and the gaps are not hypothetical: a real pair (a
+# PR closing an issue in one repo, its infrastructure sibling in another) is
+# found by exactly one of the first two.
+#
+#   pr-sources.sh <owner/repo> <issue>
+#
+# Prints the deduped union, one PR per line, then a result line, then exits 0:
+#   <url> relevance=<closes|sibling|mention|unknown> state=<OPEN|MERGED|CLOSED|unknown>
+#   ...
+#   result=OK count=<n> closing=<s> search=<s> timeline=<s>
+#
+# `relevance` says whether a PR is the issue's own work, so a caller acting on the
+# union need not re-derive it:
+#   closes   — it carries a closing reference to the issue, or, based on a
+#              branch other than its repo's default, a closing keyword for it
+#              in its body, which GitHub links only once the PR targets the
+#              default branch;
+#   sibling  — a tagged multi-repo sibling: its title starts with `[<head branch>]`,
+#              the pairing `git-workflow`'s `references/multi-repo.md`
+#              requires, on the branch of a `closes` PR in the set, or on any
+#              branch when no `closes` PR's branch is known;
+#   mention  — neither; it only cites the issue;
+#   unknown  — the PR could not be read, and the closing source did not list it.
+# A PR both closing and tagged reads `closes`.
+#
+# `state` is the PR's own, so a caller filters on it rather than reading each hit
+# again: every source returns PRs long since merged or closed. `unknown` means the
+# PR could not be read, whatever its relevance; treat it as possibly open, since
+# reading it as closed would drop a PR nobody looked at.
+#
+#   result=ERROR reason=bad-args      # nothing was queried
+#   result=ERROR reason=all-sources   # every source failed; the URL list is empty
+#                                     # because nothing could see, not because
+#                                     # nothing is linked
+#
+# Each `<s>` is one of the SAME three values, meaning the same thing for every
+# source — `ok`, `fail` (the request did not come back), or `shape` (it came back
+# and stopped parsing). One vocabulary across all three on purpose: a caller
+# matching a per-source enumeration is one field it has never seen away from
+# reading a dead source as a live one, which is the exact confusion the fields
+# exist to remove.
+#
+# The distinction is worth keeping rather than collapsing to `fail`: a request
+# failure is transient by nature and worth retrying, while a payload that stopped
+# parsing will not start on its own.
+#
+# ⚠️ A PARTIAL FAILURE STILL PRINTS `result=OK`, WITH THE FAILING SOURCE NAMED.
+# Discovery is a union, so one live source is a real (if narrower) answer and
+# suppressing it would be worse than reporting it. The per-source fields are what
+# make "no PRs found" distinguishable from "no PRs found by the sources that
+# worked" — a caller that ignores them and reports an empty set as "nothing links
+# this issue" is making the claim this contract exists to prevent.
+#
+# All three can only find what the author linked. A sibling PR whose body never
+# mentions the issue is invisible to every method here — there is nothing to
+# discover. `git-workflow`'s `references/multi-repo.md` requires that mention
+# for this reason.
+#
+# Runs under your own auth: `GH_TOKEN`, where `as-role.sh` puts a role token,
+# is unset below rather than used. Reads of an issue are the operator's and only writes run as
+# a role, per `reviewer`'s `references/issue-mode.md`.
+set -euo pipefail
+unset GH_TOKEN
+
+REPO="${1:-}"; ISSUE="${2:-}"
+
+if [ -z "$REPO" ] || [ -z "$ISSUE" ] || [ "$#" -gt 2 ] || [ "${REPO%/*}" = "$REPO" ]; then
+  echo "result=ERROR reason=bad-args"
+  exit 0
+fi
+OWNER="${REPO%%/*}"
+
+# 1. Closing references — only PRs carrying a closing keyword. The narrowest
+#    source by construction: `git-workflow`'s multi-repo rule has exactly ONE
+#    sibling close the issue and the rest merely reference it, so this source sees
+#    a fraction of the set.
+closing=ok
+closing_urls=""
+if J=$(gh issue view "$ISSUE" --repo "$REPO" --json closedByPullRequestsReferences 2>/dev/null); then
+  closing_urls=$(echo "$J" | jq -r '(.closedByPullRequestsReferences // [])[] | .url // empty' 2>/dev/null) \
+    || { closing=shape; closing_urls=""; }
+else
+  closing=fail
+fi
+
+# 2. Timeline cross-references — anything that MENTIONS the issue, any repo,
+#    keyword or not. Authoritative, and immediate (no search-index lag).
+#
+#    `--slurp` is load-bearing. `--paginate` alone emits each page as a
+#    SEPARATE top-level JSON array, so the concatenation is not valid JSON and jq
+#    rejects the whole thing the moment an issue exceeds one page — the failure
+#    would arrive only on a busy issue, which is exactly where a cross-reference
+#    is most likely to be waiting. Hence `.[][]`.
+#
+#    And pagination itself is load-bearing. The timeline is ordered OLDEST
+#    FIRST with no sort parameter to invert it, so on an issue past 100 events
+#    every new cross-reference lands on the LAST page.
+#
+#    Fetch and parse are separated so a parse failure is not reported as "no
+#    cross-references" — the fail-closed-and-silent shape this whole file exists
+#    to keep out of prose.
+timeline=ok
+xref_urls=""
+if RAWT=$(gh api "repos/$REPO/issues/$ISSUE/timeline" --paginate --slurp 2>/dev/null); then
+  xref_urls=$(echo "$RAWT" | jq -r '.[][]
+        | select(.event == "cross-referenced")
+        | select(.source.issue.pull_request != null)
+        | .source.issue.html_url' 2>/dev/null) || { timeline=shape; xref_urls=""; }
+else
+  timeline=fail
+fi
+
+# 3. Text search, scoped to the OWNER — catches a sibling before the timeline
+#    event registers, and PRs that reference the issue in prose.
+#
+#    Scoped to `--owner`, never `--repo`. The case this source exists for is a
+#    pair spanning two repos, and `--repo` can only ever return siblings in the
+#    same one — it silently drops the half you most need. Over-inclusion (an
+#    unrelated repo of the same owner mentioning the issue) is the safe
+#    direction; `relevance` below judges it from the PR, so don't narrow the
+#    query.
+search=ok
+search_urls=""
+if RAWS=$(gh search prs --owner "$OWNER" "https://github.com/$REPO/issues/$ISSUE" \
+            --json url --limit 100 2>/dev/null); then
+  search_urls=$(echo "$RAWS" | jq -r '.[] | .url // empty' 2>/dev/null) \
+    || { search=shape; search_urls=""; }
+else
+  search=fail
+fi
+
+if [ "$closing" != ok ] && [ "$timeline" != ok ] && [ "$search" != ok ]; then
+  echo "result=ERROR reason=all-sources"
+  exit 0
+fi
+
+# `sort -u` is OUTSIDE the jq programs above: `gh --jq` applies per page, so a
+# jq-side `unique` would only dedupe within a page. `|| true` because grep exits
+# 1 on no match, which under `set -e` would kill the run on the ordinary empty
+# case.
+urls=$(printf '%s\n%s\n%s\n' "$closing_urls" "$xref_urls" "$search_urls" \
+         | grep -v '^[[:space:]]*$' | sort -u || true)
+
+# One read per PR, rather than trusting the closing source alone: that source can
+# fail while the rest answer, and the PR's own closing references still say
+# whether it closes the issue. Each read yields
+# `<url>\t<closes>\t<head>\t<tagged>\t<state>`, or `<url>\tunread` when the PR
+# could not be read.
+ISSUE_URL="https://github.com/$REPO/issues/$ISSUE"
+# Whether a PR body carries a GitHub closing keyword for the issue, as a full
+# URL, `<owner>/<repo>#<n>`, or `#<n>` from a PR in the issue's own repo.
+# shellcheck disable=SC2016  # jq program
+KEYWORD_JQ='
+  def esc: gsub("(?<c>[.\\-])"; "\\\(.c)");
+  ($issue | capture("^https://github.com/(?<r>[^/]+/[^/]+)/issues/(?<n>[0-9]+)$")) as $i
+  | ($url | capture("^https://github.com/(?<r>[^/]+/[^/]+)/pull/")).r as $pr_repo
+  | ( [ ($issue | esc), (($i.r | esc) + "#" + $i.n) ]
+      + (if ($pr_repo | ascii_downcase) == ($i.r | ascii_downcase) then ["#" + $i.n] else [] end) ) as $refs
+  | (.body // "") | test("\\b(close[sd]?|fix(e[sd])?|resolve[sd]?):?[ \\t]+("
+                          + ($refs | join("|")) + ")(?![0-9A-Za-z/])"; "i")'
+read_pr() {  # <pr-url>
+  local j listed=false line base default
+  printf '%s\n' "$closing_urls" | grep -qxF "$1" && listed=true
+  if j=$(gh pr view "$1" --json title,headRefName,baseRefName,body,closingIssuesReferences,state 2>/dev/null) \
+     && line=$(echo "$j" | jq -r --arg url "$1" --arg issue "$ISSUE_URL" --argjson listed "$listed" '
+          (.headRefName // "") as $h
+          | [ $url,
+              ($listed or any((.closingIssuesReferences // [])[];
+                  (.url // "" | ascii_downcase) == ($issue | ascii_downcase))),
+              $h,
+              ($h != "" and ((.title // "") | startswith("[" + $h + "]"))),
+              (.state // "unknown") ]
+          | map(tostring) | join("\t")' 2>/dev/null); then
+    # A stacked PR's keyword: read the default branch only when it could matter.
+    if [ "$(cut -f2 <<<"$line")" = false ] \
+       && echo "$j" | jq -e --arg url "$1" --arg issue "$ISSUE_URL" "$KEYWORD_JQ" >/dev/null 2>&1; then
+      base=$(echo "$j" | jq -r '.baseRefName // empty')
+      default=$(gh repo view "$(sed -E 's#^https://github.com/([^/]+/[^/]+)/pull/.*#\1#' <<<"$1")" \
+                  --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null || true)
+      if [ -n "$base" ] && [ -n "$default" ] && [ "$base" != "$default" ]; then
+        line=$(awk -F'\t' -v OFS='\t' '{ $2 = "true"; print }' <<<"$line")
+      fi
+    fi
+    printf '%s\n' "$line"
+    return
+  fi
+  if $listed; then printf '%s\ttrue\t\tfalse\tunknown\n' "$1"; else printf '%s\tunread\n' "$1"; fi
+}
+
+# A tag pairs a PR with the issue's closing PR, so a tagged PR whose branch no
+# closing PR shares is another change that cites this issue. With no closing PR
+# whose branch is known, a tag is taken at its word: a sibling can open first.
+if [ -n "$urls" ]; then
+  while IFS= read -r u; do read_pr "$u"; done <<<"$urls" | awk -F'\t' '
+    { url[NR] = $1; closes[NR] = $2; head[NR] = $3; tagged[NR] = $4
+      state[NR] = ($2 == "unread" || $5 == "") ? "unknown" : $5
+      if ($2 == "true" && $3 != "") closer[$3] = 1 }
+    END {
+      for (b in closer) any_closer = 1
+      for (i = 1; i <= NR; i++) {
+        if (closes[i] == "unread")     r = "unknown"
+        else if (closes[i] == "true")  r = "closes"
+        else if (tagged[i] == "true" && (!any_closer || head[i] in closer)) r = "sibling"
+        else                           r = "mention"
+        print url[i] " relevance=" r " state=" state[i]
+      }
+    }'
+fi
+echo "result=OK count=$(printf '%s' "$urls" | grep -c . || true) closing=$closing search=$search timeline=$timeline"

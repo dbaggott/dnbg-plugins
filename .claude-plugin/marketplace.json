@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-marketplace.json",
+  "name": "dnbg",
+  "description": "Opinionated GitHub workflow and coding-practice plugins: worktree + draft PR flow, self-documenting issues, an independent PR reviewer bot, and work summaries.",
+  "owner": {
+    "name": "dbaggott"
+  },
+  "plugins": [
+    {
+      "name": "dnbg-practices",
+      "description": "Coding practices that apply on any host: design and clarity over expediency, security first, comment discipline, logging, and verifying what you don't know. No hooks, no forge.",
+      "source": "./dnbg-practices",
+      "author": {
+        "name": "Dan Baggott",
+        "url": "https://github.com/dbaggott"
+      },
+      "homepage": "https://github.com/dbaggott/dnbg-plugins",
+      "repository": "https://github.com/dbaggott/dnbg-plugins",
+      "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
+      "category": "development",
+      "keywords": [
+        "coding-standards",
+        "code-quality",
+        "security",
+        "code-review"
+      ]
+    },
+    {
+      "name": "dnbg-workflow",
+      "description": "Opinionated GitHub workflow: worktree + draft PR flow, self-documenting issues, and an independent PR reviewer bot.",
+      "source": "./dnbg-workflow",
+      "author": {
+        "name": "Dan Baggott",
+        "url": "https://github.com/dbaggott"
+      },
+      "homepage": "https://github.com/dbaggott/dnbg-plugins",
+      "repository": "https://github.com/dbaggott/dnbg-plugins",
+      "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
+      "category": "workflow",
+      "keywords": [
+        "git",
+        "github",
+        "pull-request",
+        "code-review",
+        "issues",
+        "worktree"
+      ]
+    },
+    {
+      "name": "dnbg-work-summary",
+      "description": "Turn your merged and open GitHub PRs into an audience-shaped recap — shipped work over a window, or what's in flight.",
+      "source": "./dnbg-work-summary",
+      "author": {
+        "name": "Dan Baggott",
+        "url": "https://github.com/dbaggott"
+      },
+      "homepage": "https://github.com/dbaggott/dnbg-plugins",
+      "repository": "https://github.com/dbaggott/dnbg-plugins",
+      "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "github",
+        "pull-request",
+        "reporting",
+        "standup"
+      ]
+    },
+    {
+      "name": "dnbg-agent-summaries",
+      "description": "Keep the summary files agents write (research, design proposals, issue drafts) in one directory with a status field, and sweep the stale ones into an archive. No hooks, no forge.",
+      "source": "./dnbg-agent-summaries",
+      "author": {
+        "name": "Dan Baggott",
+        "url": "https://github.com/dbaggott"
+      },
+      "homepage": "https://github.com/dbaggott/dnbg-plugins",
+      "repository": "https://github.com/dbaggott/dnbg-plugins",
+      "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "notes",
+        "summaries",
+        "archive"
+      ]
+    },
+    {
+      "name": "dnbg-all",
+      "description": "Everything: the workflow plugin, the coding practices, work summaries and agent summary files. Installs the other four.",
+      "source": "./dnbg-all",
+      "author": {
+        "name": "Dan Baggott",
+        "url": "https://github.com/dbaggott"
+      },
+      "homepage": "https://github.com/dbaggott/dnbg-plugins",
+      "repository": "https://github.com/dbaggott/dnbg-plugins",
+      "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
+      "category": "workflow",
+      "keywords": [
+        "github",
+        "workflow",
+        "bundle"
+      ]
+    }
+  ]
+}

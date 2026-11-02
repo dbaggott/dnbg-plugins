@@ -1,0 +1,192 @@
+# Contributing
+
+Thanks for looking. Nothing here is enforced on you — read what is useful and
+ignore the rest.
+
+If you are working with `dnbg-workflow` installed and covered, the skills
+already tell your session how this project works, and the hooks keep it honest.
+This file is for everyone else: what the project wants, and the handful of
+mechanics you cannot guess.
+
+## Whether the gates fire on your fork
+
+Worth knowing so the silence does not mislead you. The two enforcement hooks
+only fire for repos in an operator's `owners` config, and `remote_is_covered()`
+in [`dnbg-workflow/hooks/lib.sh`](dnbg-workflow/hooks/lib.sh) requires both
+`github.com` **and** an owner match. Your fork's owner is you rather than this
+project, so unless you have listed your own login in `owners` the gates are
+inert on it. That is deliberate — the plugin fails open so a fresh install
+blocks nothing — not a sign you have configured something wrong. List yourself
+and the fork is covered like any other repo of yours.
+
+## Scope
+
+This is an opinionated single-maintainer project. Knowing where the line sits
+should save you proposing something that gets declined. Proposals come as
+issues, since outside pull requests aren't merged for now (see "Pull requests"
+below).
+
+**Welcome:** bug reports, proposed fixes, untested branches worth a test,
+portability findings (Windows/Git Bash is expected to work and has never been
+tested), and documentation corrections.
+
+**Likely declined:** softening a gate rather than reporting where it misfires,
+new always-on rules (that file is charged to every session of every user; a
+skill is almost always the right home), and restating an opinion in a second
+place.
+
+**The opinions themselves are open, if you make them configurable.** Swapping one
+default for another is declined — worktree-then-draft-PR, never merging your own
+work, CalVer, fragments-drive-releases are the product rather than incidental
+choices, and someone installed this *for* them. But adding a knob that leaves the
+current behavior as the default is a different proposal, and a welcome one.
+`worktree_path` and `claim_label` are exactly that: opinions that turned out to
+be someone else's to make, so they became `userConfig` keys with the original
+value as the default.
+
+Two things such a change has to carry. The default has to live somewhere that
+*runs* — an unset option substitutes nothing and exports no environment variable,
+so the manifest's `default` field is not a fallback; `dnbg-workflow/hooks/lib.sh`
+is where the existing ones resolve, and `tests/coupling.bats` pins them against
+the manifest. And the skill text has to name the configured value as the default
+rather than a constant, the way `.worktrees/` and `assigned:agent-session`
+already do, so a session reading it knows the literal may not be what applies.
+
+Either way, an issue first is cheaper than a PR. A short issue costs you minutes;
+a declined PR costs you the whole change.
+
+## Filing an issue
+
+Say what happened, where, and what you expected. That is genuinely enough — if
+it needs more, it will be asked for.
+
+Templates exist for the three types and pre-apply the type label; they are a
+convenience, not a form to complete. Delete whatever does not apply, or start
+from a blank issue.
+
+The maintainer applies an `area:*` label. If you know which subsystem it is,
+mention it — `gh label list --repo dbaggott/dnbg-plugins --search area` lists
+the current set.
+
+## Pull requests
+
+Pull requests from outside contributors aren't merged for now. The license can
+be loosened later only while the maintainer is its sole copyright holder, and
+there is no contributor agreement yet. To report a bug or propose a change, open
+an issue.
+
+The rest of this file describes how a change here is made.
+
+For the description, the only thing asked is that it be accurate: say what you
+verified and how, and mention what you could not check. Under-claiming costs
+nothing. The full version is `git-workflow`'s "Writing the PR description", if
+you want it.
+
+Reference issues and PRs by full URL rather than `#19` — it is the only form
+that stays clickable and unambiguous when copied between surfaces.
+
+## Two mechanics you cannot guess
+
+**A change under a plugin directory needs a changelog fragment.** This one is a
+CI gate, and not for the reason you would assume: a plugin's version is Claude
+Code's update cache key, so no fragment means no version bump, which means
+nobody who already installed the plugin ever receives your change. The failure
+is silent and can sit for months. Add
+`changelog.d/<plugin-name>/<short-slug>.md`; see
+[`changelog.d/README.md`](changelog.d/README.md). If you believe your change has
+no user-visible effect, say so in the PR and the `no-changelog` label can be
+applied — you cannot set labels from a fork.
+
+**You can run CI's checks locally.** From the repo root:
+
+```bash
+shellcheck $(find . \( -name '*.sh' -o -name '*.bash' \) -not -path './.git/*')
+scripts/dev/test.sh                         # the bats suite; see below
+jq empty .claude-plugin/marketplace.json
+jq -r '.plugins[].source' .claude-plugin/marketplace.json \
+  | xargs -I{} find {} -name '*.json' | xargs -n1 jq empty
+claude plugin validate . --strict
+actionlint                                  # brew install actionlint
+docs/media/check-render.sh                  # README demos; a hook reword stales one
+```
+
+`scripts/dev/test.sh` runs CI's bats command with a junit report added, passing
+`-j` only when GNU `parallel` is installed. It writes the full TAP output to a
+temporary file and prints the plan line, each failure with its diagnostics, each
+skipped test, any bats warning or error, the ten slowest tests with their files,
+the summed test time and the run's wall time, `report=<path>` naming the report
+with every test's time, `tap=<path>` naming the TAP file, and `status=<n>` last,
+then exits with bats' status. Pass it test files to run only those. The full suite
+takes minutes, so from an agent's Bash tool run it as a background task rather
+than in the foreground. Read the result from its last line, and don't pipe it
+into `tail` or a `not ok` filter, which reports the filter's status instead of
+bats'. A `# bats warning: Executed 0 instead of expected N tests` line means
+nothing ran.
+
+The timing is there for the change that adds a test, not only for a slow day:
+a test that lands near the top of that list is the suite's cost growing, and the
+PR adding it is where that is cheapest to notice. A watch test is a loop of
+synthetic ticks against stubs, and most of its time is the processes each tick
+starts, so fewer ticks, or a stub that does less per call, is usually the fix.
+
+Two of the commands above are narrower than the CI step they stand for, so a
+green run here is good evidence rather than a guarantee. The `jq` lines are only
+the JSON-parse part of the manifest checks, which also compare marketplace and
+manifest descriptions and confirm every version is semver-parseable; and
+`claude plugin validate .` is the root call, where CI additionally runs it over
+each plugin source. Those, and the fragment rule above, are short shell blocks
+in the `lint` job of [`.github/workflows/ci.yml`](.github/workflows/ci.yml) if
+you want to run the rest by hand.
+
+### Evals
+
+None of these runs in CI. Each spends model calls on your own credential, and
+the last two write to a live repository.
+
+- `scripts/dev/prose-ab.sh` answers whether a passage of skill prose is
+  load-bearing: one eval case, two trees differing in the passage, two scores.
+  The seed cases are under `dnbg-workflow/evals/`.
+- `tests/evals/delegated-mode/run.sh` answers whether an author running as a
+  subagent, with no operator to ask, records the question where its dispatcher
+  finds it or decides it silently.
+- `tests/evals/restart/run.sh` answers whether a fresh orchestrator finishes the
+  sweep a killed one left behind.
+- `tests/evals/set-review/create.sh` files a deliberately incomplete
+  decomposition for `issue-reviewer` to review by hand, and the review's round
+  comments are the result.
+
+#### A testbed
+
+The live repository is your **testbed**, named by `DNBG_TESTBED_REPO`. The two
+evals that write to one stop before writing anything when it is unset. The
+same repo takes any other live run: dogfooding a watcher, reviewer or
+orchestrator, or a run recorded to meet an acceptance criterion. A testbed is:
+
+- a private repo you own and can delete freely;
+- protected on its default branch: a pull request with **one approving
+  review**, stale reviews dismissed, conversations resolved, and one required
+  status check from a minimal CI workflow of its own: a check a run can fail or
+  hold on purpose, required with `strict` so a PR can fall behind its base;
+- open to admin pushes on the default branch, so a capture can move the base
+  under an open PR;
+- squash-only, with auto-merge allowed and branches deleted on merge;
+- installed with the role Apps from `reviewer-setup` (author and reviewer);
+- exported as `DNBG_TESTBED_REPO=<owner>/<repo>` in your environment.
+
+A run closes what it opens. The testbed is shared across runs, so an issue or
+PR one run leaves open changes what the next one sees.
+`tests/evals/set-review/create.sh` prints what it filed so it can be closed.
+
+## More
+
+[`README.md`](README.md) covers what the plugins are and what they do to a
+session; [`docs/maintainers.md`](docs/maintainers.md) covers repo layout, where
+new content goes, and what a fork inherits from CI, and
+[`docs/releases.md`](docs/releases.md) covers versioning.
+[`SECURITY.md`](SECURITY.md) covers reporting a vulnerability. The skills under
+`dnbg-workflow/skills/` are the philosophy in full — they are the product, so
+this file points at them rather than summarizing them.
+
+The plugins are licensed as [LICENSE](LICENSE) says. Outside contributions
+aren't merged until a contributor agreement lets the maintainer relicense them,
+so that the license can be loosened later.

@@ -1,0 +1,305 @@
+#!/usr/bin/env bash
+# Shared helpers for the enforcement hooks. Sourced, never executed.
+#
+# Both blocking hooks answer the same question — "is this repo one the operator
+# asked me to enforce on?" — from two different inputs (a git remote, a `gh
+# --repo` argument), so the owner match lives here rather than in each script.
+
+# The layered strips below are fragile. If another fix is needed, stop patching
+# and parse the URL once into (scheme, user, host, port, path), then answer both
+# questions from the parts.
+#
+# Owner segment of a git remote URL. Handles the forms git emits:
+#   git@github.com:owner/repo.git
+#   https://github.com/owner/repo.git
+#   ssh://git@github.com/owner/repo.git
+#   ssh://git@github.com:22/owner/repo.git   (explicit port)
+#
+# The optional `(:[0-9]+)?` is what makes the port form work. Without it the
+# host strip consumes `github.com:` and leaves `22/owner/repo`, so the port
+# becomes the owner — a legitimately covered repo then reads as uncovered and
+# silently loses its gate. Restricted to digits so it cannot eat the `owner`
+# in the scp-style `github.com:owner/repo`, where the same colon separates a
+# host from a path rather than from a port.
+owner_from_remote() {
+  printf '%s\n' "${1:-}" \
+    | sed -E 's#\.git$##; s#^[a-zA-Z+]+://##; s#^[^/@]+@##; s#^[^/:]+(:[0-9]+)?[:/]##; s#/.*$##'
+}
+
+# Host segment of the same URL. Everything before the first `:` or `/` once the
+# scheme and any `user@` are gone; empty for a local path, which has no host and
+# is therefore never covered.
+#
+# Lowercased, because hostnames are case-insensitive by DNS and git stores a
+# remote URL exactly as it was typed — it never normalises the host. Without
+# this, a perfectly ordinary `git@GitHub.com:owner/repo.git` fails the
+# `github.com` comparison below and the gate silently does not fire on a repo
+# the operator explicitly listed. Normalising here rather than at the comparison
+# keeps it true for any future caller.
+host_from_remote() {
+  printf '%s\n' "${1:-}" \
+    | sed -E 's#^[a-zA-Z+]+://##; s#^[^/@]+@##; s#[:/].*$##' \
+    | tr '[:upper:]' '[:lower:]'
+}
+
+# Owner segment of a `gh --repo` argument, which is either `owner/repo` or a
+# full URL. Kept separate from owner_from_remote: `owner/repo` has no host to
+# strip, so the remote parser would strip the owner itself.
+owner_from_repo_spec() {
+  printf '%s\n' "${1:-}" \
+    | sed -E 's#^[a-z+]+://[^/]+/##; s#^github\.com/##; s#/.*$##'
+}
+
+# Is this owner in the operator's configured list? The list comes from the
+# plugin's `owners` userConfig, which Claude Code exports to hook processes as
+# CLAUDE_PLUGIN_OPTION_OWNERS.
+#
+# An unset or empty list means no repo is covered, so a fresh install blocks
+# nothing until the operator opts in. Failing open is the right default for a
+# hook that can halt an edit: someone who installed this for the skills should
+# not discover the config field by having their work blocked.
+# Matching is case-insensitive (GitHub logins are) and whitespace around the
+# commas is ignored. Comparing comma-wrapped strings rather than splitting the
+# list keeps this correct under any shell — unquoted word splitting is a bash
+# behavior zsh does not share, and a sourced helper should not depend on it.
+# GitHub logins contain no commas or whitespace, so stripping both is safe.
+owner_is_covered() {
+  local owner list
+  owner=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+  list=$(printf '%s' "${CLAUDE_PLUGIN_OPTION_OWNERS:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+  [ -n "$owner" ] && [ -n "$list" ] || return 1
+
+  case ",${list}," in
+    *",${owner},"*) return 0 ;;
+  esac
+  return 1
+}
+
+# Is this remote a repo the operator asked to enforce on? Both the host and the
+# owner have to match, and this exists so that no *remote* is judged on its owner
+# alone — a `git remote get-url` result has a host, so the host is always part of
+# the question.
+#
+# `gh --repo` arguments are the deliberate exception and still go through
+# `owner_is_covered` directly: `owner/repo` carries no host, and `gh` is GitHub
+# by definition, so there is nothing to check.
+#
+# The host check is not pedantry. Without it the owner parser happily reports
+# `acme-corp` for `gitlab.com/acme-corp/api`, so listing a GitHub org silently
+# gates a same-named org on another host — where the hooks would block edits
+# while every skill instructs the agent to run `gh` commands that cannot work
+# there. A half-working state is worse than either extreme.
+#
+# GitHub Enterprise (`github.mycorp.com`) is deliberately *not* covered. That is
+# the safe direction to be wrong in — under-enforcing rather than mis-enforcing —
+# and the skills' `gh` usage has never been audited against Enterprise anyway.
+remote_is_covered() {
+  [ "$(host_from_remote "${1:-}")" = "github.com" ] || return 1
+  owner_is_covered "$(owner_from_remote "${1:-}")"
+}
+
+# --- the mechanical opinions --------------------------------------------------
+#
+# Three userConfig knobs move where worktrees live, what the claim label is
+# called, and where retrospectives are written. All three resolve here, so the
+# gate that prints a path and the session-start note that announces one can
+# never disagree about what this session is using.
+#
+# The manifest's `default` field does not supply these, and the reference's
+# one-line gloss for it ("Value used when the user provides nothing") reads as if
+# it does. It applies when the user clears a field in the configuration dialog —
+# not when the option was never configured at all. An option nobody has touched
+# substitutes nothing into skill content and exports no
+# CLAUDE_PLUGIN_OPTION_<KEY> to a hook, both verified against v2.1.226. That is
+# the state of every existing install the moment a key is added to the manifest,
+# and of every fresh install whose owner never opens the dialog, so it is the
+# common case rather than the edge one. The defaults therefore have to live
+# somewhere that runs; they live here. tests/coupling.bats pins them against the
+# manifest so the value the dialog offers and the value an unconfigured session
+# actually gets cannot drift apart.
+DEFAULT_WORKTREE_PATH='.worktrees'
+DEFAULT_CLAIM_LABEL='assigned:agent-session'
+# Literal `~`s: they are printed to an agent, which expands them when it writes.
+# shellcheck disable=SC2088
+DEFAULT_RETROSPECTIVE_DIR='~/.claude/dnbg-retrospectives'
+# shellcheck disable=SC2088
+DEFAULT_FINDINGS_DIR='~/.claude/dnbg-findings'
+
+# The namespace every claim label has to sit in. `issue-workflow`'s in-progress
+# check matches this prefix rather than an enumerated list, deliberately, so that
+# any claimant — another agent, a bot, a teammate's tooling — is seen without
+# this plugin knowing about it. A label outside the namespace breaks that in both
+# directions at once: this plugin's claims stop being visible to other tools, and
+# theirs stop being visible here. Both failures are silent, and what they produce
+# is two workers on one issue — the exact collision the label exists to prevent.
+CLAIM_LABEL_NAMESPACE='assigned:'
+
+# Why a configured worktree path cannot be used, as a sentence fragment that
+# completes "…is unusable: %s." Empty output means it is usable.
+#
+# Two failure modes, one rule. The first three arms are about *where* the path
+# points: repo-relative only, because an absolute path — or a `~` one, which is
+# absolute in the only sense that matters here — puts worktrees where
+# `.gitignore` cannot cover them and where `git-workflow`'s cleanup steps stop
+# resolving, and a `..` segment escapes the same way while looking relative.
+#
+# The last two are about what the path *renders into*. The value is interpolated
+# into `check-worktree.sh`'s block message and into the session-start note, both
+# of which an agent reads and retypes as a shell command, so a value that renders
+# an instruction nobody can run fails in exactly the way the arms above do. A
+# leading `-` makes git read the path as an option; anything outside the
+# character set turns one argument into two (`my wt`) or, with a `;` or a `$(`,
+# into a different command entirely. Quoting the heredoc would repair the block
+# message alone and leave the note and the skills' prose still broken, so the
+# rejection belongs here at the source rather than at one of the render sites.
+worktree_path_rejection() {  # <configured-value>
+  # SC2088 reads a quoted `~` as a tilde that failed to expand. Here it is a
+  # `case` pattern matching the literal character the operator typed, which is
+  # the only thing git would see either — so not expanding it is the point.
+  # shellcheck disable=SC2088
+  case "${1:-}" in
+    /*) printf 'it is an absolute path' ;;
+    '~' | '~/'*) printf 'it is a home-relative path' ;;
+    '..' | '../'* | *'/..' | *'/../'*) printf "it contains a \`..\` segment that escapes the repo" ;;
+    -*) printf 'it starts with a dash, which git reads as an option rather than a path' ;;
+    *) path_charset_rejection "$1" ;;
+  esac
+}
+
+# The character rule both configured paths share: they are rendered into text
+# an agent retypes as a shell command.
+path_charset_rejection() {  # <path>
+  case "${1:-}" in
+    # POSIX classes rather than `A-Za-z0-9` ranges: range endpoints are
+    # collation-dependent, which tests/watch-pr.bats already has a case for
+    # elsewhere in this repo.
+    *[![:alnum:]._/-]*)
+      printf "it contains a character outside letters, digits and \`.\` \`_\` \`-\` \`/\`" ;;
+  esac
+}
+
+# Why a configured claim label cannot be used, same contract as above.
+#
+# The bare-namespace case is checked first because `case` takes the first match
+# and `assigned:` matches the prefix pattern below it. A label of exactly
+# `assigned:` passes a naive prefix test while naming no claimant at all.
+claim_label_rejection() {  # <configured-value>
+  case "${1:-}" in
+    "$CLAIM_LABEL_NAMESPACE")
+      printf "it is the bare \`%s\` namespace with nothing after the colon" "$CLAIM_LABEL_NAMESPACE" ;;
+    "$CLAIM_LABEL_NAMESPACE"*) ;;
+    *) printf "it is outside the \`%s\` namespace" "$CLAIM_LABEL_NAMESPACE" ;;
+  esac
+}
+
+# Why a configured directory outside every repo — the retrospective root or the
+# findings root — cannot be used, same contract as above.
+#
+# Unlike a worktree root these live outside every repo, so each has to name a
+# place on its own: absolute, or under `~/`. A relative path would land in
+# whichever checkout the writing agent stands in. The character rule is the
+# worktree one, for the same reason — the value is rendered into the
+# session-start note, and an agent retypes it into `mkdir -p`.
+outside_repo_dir_rejection() {  # <configured-value>
+  # Judged as resolve_outside_repo_dir will use it, so `~//` is rejected here
+  # rather than passing and then silently falling back there.
+  local value="${1:-}"
+  while [ "${value%/}" != "$value" ]; do value="${value%/}"; done
+  # The literal `~` the operator typed, as in worktree_path_rejection.
+  # shellcheck disable=SC2088
+  case "$value" in
+    /?* | '~/'?*) ;;
+    *) printf "it is neither an absolute path nor one under \`~/\`"; return ;;
+  esac
+  path_charset_rejection "${value#\~}"
+}
+
+# The worktree root this session uses: the configured value when it is set and
+# usable, the default otherwise. A rejected value falls back rather than failing
+# the hook — `inject-rules.sh` is where the operator is told why, once per
+# session, and a gate that blocked every edit over a bad config would punish the
+# wrong thing.
+#
+# Trailing slashes are stripped so every caller can join with a single `/`, and
+# so that `.worktrees` and `.worktrees/` are not two different configurations.
+# Stripping before the emptiness test is what keeps a value of `/` (which strips
+# to nothing) from resolving to an empty root that would silently mean the repo
+# itself.
+resolve_worktree_path() {
+  local value="${CLAUDE_PLUGIN_OPTION_WORKTREE_PATH:-}"
+  while [ "${value%/}" != "$value" ]; do value="${value%/}"; done
+  if [ -n "$value" ] && [ -z "$(worktree_path_rejection "$value")" ]; then
+    printf '%s' "$value"
+  else
+    printf '%s' "$DEFAULT_WORKTREE_PATH"
+  fi
+}
+
+# The claim label this session uses. Same fallback contract as above.
+resolve_claim_label() {
+  local value="${CLAUDE_PLUGIN_OPTION_CLAIM_LABEL:-}"
+  if [ -n "$value" ] && [ -z "$(claim_label_rejection "$value")" ]; then
+    printf '%s' "$value"
+  else
+    printf '%s' "$DEFAULT_CLAIM_LABEL"
+  fi
+}
+
+# A directory outside every repo, as this session uses it: the configured value
+# when it is set and usable, the default otherwise. Same fallback contract and the
+# same trailing-slash stripping as the worktree root; files go in
+# `<root>/<owner>/<repo>/`, which the skills append.
+resolve_outside_repo_dir() {  # <configured-value> <default>
+  local value="${1:-}"
+  while [ "${value%/}" != "$value" ]; do value="${value%/}"; done
+  if [ -n "$value" ] && [ -z "$(outside_repo_dir_rejection "$value")" ]; then
+    printf '%s' "$value"
+  else
+    printf '%s' "$2"
+  fi
+}
+
+resolve_retrospective_dir() {
+  resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_RETROSPECTIVE_DIR:-}" "$DEFAULT_RETROSPECTIVE_DIR"
+}
+
+resolve_findings_dir() {
+  resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_FINDINGS_DIR:-}" "$DEFAULT_FINDINGS_DIR"
+}
+
+# Has the operator asked for the version stamp?
+#
+# Unlike the knobs above this is a gate rather than a value, so it matches
+# the *affirmative* and everything else — unset, empty, `false`, a typo — leaves
+# the stamp off. The stamp lands on PR descriptions, review bodies and issue
+# comments that other people read, so a value this hook cannot make sense of has
+# to fail toward publishing nothing rather than toward publishing under
+# someone's name unasked.
+#
+# Only the one word matches: a `boolean` option reaches a hook as `true` or
+# `false`, since Claude Code stringifies the JSON value. Casing is not pinned by
+# anything that would fail visibly, hence the glob.
+#
+# `case` rather than `tr`, because this runs on the session-start path — `tr` is
+# not among the binaries the hooks may assume, and one that went missing here
+# would take the always-on rules down along with the stamp.
+version_stamp_enabled() {
+  case "${CLAUDE_PLUGIN_OPTION_VERSION_STAMP:-}" in
+    [Tt][Rr][Uu][Ee]) return 0 ;;
+  esac
+  return 1
+}
+
+# Has the operator asked for retrospective files?
+#
+# The same gate shape as the stamp's, for a sibling reason: on, every close-out
+# writes a file under the operator's home directory, which only the maintainer
+# of these prompts has a use for. A value this hook cannot read fails toward
+# writing nothing, and the skills, which state `off` literally, then surface the
+# friction in the report instead.
+retrospectives_enabled() {
+  case "${CLAUDE_PLUGIN_OPTION_RETROSPECTIVES:-}" in
+    [Tt][Rr][Uu][Ee]) return 0 ;;
+  esac
+  return 1
+}

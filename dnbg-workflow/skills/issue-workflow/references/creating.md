@@ -1,0 +1,148 @@
+# Issue workflow: creating an issue
+
+Part of the `issue-workflow` skill. Read this when filing or updating an issue;
+`SKILL.md` carries the host check, the reference conventions, and the
+maintenance sweep — all of which apply either way; `references/claiming.md`
+and `references/resolving.md` cover picking an issue up.
+
+## Creating issues
+
+An issue is a handoff: the session that creates it has rich context (the conversation, the code just read, the direction just agreed), and the session that resolves it has only the issue body. Whoever resolves it — a fresh interactive session, an automated agent, a human — reads that body cold. The failure modes this skill exists to prevent:
+
+- **Wasted research.** An issue body full of unlabeled cross-references forces the resolver to either follow every link (burning context budget before any code changes) or skip them (and maybe miss the one that mattered).
+- **Wrong implementation path.** An issue that was perfectly clear *in the context of its creation* reads as open-ended to a cold resolver, who then picks a different approach than the one everyone had in mind. The resolution should not depend on which agent happens to pick the issue up.
+- **Rotted handoff.** The body was accurate at creation, then the world changed — part of the work shipped, a referenced PR closed, new evidence landed in a comment — and a cold resolver faithfully implements stale truth.
+
+Issues must be **self-documenting** — a cold reader should understand the problem, the intended direction, and what "done" looks like without clicking through to other issues, PRs, or docs.
+
+A **tracking issue** — a body that is a project's design, parent of the issues implementing it — has its own shape and IDs: `references/tracking-issue.md`. Turning an accepted one into its children is `references/decomposing.md`.
+
+### Capture the direction, not just the problem
+
+The single highest-value section. At creation time there is almost always a clear solution or direction in the surrounding context — a conversation, a review comment, code just explored. That context dies with the session; the issue body is the only carrier.
+
+- **If a direction exists, a "Proposed approach" section is mandatory.** State the approach, the specific files/functions/modules involved, and any alternatives that were considered and rejected (with the reason — the rejection rationale is what stops the resolver from rediscovering the dead end).
+- **Anchors are verified, not recalled.** Every file path, function name, schema field, or external identifier named in the body is checked against the current tree (or the external source) before filing — and the body says so ("Verified present at `src/auth.ts:40`"). One wrong anchor costs more than none: the resolver loses trust in the whole body and falls back to re-researching everything, the exact failure this skill exists to prevent.
+- **If the direction is mostly set but real unknowns remain, add an "Open questions / decisions for the implementer" section.** Frame each as a decision with a default — "X or Y — default X because Z" — never as an open musing. This is the common shape (90% directed, two or three bounded unknowns); it is not the same as open-ended, and without the default form the resolver stalls or silently picks.
+- **If the issue is genuinely open-ended, say so explicitly** — e.g. "No preferred approach; evaluate X vs Y and pick." That tells the resolver the open-endedness is intentional, not an omission, and licenses the design exploration.
+- **Acceptance criteria and known constraints belong inline.** "See the linked PR for the design" is not enough — paste the relevant parts.
+- **Every acceptance criterion must be runnable at the end of *this* issue.** Litmus: "can this be checked against the merge commit of this issue alone?" A criterion needing a route, schema, or operation that another issue introduces is unrunnable here, and becomes either a test nobody can write or a checkbox ticked by inspection. Move it to the issue that supplies the missing piece, and leave a pointer so the coverage doesn't read as dropped. The corollary, for an invariant two issues share: **assert it in whichever issue introduces the operation that could break it**, not in the one that states it. Writing it into the issue that *owns* the invariant reads as thorough and is exactly the trap — that issue usually can't run it, so the guard ships untested in the issue carrying the actual risk.
+- **A criterion met by a recorded run names what invalidates the run.** An eval or a live exercise is met by a run recorded on the PR, and "at the merge commit" leaves every later commit asking whether to run it again. Name the paths whose change can void it and, in a sentence, the behavior the run proves: "one passing run of the `<x>` eval, recorded on the PR, proving the stop, one feedback round, and the resumption; re-run after a change under `tests/evals/<x>/` or the skills it loads, unless the PR's record shows the change leaves that behavior as it was". A commit touching none of the paths leaves the run standing, and so does one under them that the author's record on the PR shows leaves the named behavior as it was (`references/resolving.md`). Where the clause names paths alone, any change under them voids the run.
+
+### Is this one issue or a project?
+
+Before writing the body, check whether the direction is a project, which
+belongs in a tracking issue. First state the direction's acceptance criterion
+in one sentence: what is true once all of it has landed. Apply the tests to
+that sentence and the whole direction it states, not to the pieces the
+direction has already been cut into, since each piece can pass the per-issue
+test on its own. It is a project when any of these holds:
+
+- it needs more than one PR to land, PRs that depend on each other or on shared
+  decisions, by your reading of the proposed approach;
+- it has decisions a second issue would cite, so they need stable IDs;
+- it has an acceptance criterion no single PR can run (the per-issue test above).
+
+Issues that share only a topic are not a project, however many issues or PRs
+they take: their sentence is each one's own criterion joined by "and". Issues
+whose shared goal's criterion needs more than one of their PRs together are a
+project by the third test, even when each PR merges on its own. The tracking
+issue buys a review, in `reviewer`'s issue mode, of all its children's PRs
+against the goal's criteria, and, under `orchestrate`, a close-out that runs the
+goal's criterion once. A child of a tracking issue is already in its project, so the
+check does not apply to it.
+
+When a test fires, ask with `AskUserQuestion`: "This looks like a project rather
+than one issue, because <the tests that fired>. File it as a tracking issue?",
+with two options:
+
+1. **"Tracking issue (Recommended)"**: write the body per
+   `references/tracking-issue.md`, then hand it to its spec reviewer per
+   `references/spec-review-rounds.md`, "Handing the issue to its reviewer".
+2. **"Plain issue(s)"**: file as asked.
+
+Without `AskUserQuestion`, follow `references/delegated.md`; with neither an
+issue nor a PR to post on, take the recommended option and say so in the
+report.
+
+### Declare an operator check before review
+
+When the proposed approach changes anything a person sees or interacts with when
+it runs (pages, components, templates, styles, terminal screens), ask the operator
+with `AskUserQuestion` whether they want to look at the work before it is
+reviewed, with two options: **"Add the check"** and **"No check"**. When unsure
+whether the approach does, ask; the cost is one picker. Without
+`AskUserQuestion`, take the default, no check, and say so in the report: the
+operator adds the section, or asks for the check when dispatching, when they
+want the look.
+
+On "Add the check", the body gets a section of its own, outside the acceptance
+criteria:
+
+```markdown
+## Operator check before review
+
+<the recipe for bringing the work up, run from the worktree: the command, the
+project skill, or the port; and what to look at>
+```
+
+The resolver stops there once the work is complete, before its self-review
+(`<skill-dir>/../git-workflow/references/operator-check.md`), and the operator's
+feedback goes back to it until they say proceed. The section is a declaration,
+not an acceptance criterion: the reviewer grades nothing in it (`reviewer`'s
+`references/issue-mode.md`). The recipe's command is an anchor, verified before
+filing like any other.
+
+### Declare operator steps
+
+When the work needs something only the operator can do, such as a browser
+flow, installing an App or providing a credential, the body names each step in
+a section of its own, outside the acceptance criteria:
+
+```markdown
+## Operator steps
+
+- <the step>: <when the work needs it, such as before the first live run>
+```
+
+`orchestrate` asks the operator about them before the resolver reaches them.
+Like the operator check, the section is a declaration, not an acceptance
+criterion: the reviewer grades nothing in it.
+
+### Inline summary over links
+
+- If the relevant content is a schema, a reviewer's specific concern, or a short code excerpt, **paste it into the issue body** and cite the source URL beneath it — don't rely on the reader clicking through.
+- Include a link only when the linked content is genuinely irreducible (a long proposal doc, a non-trivial PR diff, audit logs). Even then, summarize its key conclusions inline; the link is supplementary.
+- Don't link to recently-merged PRs as a substitute for describing what changed. The resolver shouldn't need to read a diff to understand the issue's context.
+- **Carry conclusions, not the investigation story.** "Inline over links" means each conclusion plus its minimal supporting fact ("Evidence: the retry path drops the dedup key — see `queue.go:112`"), not the session narrative that produced it. The resolver needs what's true and why it matters, not how it was discovered.
+- **Don't argue for the issue's own shape.** Why this is one issue and not three, why it isn't a duplicate — the reader already holds the scoped artifact, so none of it changes what they do. Where such an argument carries a real constraint ("X cannot land before Y"), keep the constraint and attach it to the thing it constrains.
+
+The asymmetry: writing a self-documenting issue costs the creator a few extra minutes once; an issue that requires N link-traversals costs *every* future reader the same N traversals.
+
+### Label every cross-reference
+
+Cross-references go in one of two explicitly-titled groups:
+
+- **Required reading** — the resolver must read these before starting. Keep this list ruthlessly short; every entry is a context-budget tax on the resolver.
+- **Related (optional)** — background only. Add the literal instruction "do not read unless blocked" so a resolver under the link-following discipline (`references/resolving.md`) knows these are skippable.
+
+An unlabeled reference defaults to looking load-bearing, so the resolver pays for it either way — label or omit.
+
+All references use full GitHub URLs (see "Referencing issues and PRs" in `SKILL.md`).
+
+### Write state-independent references
+
+When the body's truth depends on another issue/PR's future state, phrase it as a conditional that holds in **every** state — "while X exists", "any run without a registration row" — rather than a snapshot of the current state — "until X lands", "once X merges". A snapshot owes a maintenance sweep when the world changes (and the sweep is owed even if the issue is never touched again, which the touch-triggered model in "Maintaining issues" (`SKILL.md`) can't cover); a conditional never does.
+
+Same discipline for case lists: state the **contract** ("the fallback covers any request with no session row") and mark any enumeration as illustrative ("the cases below are illustrations, not an enumeration to maintain") — so membership changes elsewhere can't stale the body.
+
+Litmus test before filing: for each cross-reference, ask "if the referenced thing resolves first, does this body need editing?" If yes, rephrase until the answer is no.
+
+### Label the issue
+
+Every issue gets labels, per `references/labeling.md`.
+
+### File it
+
+Filing it, the spec review offered once it is filed, and reporting a gap
+upstream are in `references/filing.md`.

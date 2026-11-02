@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "dnbg-all",
+  "description": "Everything: the workflow plugin, the coding practices, work summaries and agent summary files. Installs the other four.",
+  "version": "2026.10.1",
+  "author": {
+    "name": "Dan Baggott",
+    "url": "https://github.com/dbaggott"
+  },
+  "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
+  "homepage": "https://github.com/dbaggott/dnbg-plugins",
+  "repository": "https://github.com/dbaggott/dnbg-plugins",
+  "dependencies": [
+    "dnbg-practices",
+    "dnbg-workflow",
+    "dnbg-work-summary",
+    "dnbg-agent-summaries"
+  ]
+}

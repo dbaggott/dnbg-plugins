@@ -1,0 +1,517 @@
+#!/usr/bin/env bash
+# Shared polling primitives for the watchers in this directory. Sourced, never
+# executed — `watch-pr.sh` and `watch-issue.sh` both `.` this file.
+#
+# Two things live here because both watchers need them and neither can own them:
+# the poll-interval curve, and the awake clock.
+#
+# ## The awake clock
+#
+# Every duration here — the curve's position and the window — is measured in
+# laptop-open seconds, not wall-clock. A watch that spent the night suspended has
+# not been watching, and charging it for that time is wrong in both directions:
+# it retires the window without the watch ever having looked, and it comes back
+# at the 5-minute cap at exactly the moment the operator has returned and is
+# about to act. `poll_nap` detects a suspend as overshoot on its own sleep and
+# banks it in `_poll_suspended`, which every elapsed calculation subtracts.
+#
+# The clock is read once and then answered from: `poll_init`, `poll_tick` and
+# `poll_nap`'s own reads around each sleep set `_poll_now`, and every elapsed or
+# epoch-seconds question here answers as of the last of those reads without
+# running `date` (the ISO stamps still read the clock). A caller that lets time
+# pass outside a nap calls `poll_tick` before asking.
+#
+# ## The curve
+#
+# A watch is most valuable early. A PR merges, a review lands, or a PR shows up
+# for review usually within minutes, and nearly always inside the first hour or
+# so; after that the odds flatten and a fast poll stops buying anything. So the
+# interval is a piecewise-linear function of how long the watch has been quiet,
+# given as breakpoints rather than as a state machine:
+#
+#   POLL_CURVE="<awake-seconds>:<interval-seconds> ..."
+#
+# Between breakpoints the interval is linearly interpolated; past the last one it
+# is flat. The default, and what each breakpoint is buying:
+#
+#   0s     -> 10s    the first minutes, where most events land
+#   30m    -> 30s
+#   1h30m  -> 60s    a minute or better across the whole likely window
+#   2h+    -> 300s   the cap — nobody waits more than 5 minutes for a wake
+#
+# Expressing it as a pure function of elapsed time (`poll_interval_at`) is what
+# makes it testable without running a watch: there is no accumulated per-tick
+# state to seed, and retuning is a one-line diff rather than a re-derivation.
+# `tests/lib-poll.bats` pins both the breakpoints and the two properties that
+# outlive any particular shape — never slower than 60s inside the first 90
+# minutes, never slower than the cap ever.
+#
+# ## The heartbeat
+#
+# A watch writes nothing to stdout until its result, so the task output of a
+# healthy watch mid-wait looks exactly like that of a killed one. `poll_nap`
+# therefore prints `alive at=<iso> awake=<n>s` every HEARTBEAT awake seconds,
+# and those lines are the only stdout before the result. The beat is on its
+# own clock, not once per tick, because the curve backs off to its slowest
+# exactly where a long wait most needs evidence of life.
+#
+# It is printed by the poll loop itself, never by a background helper: a helper
+# would outlive a killed watch and keep reporting it alive.
+
+# INTERVAL pins the curve flat at one value. Kept as its own knob because a test
+# wants a fixed rate, and writing `POLL_CURVE=0:1` in every test would couple
+# each of them to the curve's syntax for no benefit.
+# `-` not `:-` on purpose: an explicitly empty POLL_CURVE is a caller bug, and
+# quietly serving the default would hide it for the life of the watch.
+POLL_CURVE=${POLL_CURVE-"0:10 1800:30 5400:60 7200:300"}
+[ -n "${INTERVAL:-}" ] && POLL_CURVE="0:${INTERVAL}"
+
+# Consecutive failed ticks of one source before a watch declares itself broken.
+# Counted in TICKS, not elapsed time: ticks are elastic, so an elapsed threshold
+# alone would mean something different at the floor than at the cap.
+FAIL_MAX=${FAIL_MAX:-10}
+
+# ...but ticks alone are not enough either, because a failure resets the curve to
+# the floor. Ten ticks at a 10s floor is 100 seconds, so a two-minute wifi hiccup
+# would end a six-hour watch and report it as broken.
+#
+# That is not hypothetical: waking from suspend also resets to the floor, so
+# lid-open-and-reconnect is precisely a fast blind streak. A watch must ride that
+# out. Both conditions have to hold — enough ticks AND enough awake time — before
+# a transient source is called broken.
+FAIL_MIN_SECONDS=${FAIL_MIN_SECONDS:-180}
+
+# For sources whose failures are transient by nature (a network call). A shape
+# break is NOT one of these: the payload will not start parsing on its own, so
+# waiting three minutes to say so only delays the report. Those keep the plain
+# FAIL_MAX check at their call site.
+poll_broken() {   # $1 = consecutive failures, $2 = awake seconds when the streak began
+  [ "$1" -ge "$FAIL_MAX" ] || return 1
+  [ $(( $(poll_awake) - $2 )) -ge "$FAIL_MIN_SECONDS" ]
+}
+
+# How long a watch runs before reporting that nothing happened. Awake seconds —
+# see the header. Callers differ on what a timeout *means* (routine for the
+# reviewer's watch, a problem for the author's), so only the number lives here.
+WINDOW=${WINDOW:-21600}
+
+# How long one run may last, in WALL-CLOCK seconds, whatever WINDOW says. An
+# unattended Claude Code session (`-p`, the Agent SDK, CI, cloud) stops a
+# background command at its Bash `timeout` (7200 s at most), and a watch stopped
+# that way prints no result line. So a window longer than this is served as
+# several runs: the run that reaches the ceiling reports IDLE with
+# `window_left=`, and its re-arm line carries the remainder as WINDOW_LEFT. The
+# skills spawn every watch with the 7200 s maximum, and the gap to this ceiling
+# is room for a burst seen just before it to settle; tests/coupling.bats pins
+# the two together. Wall-clock rather than awake time because the harness's
+# deadline is not ours to see, and wall time is never less than awake time.
+#
+# An attended session (terminal, desktop app, VS Code) puts no time limit on
+# background commands, so there the ceiling is off and one run serves the whole
+# window, where a split would only cost the agent a wake to re-arm. Source:
+# "Time limit for background commands" in
+# https://code.claude.com/docs/en/tools-reference, which says the limit has
+# applied only to unattended sessions since v2.1.288. The variable this keys
+# on, CLAUDE_CODE_SESSION_ATTENDED=1, is not documented
+# (https://code.claude.com/docs/en/env-vars does not list it), so a release
+# that drops or renames it falls back to the ceiling, costing only the saving.
+# A WINDOW_CEILING the caller gives always wins, so whether one was given is
+# read before the default line fills it in; an empty one counts as not given,
+# as it does for that line.
+_poll_ceiling_given=${WINDOW_CEILING:+x}
+WINDOW_CEILING=${WINDOW_CEILING:-6300}
+_poll_ceiling_off=
+if [ -z "$_poll_ceiling_given" ] && [ "${CLAUDE_CODE_SESSION_ATTENDED:-}" = 1 ]; then
+  _poll_ceiling_off=1
+fi
+
+# How much of WINDOW this run still owes. Unset on a first arm; a run cut short
+# by the ceiling hands the remainder to the next one through its re-arm line.
+WINDOW_LEFT=${WINDOW_LEFT:-$WINDOW}
+
+# Seconds between heartbeat lines — see the header.
+HEARTBEAT=${HEARTBEAT:-60}
+
+# A nap that overshoots by more than this is read as a machine suspend rather
+# than a busy scheduler. Generous on purpose: over-counting a loaded machine's
+# late wake as suspend costs a few seconds of clock, while under-counting a real
+# suspend costs the whole window.
+POLL_SUSPEND_SLACK=${POLL_SUSPEND_SLACK:-30}
+
+_poll_die() { echo "watch: $*" >&2; exit 1; }
+
+for _poll_knob in WINDOW WINDOW_LEFT WINDOW_CEILING; do
+  case ${!_poll_knob} in
+    ''|*[!0-9]*|0) _poll_die "$_poll_knob must be a positive integer (got '${!_poll_knob}')" ;;
+  esac
+done
+
+# ## Tracing a watch that vanishes (on by default)
+#
+# Every watch records its own life: one line per tick, one per signal, one at exit.
+# Traces land in `${TMPDIR:-/tmp}/dnbg-watch/<script>-<pid>.log` and are swept after
+# three days. `WATCH_LOG=<path>` redirects it; `WATCH_LOG=off` turns it off, after
+# which every function below is an immediate return and nothing is spent.
+#
+# It exists because a vanished watch leaves no evidence anywhere else, which is
+# not obvious until you go looking for it. A background task reported as killed
+# has no result line, because a watch writes its result at exit and a watch that
+# was killed never reached it; its heartbeats say roughly when it stopped, never
+# why. macOS keeps nothing either: the unified log does not record ordinary
+# process signals or exits, and dtrace's
+# `proc:::signal-send` — the only probe that names WHO signalled WHOM — needs SIP
+# disabled. So a watch that stopped could not be diagnosed after the fact at all.
+#
+# Three records partition the causes, and the third is an absence:
+#
+#   SIGNAL=<name>   something asked it to stop, and the name says what kind
+#   EXIT code=<n>   it stopped itself — a `set -e` death, or a normal result
+#   neither         SIGKILL, or the process group went down underneath it
+#
+# The absence only means anything against a record of the watch running, which is
+# why the tick line earns its place: without one, "the watch died silently" and
+# "the watch was never running" produce identical logs.
+#
+# Under bash 5.2 a signal can go unrecorded. A trapped signal that lands while the
+# shell is expanding a command substitution, which a watch does between its
+# sleeps, can fail to run its handler: bash prints `trap: ... unexpected EOF` to
+# stderr, then either aborts with status 134, leaving the "neither" row, or carries
+# on as if no signal came, which ends in an ordinary EXIT line from a watch that was
+# asked to stop. Only that stderr line, which the trace does not capture, tells
+# either case apart. It did not reproduce under bash 5.3, nor with the signal
+# landing in a sleep.
+#
+# On by default, and that is the whole point — an opt-in knob is off exactly when
+# it matters. The failure this traces is intermittent and unreproducible: it never
+# occurs on demand, and nobody knows in advance which watch will be the one that
+# dies. A knob somebody has to remember to set BEFORE a random failure captures
+# nothing, so the feature would ship and never once fire.
+#
+# `WATCH_LOG=off` opts out. Any other value is an explicit path.
+#
+# Defaulting also covers every caller for free, including every spawn site in the
+# skills and any written later — wiring the knob into those instead would leave each
+# new spawn site silently opted out again.
+_poll_trace_default() {
+  local dir="${TMPDIR:-/tmp}/dnbg-watch"
+  mkdir -p "$dir" 2>/dev/null || return 1
+  # Best-effort sweep, so unattended tracing cannot grow without bound. Failures are
+  # ignored: housekeeping must never be the reason a watch does not start.
+  find "$dir" -name '*.log' -mtime +3 -delete 2>/dev/null || true
+  printf '%s/%s-%s.log' "$dir" "$(basename "${0%.sh}")" "$$"
+}
+
+# Captured at source time, because inside a function `$@` is the FUNCTION's
+# arguments, not the script's. Sourcing inherits the caller's positional parameters,
+# so this is the only place the watcher's own arguments are reachable.
+#
+# Logged in START so a trace says WHICH watch died, not merely that one did. Without
+# it a stray trace identifies only a script name and a pid — enough to know a watch
+# was killed, useless for correlating a cohort of kills against the PRs they were
+# watching, which is exactly what a post-mortem needs.
+#
+# A caller that parses leading flags of its own must capture argv BEFORE shifting them
+# away and pre-set this, or the trace records only what survived the shift — see
+# watch-pr.sh, which does so and says what is lost without it. `-` not `:-`: a
+# caller that pre-set it to empty said something, and re-deriving from the post-shift
+# `$*` would silently contradict it.
+_poll_argv="${_poll_argv-$*}"
+
+_poll_trace_defaulted=0
+if [ "${WATCH_LOG:-}" = off ]; then
+  WATCH_LOG=""
+elif [ -z "${WATCH_LOG:-}" ]; then
+  WATCH_LOG=$(_poll_trace_default) || WATCH_LOG=""
+  _poll_trace_defaulted=1
+fi
+
+# The live parent, not `$PPID`. Bash captures `$PPID` once at startup and never
+# refreshes it, so after the parent dies it still names the dead one — exactly the
+# case worth detecting. A watch reparented to 1 was ORPHANED, which is a different
+# failure from being killed and is otherwise indistinguishable in the log.
+_poll_parent() {
+  local p
+  p=$(ps -o ppid= -p $$ 2>/dev/null | tr -d ' ')
+  printf '%s(%s)' "$(ps -o comm= -p "${p:-0}" 2>/dev/null | tr -d ' ')" "${p:-?}"
+}
+
+# Never fails the watch: a trace that cannot be written is worth less than the
+# watch, so an unwritable path is swallowed rather than killing the run under
+# `set -e`.
+poll_log() {
+  [ -n "$WATCH_LOG" ] || return 0
+  printf '%s pid=%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$" "$*" >> "$WATCH_LOG" 2>/dev/null || true
+}
+
+# Log, then re-raise with the default disposition so the exit status still encodes
+# the signal. Clearing the trap first is what keeps the re-raise from re-entering
+# this handler.
+_poll_on_signal() {
+  poll_log "SIGNAL=$1 parent=$(_poll_parent)"
+  # Take the nap's `sleep` down first. Re-raising kills this shell, and the child
+  # would outlive it by up to a whole interval — 300s at the cap. Harmless in
+  # itself, but leaving a stray process behind is a poor look for the one code path
+  # whose entire job is to make a death legible.
+  # `|| true` is load-bearing rather than tidiness. `kill` here follows the final `&&`,
+  # which `set -e` does NOT exempt, and both watchers run under `set -euo pipefail`.
+  # The nap child is often already gone — `wait` reaps it a moment before
+  # `_poll_napper` is cleared — so the kill fails, the handler aborts before the
+  # re-raise, and the death is recorded as an ordinary exit. That is a FALSE trace
+  # (a SIGNAL line and an EXIT line together, contradicting the table, with the
+  # status no longer naming the signal), which costs strictly more than the stray
+  # `sleep` this kill exists to reap.
+  if [ -n "${_poll_napper:-}" ]; then kill "$_poll_napper" 2>/dev/null || true; fi
+  trap - "$1"
+  kill -s "$1" $$
+}
+
+# Guarded INSIDE rather than at the call site: the arguments to `poll_log` are
+# expanded before it runs, so an unguarded tick line would fork `ps` twice per
+# poll for a log nobody asked for.
+_poll_log_tick() {
+  [ -n "$WATCH_LOG" ] || return 0
+  poll_log "tick interval=${1}s awake=$(poll_awake)s quiet=$(poll_quiet)s parent=$(_poll_parent)"
+}
+
+# Installed only while tracing: these traps change the exit path, which is not
+# something to carry on the default path in exchange for nothing.
+poll_trace_init() {
+  [ -n "$WATCH_LOG" ] || return 0
+  # One unguarded write, first. `poll_log` swallows per-line failures, which is
+  # right — a trace is worth less than the watch — but swallowing the FIRST one
+  # turns a mistyped path into the most misleading outcome this feature has. A
+  # `WATCH_LOG` under a directory that does not exist writes nothing at all, not
+  # even START, and no file is exactly row three of the table above: killed before
+  # its first tick. That reading is confidently wrong, and the path is typed by
+  # hand, at the moment something has just gone wrong, by someone already primed to
+  # expect a silent death.
+  # `2>/dev/null` goes first, before the append. Redirections are applied left to right,
+  # so writing it the other way round attempts `>>` while stderr is still the
+  # caller's — bash prints its own `Permission denied` there before the suppression
+  # is in effect. Tracing defaults on, so this line is reached by every watch on the
+  # machine, and the branch below deliberately carries on without dying: a raw
+  # error on the stderr of a watch that then runs perfectly normally is a confusing
+  # thing to hand somebody, especially on the one script whose stderr gets read when
+  # they are already trying to work out why a watch misbehaved.
+  if ! : 2>/dev/null >> "$WATCH_LOG"; then
+    # Loud for a path the caller typed, silent for the default, and the asymmetry
+    # is the point. An explicit path that cannot be written is a caller error, and
+    # swallowing it produces the most misleading outcome this feature has: no file at
+    # all, which the table above reads as row three. The default path is nobody's
+    # request, so it must never take down a watch that was otherwise doing its job:
+    # with tracing on by default, dying here would turn an unwritable TMPDIR into
+    # every watch failing to start.
+    [ "$_poll_trace_defaulted" = 1 ] || _poll_die "WATCH_LOG=$WATCH_LOG is not writable"
+    WATCH_LOG=""
+    return 0
+  fi
+  local s
+  for s in TERM INT HUP QUIT PIPE USR1 USR2; do
+    # SC2064 expands $s at install time deliberately — the handler has to know
+    # which signal it is standing in for, and a deferred expansion would read the
+    # loop variable's final value in every trap.
+    # shellcheck disable=SC2064
+    trap "_poll_on_signal $s" "$s"
+  done
+  # `$?` here is the pending exit status, so a `set -e` death is recorded with the
+  # status that caused it rather than as a clean finish.
+  # shellcheck disable=SC2064
+  trap 'poll_log "EXIT code=$?"' EXIT
+  poll_log "START script=$(basename "$0") args=[${_poll_argv}] parent=$(_poll_parent) window=${WINDOW}s left=${WINDOW_LEFT}s ceiling=$([ -n "$_poll_ceiling_off" ] && echo off || echo "${WINDOW_CEILING}s") curve=${POLL_CURVE}"
+}
+
+# Breakpoints, split into parallel arrays at source time so a malformed knob
+# fails before the watch prints anything — a bad curve is a caller bug, and
+# silently falling back to the default would hide it for the life of the watch.
+_poll_t=(0); _poll_i=(10)
+_poll_parse_curve() {
+  local pair t i prev=-1
+  local -a parts=() ts=() is=()
+  read -r -a parts <<< "$POLL_CURVE"
+  [ "${#parts[@]}" -gt 0 ] || _poll_die "POLL_CURVE is empty"
+  for pair in "${parts[@]}"; do
+    case $pair in
+      *:*) ;;
+      *) _poll_die "POLL_CURVE entry '$pair' is not <seconds>:<interval>" ;;
+    esac
+    t=${pair%%:*}; i=${pair##*:}
+    case $t in ''|*[!0-9]*) _poll_die "POLL_CURVE offset '$t' is not a non-negative integer" ;; esac
+    # ⚠️ OFFSETS MAY BE ZERO, INTERVALS MAY NOT, and the asymmetry is the point: the
+    # curve has to start at offset 0, while a zero INTERVAL makes `poll_nap` return
+    # at once and turns the watch into a busy loop around `gh` — measured at 200 naps
+    # in 2s, which is the hourly REST budget gone inside a minute and the watch then
+    # blind behind rate-limit failures for the rest of its window, while still
+    # reporting a perfectly ordinary IDLE. `INTERVAL` is the knob tests and callers
+    # reach for, so `INTERVAL=0` is a live typo, not a hypothetical.
+    case $i in ''|*[!0-9]*) _poll_die "POLL_CURVE interval '$i' is not a non-negative integer" ;; esac
+    [ "$i" -ge 1 ] || _poll_die "POLL_CURVE interval must be at least 1s (got $i) — 0 spins"
+    # Strictly increasing, so the interpolation below can never divide by zero
+    # and the segment search can never pick a later breakpoint than it meant to.
+    [ "$t" -gt "$prev" ] || _poll_die "POLL_CURVE offsets must strictly increase (got $t after $prev)"
+    prev=$t
+    ts[${#ts[@]}]=$t
+    is[${#is[@]}]=$i
+  done
+  [ "${ts[0]}" = 0 ] || _poll_die "POLL_CURVE must start at offset 0 (got ${ts[0]})"
+  _poll_t=("${ts[@]}"); _poll_i=("${is[@]}")
+}
+_poll_parse_curve
+# A leading zero is refused too: arithmetic reads `08` as bad octal and kills the
+# watch mid-nap rather than here.
+case $HEARTBEAT in ''|0*|*[!0-9]*) _poll_die "HEARTBEAT must be a whole number of seconds, at least 1 (got '$HEARTBEAT')" ;; esac
+
+# The curve as a pure function: interval for a given quiet-time, in seconds.
+# Public because it is the whole shape of the thing and deserves a test that
+# doesn't have to run a watch to reach it.
+poll_interval_at() {
+  local e=$1 n k t0 t1 i0 i1
+  n=${#_poll_t[@]}
+  if [ "$e" -le "${_poll_t[0]}" ]; then echo "${_poll_i[0]}"; return 0; fi
+  k=1
+  while [ "$k" -lt "$n" ]; do
+    if [ "$e" -lt "${_poll_t[$k]}" ]; then
+      t0=${_poll_t[$((k - 1))]}; t1=${_poll_t[$k]}
+      i0=${_poll_i[$((k - 1))]}; i1=${_poll_i[$k]}
+      echo $(( i0 + ((i1 - i0) * (e - t0)) / (t1 - t0) ))
+      return 0
+    fi
+    k=$((k + 1))
+  done
+  echo "${_poll_i[$((n - 1))]}"
+}
+
+_poll_start=0; _poll_suspended=0; _poll_baseline=0; _poll_beat=0; _poll_now=0
+
+# Call once, after the knobs are set and before the loop.
+#
+# A run re-armed from a split starts the curve where the window had reached, not
+# at the floor: a split run ended quiet, so the window has been quiet all along,
+# and restarting at the floor every ceiling would keep a six-hour wait from ever
+# reaching the cap.
+poll_init() {
+  _poll_now=$(date +%s); _poll_start=$_poll_now; _poll_suspended=0; _poll_beat=0
+  _poll_baseline=$(( WINDOW_LEFT < WINDOW ? WINDOW_LEFT - WINDOW : 0 ))
+  poll_trace_init
+}
+
+# Reads the clock for every question asked until the next read — see the header.
+poll_tick() { _poll_now=$(date +%s); }
+
+# Epoch seconds as of the last read, for a caller's own deadlines.
+poll_now() { echo "$_poll_now"; }
+
+# Awake seconds since poll_init.
+poll_awake() { echo $(( _poll_now - _poll_start - _poll_suspended )); }
+
+# Awake seconds since the last poll_reset — the curve's input.
+poll_quiet() { echo $(( $(poll_awake) - _poll_baseline )); }
+
+# Back to the floor. Three callers, for three different reasons:
+#   - an observed change: the watch just got interesting again;
+#   - a failed poll: FAIL_MAX is counted in ticks, so a watch that went blind at
+#     the cap would take 10 x 5 minutes to say so;
+#   - a detected suspend: waking at the dormant cap is being least responsive
+#     exactly when the human has come back.
+poll_reset() { _poll_baseline=$(poll_awake); }
+
+poll_interval() { poll_interval_at "$(poll_quiet)"; }
+
+# Wall-clock seconds since poll_init — the ceiling's input, not the window's.
+poll_wall() { echo $(( _poll_now - _poll_start )); }
+
+poll_timed_out() {
+  [ "$(poll_awake)" -ge "$WINDOW_LEFT" ] && return 0
+  [ -z "$_poll_ceiling_off" ] && [ "$(poll_wall)" -ge "$WINDOW_CEILING" ]
+}
+
+# On a run that has timed out, the part of the window it leaves unserved: empty
+# when the window itself ran out, a number when the ceiling cut the run short.
+poll_split_left() {
+  local left=$(( WINDOW_LEFT - $(poll_awake) ))
+  [ "$left" -gt 0 ] && echo "$left" || true
+}
+
+# The re-arm line's environment prefix, and the IDLE result's field, for a run
+# that ends with <left> seconds of window unserved (empty for none).
+poll_window_env() { printf 'WINDOW=%s%s' "$WINDOW" "${1:+ WINDOW_LEFT=$1}"; }
+poll_window_field() { printf '%s' "${1:+ window_left=$1}"; }
+
+poll_now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+# Prints a heartbeat if one is due. A write error is swallowed: the line is
+# evidence about the watch, and losing one is cheaper than ending the watch
+# under `set -e`.
+_poll_heartbeat() {
+  local a
+  a=$(poll_awake)
+  [ $(( a - _poll_beat )) -ge "$HEARTBEAT" ] || return 0
+  # Snapped to the boundary it was due on, so a wake that runs a second late
+  # does not push every later beat back with it.
+  _poll_beat=$(( a - (a - _poll_beat) % HEARTBEAT ))
+  printf 'alive at=%s awake=%ss\n' "$(poll_now_iso)" "$a" 2>/dev/null || true
+}
+
+# Sleep one interval, then reconcile the clock with what actually elapsed. The
+# interval is slept in pieces that end on heartbeat boundaries, so a beat falls
+# due mid-nap rather than only between polls.
+#
+# An argument replaces the curve's interval for this one nap, for a caller that
+# needs its next read at a fixed delay whatever the curve has backed off to. It
+# leaves the curve's position alone.
+poll_nap() {
+  local iv left piece before after over to_ceiling
+  iv=${1:-$(poll_interval)}
+  # Never sleep through the ceiling: a nap at the 300 s cap that started just
+  # under it would spend most of the margin the ceiling keeps for the settle.
+  # Past it, only a settle is still running, and that naps on the curve as usual.
+  if [ -z "$_poll_ceiling_off" ]; then
+    to_ceiling=$(( WINDOW_CEILING - $(poll_wall) ))
+    if [ "$to_ceiling" -gt 0 ] && [ "$to_ceiling" -lt "$iv" ]; then iv=$to_ceiling; fi
+  fi
+  # Before the sleep, not after: a watch is killed mid-sleep far more often than
+  # mid-poll, and a line written afterwards is the one line that would be missing.
+  _poll_log_tick "$iv"
+  # ⚠️ BACKGROUND `sleep` + `wait`, NOT A FOREGROUND `sleep`, and the trace is the
+  # reason. Bash defers a trap until the running foreground command finishes, so a
+  # foreground nap swallows a SIGTERM for up to a full interval — five minutes at
+  # the cap. Worse, where a SIGKILL follows the TERM, the handler never runs at
+  # all and the log shows exactly the silent death the trace exists to rule out,
+  # which is a false answer rather than a missing one. `wait` is interruptible, so
+  # the handler runs while the signal still means something.
+  #
+  # Only trapped signals cut `wait` short, and the traps are installed only while
+  # tracing — so with WATCH_LOG unset nothing interrupts the wait and this is a
+  # plain sleep.
+  # This clobbers `$!` for the caller. Neither watcher backgrounds anything, so
+  # nothing is broken today — but this is a shared library function, so a future
+  # caller that backgrounds a job and reads `$!` after a nap would get the sleep.
+  # The pid is kept in `_poll_napper` rather than left in `$!` so the signal
+  # handler can reap it, and so that this is stated rather than discovered.
+  #
+  # `before` is read first and the beat checked and the piece sized from it, so
+  # the time a tick spent polling counts toward the next beat.
+  left=$iv
+  while [ "$left" -gt 0 ]; do
+    before=$(date +%s); _poll_now=$before
+    _poll_heartbeat
+    piece=$(( HEARTBEAT - ($(poll_awake) - _poll_beat) ))
+    [ "$piece" -le "$left" ] || piece=$left
+    sleep "$piece" &
+    _poll_napper=$!
+    wait "$_poll_napper" 2>/dev/null || true
+    _poll_napper=""
+    after=$(date +%s); _poll_now=$after
+    over=$(( after - before - piece ))
+    if [ "$over" -gt "$POLL_SUSPEND_SLACK" ]; then
+      _poll_suspended=$(( _poll_suspended + over ))
+      poll_reset
+      poll_log "suspend over=${over}s banked=${_poll_suspended}s"
+      # The rest of the nap is dropped: just back from a suspend is when a poll
+      # is most wanted, and the reset above has already put the curve at its floor.
+      return 0
+    fi
+    left=$(( left - piece ))
+    _poll_heartbeat
+  done
+  return 0
+}

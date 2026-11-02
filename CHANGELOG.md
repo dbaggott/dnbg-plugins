@@ -1,0 +1,2450 @@
+# Changelog
+
+What changed for someone using these plugins, newest first. Entries are
+assembled at release time from the fragments in `changelog.d/`; see
+`changelog.d/README.md` for how to write one.
+
+Releases before this file existed are recorded in the git history; they were not
+tagged, and their versions used a two-component scheme that predates the current
+`YYYY.M.N`.
+
+<!-- releases below -->
+
+## dnbg-workflow 2026.11.15 — 2026-11-02
+
+The usage sweep's per-agent count, which `process-review` quotes in its
+**Usage** section, is now named `transcripts` instead of `sessions`, both in
+the report's table and in the JSON twin's `agents` entries. It always counted
+transcripts, one per main session or agent dispatch, so an orchestrated run
+that dispatched three authors showed three "sessions" for the author. The
+report's frontmatter count of transcripts read is now `transcripts_read`.
+Sweep reports already written keep the old names.
+
+
+## dnbg-workflow 2026.11.14 — 2026-11-02
+
+`process-review` now reports usage. Each run starts the usage sweep and reads
+the `usage` its batch's retrospectives record, and its report gains a
+**Usage** section: requests and token counts summed by role, each session
+owner's total with the agents it dispatched listed under it, the previous
+report's tables beside them, and the sweep report cited by path. A reference
+file that two or more retrospectives list under **Read but not used** is
+reported as a split candidate. A change in usage is drafted as an issue on
+judgement, quoting both reports' tables, until you set a threshold.
+
+With retrospectives on, each role's retrospective now records what its run
+cost: the new `session-usage.sh` finds the agent's own transcript and reports
+its request count and token counts (input, cache writes, cache reads, output)
+in the retrospective's frontmatter. A session's owner also gets one line per
+agent it dispatched, and posts the session's figures on the issue as a comment
+starting `Usage:`, so a run split across restarts can be added up from the
+issue. The orchestrator now writes a retrospective when it restarts, not only
+when it stops.
+
+Retrospectives gain a fifth heading, **Read but not used**, for reference files
+an agent read and did not need.
+
+A new script, `usage-sweep.sh`, reads your local Claude Code transcripts for a
+date range and reports what the plugin's agents cost: per agent type, the
+sessions, requests, token counts and wakes; per plugin file, how often the
+installed copy was read; and one row per transcript. It writes a Markdown
+report and a JSON twin under the retrospective root's `_usage/` directory.
+Reads of a checkout's copy of the plugin are counted apart, so developing the
+plugin does not inflate the read counts.
+
+`process-review` no longer reads those reports as retrospectives.
+
+
+## dnbg-workflow 2026.11.13 — 2026-11-01
+
+An author that `orchestrate` dispatches no longer re-reads the claim reference
+at pickup. When its prompt says the issue, or the issues, are already claimed
+under its session id, it runs only `claim-issue.sh` for each issue and, when
+every one reads `OWN`, goes straight to resolving the issue. Any other claim
+result still sends it through the full claim check, as before.
+
+
+## dnbg-workflow 2026.11.12 — 2026-11-01
+
+Filing an issue now states the direction's acceptance criterion in one sentence
+before testing whether it is a project, so a direction already cut into pieces
+is no longer judged piece by piece and filed as independent issues when its goal
+needs more than one of their PRs. The check also says what a tracking issue
+buys: a review of all its children's PRs against the goal's criteria, and, under
+`orchestrate`, a close-out that runs that criterion.
+
+
+## dnbg-workflow 2026.11.11 — 2026-11-01
+
+The `author-orchestrated` and `reviewer-orchestrated` subagents no longer get the Artifact tools (`Artifact`, `ArtifactComments`, `ArtifactData`), which neither uses. That covers every place they are dispatched: `orchestrate`, and the spec reviews `issue-workflow`, `findings-review` and `process-review` spawn. In a session with artifacts enabled, it keeps the `Artifact` tool's definition out of every turn's context. A session without those tools launches both agents as before.
+
+
+## dnbg-workflow 2026.11.10 — 2026-11-01
+
+`git-workflow`, `orchestrate`, `reviewer` and `issue-workflow` load less text. Branches most runs skip, or first need late, now sit in reference files read only when their condition holds: draft files, the operator check before review, multi-repo changes, stacked branches, sandboxed sessions, the defect-pass exemptions and the approval check in `git-workflow`; operator steps, a dead or predecessor agent and an issue still open after its merge in `orchestrate`; the draft-PR picker in `reviewer`. Skills that send an agent to draft files now point at `git-workflow/references/draft-files.md` instead of the whole `git-workflow` skill.
+
+
+## dnbg-workflow 2026.11.9 — 2026-11-01
+
+Under a tracking issue, the orchestrator now runs its larger bookkeeping reads
+in short-lived subagents that reply in a line or two, so those reads no longer
+sit in its context through every later wake: collecting decision rows from more
+than three children, a merge's sweep of more than one sibling, and the scan for
+review findings that recur across children's PRs, which now reads each PR's
+inline review comments with their file paths. The orchestrator still makes
+every decision, escalation and message to an author.
+
+
+## dnbg-workflow 2026.11.8 — 2026-11-01
+
+The orchestrator now posts a decision-log row with one `decision-row.sh` call,
+which composes the row's comment, posts it under the orchestrator role, and,
+under a tracking issue, appends the parent's decision-log table row that links
+it. A re-run reuses an identical comment rather than posting a second, so a
+call whose outcome is unknown is safe to repeat.
+
+
+## dnbg-workflow 2026.11.7 — 2026-11-01
+
+`orchestrate` now restarts on the size of its context rather than on a count of
+its wakes. An attended orchestrator reads its context size at each wake and
+hands over to a fresh session at 150K tokens, at the first compaction, or, when
+the size cannot be read, after 20 wakes; before, it waited for 40 wakes, which
+almost no run reached. Once a restart is due it starts no new work and waits for
+the authors already running to open their PRs. Each wake of a long run re-sends
+less, since the context it re-sends stays smaller.
+
+A headless orchestrator, with no one there to start its successor, keeps the old
+triggers: 40 wakes or the first compaction.
+
+
+## dnbg-workflow 2026.11.6 — 2026-11-01
+
+A reviewer's PR watch no longer wakes it for a red build alone. The failing
+checks now arrive as the `checks=` field on its next push, comment or review,
+and a window with nothing else in it ends quietly. The author's watch still
+wakes on a red build.
+
+In issue mode, a reviewer no longer re-runs PR discovery after a PR watch
+comes back idle. It still runs after every other return, and always when the
+PR closes.
+
+
+## dnbg-workflow 2026.11.5 — 2026-11-01
+
+On a tracking issue, the orchestrator now marks a decision-log row `applied`
+with `log-row.sh --set-state`, which changes only that row's State cell and
+confirms the write against a concurrent writer, instead of reading the whole
+parent body into its context and writing it back by hand.
+
+
+## dnbg-workflow 2026.11.4 — 2026-11-01
+
+Rules that `git-workflow`, `issue-workflow`, `orchestrate` and `reviewer` each
+restated now have one full statement, with shorter copies elsewhere: the role
+resolver's mechanics live in `git-workflow`'s "Acting as the author", full-URL
+references in the always-on rule, and the version stamp's rationale in
+`reviewer`. The GitHub-only and "Related skills" sections are shorter. An agent
+with these skills loaded together carries less repeated text.
+
+
+## dnbg-workflow 2026.11.3 — 2026-11-01
+
+In an attended Claude Code session (terminal, desktop app, VS Code), a watch now
+serves its whole six-hour window in one run instead of ending every 105 minutes
+with an `IDLE window_left=` result to re-arm from. Those sessions put no time
+limit on background commands, so the split only cost a wake. Unattended sessions
+(`-p`, the Agent SDK, CI, cloud) keep the 105-minute ceiling, as does any session
+that does not set `CLAUDE_CODE_SESSION_ATTENDED=1`, and an explicit
+`WINDOW_CEILING` still wins in both.
+
+
+## dnbg-workflow 2026.11.2 — 2026-11-01
+
+A review watch that wakes on a new review, comment or push now fetches the
+review round itself and names the file it wrote it to, so the agent reads the
+round on the turn it wakes instead of spending a turn fetching it. If that
+fetch fails, the watch prints the command to run, as before.
+
+
+## dnbg-workflow 2026.11.1 — 2026-11-01
+
+Every result line from `watch-pr.sh` and `watch-issue.sh` now carries an `act=`
+field naming what the result calls for in the role and stage the watch was
+armed for, such as `round`, `rearm` or `report`, or `read` where the caller's
+reference has to decide.
+
+Agents now read the watch references (`watch.md`, `watch-results.md`,
+`issue-mode-wait.md`, `spec-review-wait.md`) and `merge.md` once per session
+rather than on every return, wait or re-verdict, and read them again only after
+an `ERROR`, a watch that returned no result line, or a context compaction. The
+orchestrator reads `triage.md` once, before the first question, and again only
+after a compaction.
+
+
+## dnbg-agent-summaries 2026.11.1 — 2026-11-01
+
+Fixed two agents writing the same summary file losing each other's changes. An
+agent now creates a summary with Write and changes one only with Edit, never
+through the shell, and applies a refused change again to the file as it now
+stands. A summary the sweep archives while an agent is still updating it is
+moved back out of `archive/` and marked active, rather than written again beside
+the archived copy.
+
+The sweep now skips, and reports, a file it was about to archive that another
+writer changed after the sweep read it, instead of archiving it.
+
+
+## dnbg-workflow 2026.10.111 — 2026-10-31
+
+Fixed the merge sweep's read of the issues a closed issue blocks. The sweep named
+`gh issue view --json blocking` without its shape, so the first `jq` read of it
+failed. A new `issue-blocking.sh` lists the open blocked issues and ends on a
+result line, and the sweep now treats any `ERROR` from it as an incomplete sweep
+rather than an empty one.
+
+
+## dnbg-workflow 2026.10.110 — 2026-10-31
+
+A reviewer running in its own session no longer tells you to merge when it approves. Its handoff turn ends on `Done:`, naming the PR watch still running, and its notification carries the verdict and short SHA, such as `PR 570 approved at 1a2b3c4`. The merge command still comes from the author's handoff, which reads the merge state; on a PR no agent authored, there is none.
+
+
+## dnbg-workflow 2026.10.109 — 2026-10-31
+
+A reviewer on a tracking issue no longer wakes on its first tick for child PRs it already knows about. While it watches the closeout PR, its watch on the parent now excludes every PR a fresh `pr-sources.sh` run on the parent finds, the closeout PR included, rather than the closeout PR alone.
+
+
+## dnbg-workflow 2026.10.108 — 2026-10-31
+
+In `orchestrate`'s stacked mode on GitHub, each stacked PR now joins its base PR's GitHub stack. When you merge a PR in a stack, GitHub rebases the PRs above it itself, so no author rebases and force-pushes after your merge, and a stacked PR's merge handoff carries a command that lands it together with every approved PR below it. That command is GitHub's asynchronous merge (`gh api --method PUT …/merge-async`), since GitHub refuses `gh pr merge` on a PR in a stack; it returns before the merge happens, and the author's watch reports the landing. Where the stack could not be formed, the handoff and the rebase work as before.
+
+
+## dnbg-workflow 2026.10.107 — 2026-10-31
+
+`orchestrate` gains a stacked mode for a tracking issue whose operator cannot merge for a while. Ask for it at dispatch ("orchestrate `<URL>`, stacked"), or accept it when offered at the first merge handoff that blocks a waiting child. A child whose one blocker has an approved PR is then dispatched on that PR's branch, and approved PRs waiting on a merge no longer fill the cap on children in flight. When you merge the stack bottom-up, each next PR's author rebases it past the merged base and asks for a fresh approval instead of stopping on the conflict.
+
+An operator leaving for a while can also delegate a class of question to the orchestrator at dispatch, and the decision log records each answer given under that delegation as such.
+
+
+## dnbg-workflow 2026.10.106 — 2026-10-30
+
+A new always-on rule keeps project status out of Claude Code's auto-memory.
+What shipped, what is open, which PR resolves what and where an issue stands
+are read from GitHub when needed, never saved as a memory, and a memory no
+longer restates a decision its issue or PR already records. New memories hold
+only what nothing on GitHub or in the code does: a way of working you asked
+for, a fact outside any repo, or a pointer to where a decision is recorded.
+
+The rule governs what gets written from now on. Status memories saved before
+the update stay in your memory store until you remove them.
+
+
+## dnbg-workflow 2026.10.105 — 2026-10-30
+
+Spec reviews now say that `gh issue view --json` cannot read an issue's
+`lastEditedAt`, on both the reviewer's and the issue author's side, and the
+author's side names the query that does, printing `null` for a body that was
+never edited. Agents had been spending a failed call on `gh issue view` before
+finding the query.
+
+
+## dnbg-workflow 2026.10.104 — 2026-10-30
+
+Filing an issue from an agent summary file now sets the summary's status the way
+`dnbg-agent-summaries` defines it, with a `Filed as` line naming the issue,
+rather than marking it `superseded` by the issue's URL.
+
+
+## dnbg-agent-summaries 2026.10.2 — 2026-10-30
+
+A summary filed as one or more issues now carries a `Filed as <URL>` line under
+its title naming every issue, and is marked `retired`, or left `active` when it
+stays the deeper context, instead of `superseded` by a single issue URL.
+`superseded` now means only that a newer summary file replaces it. A sweep that
+finds a summary still marked `superseded` by an issue URL proposes the new form
+and writes the `Filed as` line for you.
+
+The sweep no longer proposes a status for a file without one from a banner word
+such as "SHIPPED" or "Filed as", which matched one finding's status deep in a
+file and a banner the file's next sentence contradicted. It reads what the file
+says about itself, quotes the line its proposal rests on, and proposes `active`
+as borderline when the file's own words conflict, so a file you still use is not
+proposed for archive on a word it happens to contain.
+
+
+## dnbg-workflow 2026.10.103 — 2026-10-30
+
+Releases of these plugins are now published by a GitHub App dedicated to this
+repository, `claude-plugins-dbaggott`, installed on it alone. A credential that
+leaks from another repository can no longer publish a release here. The release
+workflow's own actions are pinned to commit SHAs, so a moved tag cannot change
+what runs in the job that holds the release credential.
+
+
+## dnbg-workflow 2026.10.102 — 2026-10-30
+
+Filing an issue from an agent summary file now marks that summary `superseded`
+by the new issue, when `dnbg-agent-summaries` is installed.
+
+
+## dnbg-agent-summaries 2026.10.1 — 2026-10-30
+
+New plugin. Agents' summary files (outstanding work, research, design proposals,
+issue drafts) now have a home and a lifecycle: one directory, set with
+`summary_dir` (default `~/.claude/dnbg-agent-summaries`), and a `status:` in each
+file's frontmatter saying whether it is still needed (`active`, `superseded` or
+`retired`). The `summary-review` skill sweeps the directory: it archives what is
+superseded or retired into `archive/`, flags files older than 60 days for you to
+keep or archive, and moves nothing until you approve.
+
+## Migration
+If your own `CLAUDE.md` tells agents where to write summaries, set `summary_dir`
+to that directory and remove the section; the skill replaces it. Until you do,
+agents have two conventions to follow.
+
+
+## dnbg-all 2026.10.1 — 2026-10-30
+
+`dnbg-all` now also installs `dnbg-agent-summaries`, which keeps agents' summary
+files in one directory with a status field and sweeps the stale ones into an
+archive.
+
+
+## dnbg-workflow 2026.10.101 — 2026-10-28
+
+The PR and issue watches read the clock once per poll instead of once per
+question, cutting about a dozen `date` process starts from every tick of a
+long-running watch. Nothing a watch reports changes.
+
+
+## dnbg-workflow 2026.10.100 — 2026-10-28
+
+A turn that leaves the next step to you now ends on it. The last line reads **Your move:**, repeating the merge command, URL or prompt it needs, or **Done:**, saying whether anything is still running and whether the session can be closed. A merge handoff repeats its merge command at the bottom, so it's the last thing on screen.
+
+When the next step is yours, the session also sends a notification through Claude Code's `PushNotification`, which reaches you when you're in another window. A finished `orchestrate` run notifies too. Dispatched subagents do neither, because the orchestrator adds the line and the notification when it passes their reports on.
+
+
+## dnbg-workflow 2026.10.99 — 2026-10-28
+
+Picking up a tracking issue that has no children and no acceptance row now asks
+the acceptance question when its latest design-mode review is still `READY`
+against the body as it stands, instead of starting another review. This covers
+an earlier "Not yet" answer and a session that ended before asking. A stale or
+non-design-mode `READY` still leads to a review.
+
+`project-status` agrees: `issue-stage.sh` now says `next=accept` only for a
+current design-mode `READY`, and adds a `round=current|stale|not-design`
+evidence key beside it, with `round_url` naming the round when it is current.
+`ready-set.sh`'s parent object gains `verdict_mode`, `verdict_current` and
+`verdict_url`, and `issue-reviewer` now states the form its round comments
+use for the `lastEditedAt` they were reviewed against.
+
+
+## dnbg-workflow 2026.10.98 — 2026-10-28
+
+Fixed a role's config directory being read differently by `reviewer-setup` and
+by every later role call. Setup no longer takes `--config-dir`, which stored an
+App where nothing else looked for it: set `DNBG_<ROLE>_CONFIG_DIR` instead, for
+setup and every later call alike. A value of that variable in the `~alice/...`
+form is now refused by both, and named at session start, rather than read as two
+different directories.
+
+`XDG_CONFIG_HOME`, which both already honoured, is now documented: when set, a
+role's directory defaults to `$XDG_CONFIG_HOME/dnbg/<role>/`.
+
+## Migration
+A setup script passing `--config-dir <path>` to the `reviewer-setup` bootstrap
+must export `DNBG_<ROLE>_CONFIG_DIR=<path>` instead; the flag is now an error.
+
+
+## dnbg-workflow 2026.10.97 — 2026-10-28
+
+Retrospectives written when answering a spec review of an issue now carry the
+`spec-author` role, so `process-review` reports that friction apart from a PR
+author's. Files written before this change still read, counted under `author`.
+
+
+## dnbg-workflow 2026.10.96 — 2026-10-28
+
+Several skill cross-references that pointed at the wrong file or section now land where they say, and the dispatch-time decision-log row reads `none, asked at dispatch` in both of `orchestrate`'s files. The configuration note shown when `retrospective_dir` is overridden now names only `process-review` as the skill that spells out the default.
+
+
+## dnbg-workflow 2026.10.95 — 2026-10-28
+
+The spec-review offer for a batch of filed issues is written once, in
+`issue-workflow`'s `references/filing.md`, "Offer the spec review for a batch".
+`findings-review`, `process-review` and `orchestrate`'s close-out point at it
+instead of each carrying its own copy, so all three now hand over the prompts
+the same way when the review is declined or no operator can be asked.
+
+
+## dnbg-workflow 2026.10.94 — 2026-10-28
+
+The close-out sites across `git-workflow`, `reviewer`, `issue-reviewer`,
+`issue-workflow` and `orchestrate` now route through `process-review`'s
+"When a retrospective is written" instead of naming a retrospective file, its
+path or a Retrospective section. With retrospectives off (the default), an agent
+following its close-out line no longer writes a file the setting forbids, and a
+dispatcher no longer asks a subagent for a path that does not exist.
+
+
+## dnbg-workflow 2026.10.93 — 2026-10-28
+
+Fixed a set review that could never converge after a decomposition. Decomposing
+a tracking issue could leave a late decision unapplied above the record of the
+filed children, which the design review then flagged as a finding. Decomposing
+now applies every pending decision, the design's acceptance included, before it
+records the filing.
+
+
+## dnbg-workflow 2026.10.92 — 2026-10-28
+
+Decomposing a tracking issue now claims it first, so two sessions given the
+same tracking issue can no longer both file a set of child issues and overwrite
+each other's edits to it. The second one stops and says who holds the claim.
+
+The claim is released when the set review of the children ends, so the
+`orchestrate` session that comes next does not read it as someone else's.
+
+
+## dnbg-workflow 2026.10.91 — 2026-10-28
+
+`fetch-issue-set.sh` takes `--json-out=<file>`: the set goes to the file, which
+`jq` reads directly, and stdout carries only the result line. The file's
+directory is created, and on an error the file is left empty, so it never holds
+an earlier run's set. The reviewer, issue-reviewer and orchestrator recipes use
+it, so they no longer split the object from the result line by hand.
+
+
+## dnbg-workflow 2026.10.90 — 2026-10-28
+
+Fixed re-reviews after a merge from base or a rebase showing the base's changes as the PR's. `pr-round.sh` now reports `diff=interdiff` when the PR's merge base moved, and its diff section holds only the files whose own change differs from the one last reviewed, rather than every base commit in between. It falls back to the old delta wherever GitHub's compare cannot give a complete answer, such as a binary file or a PR touching 300 files or more.
+
+
+## dnbg-workflow 2026.10.89 — 2026-10-28
+
+Fixed two ways a role App's credentials could be read back. The short-lived
+token used to sign in as an App no longer appears in the process list while it
+is being exchanged, where any user on the machine could read it, and a failing
+private key command is no longer echoed into the session's output, where a
+vault token passed as one of its arguments would have been logged.
+
+Setting up pushes as the author now refuses, by name, a plugin path containing
+`"`, `$`, a backtick, a backslash or a newline, which the push would otherwise
+have run through the shell.
+
+
+## dnbg-workflow 2026.10.88 — 2026-10-28
+
+Fixed the reviewer sending you to `reviewer-setup` when its bot is refused as
+`shared-identity` (two roles configured with one App) or `no-login` (the App's
+login is unknown), which a plain setup run skips. The reviewer skill now gives
+each its own remedy: setup for one role alone (`--roles <role>`), or the App's
+`slug` set beside the role's other settings. It also says that the `--login`
+call reports a refusal on stdout with exit 0, and to stop and report any reason
+it does not list.
+
+
+## dnbg-workflow 2026.10.87 — 2026-10-28
+
+Corrected `issue-reviewer`'s description of who writes issues. It said issues
+are filed and edited under your own GitHub account; they go up as the author
+bot when one is set up, as `issue-workflow` already did. A documentation fix
+only: nothing posts differently.
+
+
+## dnbg-workflow 2026.10.86 — 2026-10-28
+
+Fixed `orchestrate` stopping while its reviewer was still running. It stopped
+on the reviewer's close-out for a PR, but an issue-mode reviewer keeps watching
+the issue after each PR closes, and writes its retrospective only once no PR is
+open and the issue is closed. So the orchestrator collected retrospectives
+before the reviewer's existed, and a PR that joined the issue later was
+reviewed with nobody listening.
+
+The reviewer now ends its issue-mode assignment with its own report, opening
+`**Reviewer close-out: assignment ended**`, and the orchestrator stops on that.
+When the issue is still open after its last PR merged, the orchestrator asks
+whether to close it; leaving it open tells the reviewer to end its assignment
+anyway, and a session without `AskUserQuestion` leaves it open unless its
+prompt says otherwise.
+
+
+## dnbg-workflow 2026.10.85 — 2026-10-28
+
+`orchestrate` now covers several issues with no parent in one session. Issues
+each resolved by their own PR run side by side, held back while an earlier one
+touching the same file is in flight. A set resolved by one PR gets one author
+and one reviewer naming every issue, with decisions logged on the issue each
+affects.
+
+Retrospectives for such a set are named for its first issue, by repo and number, and list
+every issue's URL in `issue:`, which `process-review` reads.
+
+
+## dnbg-workflow 2026.10.84 — 2026-10-28
+
+Fixed parallel agents in one session publishing each other's drafts. An agent
+that went looking for its earlier PR description in the shared scratchpad could
+find a sibling's draft and post it as its own.
+
+Every agent the plugin dispatches now gets its own draft directory, named in its
+prompt, and drafts its PR descriptions, issue bodies, comments and reviews there
+under fixed names. A session nobody dispatched creates one at its first draft.
+Before posting, an agent now recreates the directory if the scratchpad vanished
+and refuses to post an empty body.
+
+
+## dnbg-workflow 2026.10.83 — 2026-10-28
+
+A reviewer grading a criterion met by a recorded run now compares the run commit with the tree the PR will actually land (`git merge-tree` of the head onto the base branch), and recomputes that at every grading. Before, it diffed only the run commit against the PR's head, so a run voided by an unrelated merge to the default branch went unnoticed, including at a project's closeout. An author's per-file record of changes that leave the run standing now covers default-branch changes too, using the same comparison.
+
+
+## dnbg-workflow 2026.10.82 — 2026-10-28
+
+A reviewer on an issue now takes its first issue wait's `since` from the assignment step itself: the posted "acting as reviewer" comment's own time, or, when it skipped the post because the comment already exists or the post failed, a snapshot taken after that. Before, `since` came from a snapshot that had to run after the post, and a reviewer posting under the operator's login, because no reviewer App was set up, could wake on its own comment when it ran its first reads in a different order.
+
+
+## dnbg-workflow 2026.10.81 — 2026-10-28
+
+An acceptance criterion met by a recorded run, such as an eval, no longer has
+to be run before the PR leaves draft when review fixes would likely void it.
+When the run's paths overlap the skill text the PR changes, the author can mark
+it pending in the PR description and make it after the first review round with
+no blocking finding, so a single run usually suffices.
+
+`reviewer` grades that pending run, and a re-run already in progress, as a
+conditional approval rather than a blocking finding, and re-verdicts on the
+run's record when it lands. When its own findings will void a run, it asks for
+the run after the fixes instead of grading the current one. Neither the author
+nor `orchestrate` hands the PR off for merge until the re-verdict on a pending
+run is in, and `orchestrate` asks the operator for their part of a deferred run
+only once the conditional approval is in.
+
+
+## dnbg-workflow 2026.10.80 — 2026-10-28
+
+An orchestrated reviewer whose turn carries several reports, such as a handoff for one PR and a close-out for a sibling that merged on the same wake, now gives each its own first line, and the orchestrator scans the whole turn for those lines instead of reading only its first. Before, every report after the first went unseen: a missed handoff meant its findings were not relayed before the merge, and a missed close-out left the orchestrator waiting.
+
+
+## dnbg-workflow 2026.10.79 — 2026-10-28
+
+`pr-sources.sh` now prints each PR's state (`state=OPEN`, `MERGED`, `CLOSED`, or
+`unknown` when the PR could not be read) on its result line. The skills that find
+an issue's PRs filter on it instead of running `gh pr view` on every hit, so an
+issue with a long history of merged or unrelated PRs costs one call instead of
+one per PR.
+
+
+## dnbg-workflow 2026.10.78 — 2026-10-28
+
+In a Claude Code sandboxed session, setting up pushes on a worktree you take
+over or continue now works sandboxed, once that setup has run in the repository
+before. A failed setup's error now names the file it could not write, gives
+git's own reason, and says a sandbox is the likely cause.
+
+`git-workflow` step 4 now lists what a sandboxed session must run outside the
+sandbox: creating a worktree, the first setup in a repository, and the first
+push, since each writes the main checkout's `.git/config`, which the sandbox
+never allows. Pushes and `gh` calls also need `github.com` and
+`api.github.com` allowed for network access.
+
+
+## dnbg-workflow 2026.10.77 — 2026-10-28
+
+A `reviewer` re-review after a rebase that only moved the PR's base, such as
+dropping a squash-merged parent's commits, now recognises that the reviewed
+content is unchanged instead of showing the new base's changes as if they were
+the PR's. What is left before re-approving is a read of the PR's own diff against
+its new base for any change it would revert, rather than a hand comparison in a
+scratch clone.
+
+
+## dnbg-workflow 2026.10.76 — 2026-10-28
+
+`process-review` now asks the spec-review question once for the issues it files in your own repos, and on "Spec-review it now" starts one set reviewer per repo, instead of asking once per filed issue and starting a reviewer for each. Gaps reported upstream still get no offer.
+
+
+## dnbg-workflow 2026.10.75 — 2026-10-28
+
+The `retrospective_dir` setting's description in the plugin configuration no
+longer says only `orchestrate`'s agents write retrospectives there. It now says
+retrospectives are written there whenever the `retrospectives` option is on.
+
+
+## dnbg-workflow 2026.10.74 — 2026-10-28
+
+An author or reviewer now writes each findings entry at its handoff, before the merge, and names its path on the item there, rather than leaving it for the post-merge close-out. A finding declined because the operator said to gets no entry from either side: the author's decline reply names where the operator said so, and both reports list it under Observations.
+
+Process friction that did not stop the task is no longer offered for filing at send-to-review or in a handoff; it waits for the close-out.
+
+
+## dnbg-workflow 2026.10.73 — 2026-10-28
+
+The PR reviewer now reports twice: a handoff when it approves, so its findings
+reach you before you merge, and a close-out when the PR merges or closes, a
+delta against that handoff. Each opens with a fixed first line, and an
+orchestrated run relays the reviewer's handoff beneath the author's and waits
+for the reviewer's close-out before it stops.
+
+The reviewer now writes a findings entry for every finding it raised that is
+still unaddressed at its approval, alongside the author's entry for one it
+declined; `findings-review` and a tracking issue's closeout merge that pair as
+one item.
+
+
+## dnbg-workflow 2026.10.72 — 2026-10-28
+
+A new `retrospectives` setting, off by default, decides where the process
+friction an agent meets goes when its part of the work ends. Off, no
+retrospective file is written: the agent's report lists, one line each, where a
+skill was wrong or had to be worked around, and offers to file those upstream
+with your approval of the text. On, every close-out writes a retrospective file
+for `process-review` to read later, and says nothing more about that friction.
+
+If you relied on retrospectives being written, turn the setting on from
+`/plugin`.
+
+
+## dnbg-workflow 2026.10.71 — 2026-10-28
+
+Every role now closes out its part the same way, whether an `orchestrate` run
+dispatched it or you started it yourself: the author once its PR merges or
+closes, the PR reviewer when its review ends, both sides of a spec review where
+it ends, and the orchestrator at Stop. Each gives its report and writes a
+retrospective, so a standalone author or reviewer now leaves one too.
+
+The Summary / Observations / Actionable report is defined once, in
+`findings-review`'s new `references/report.md`, and each role's skill cites it
+with a line per heading for what its role reports.
+
+
+## dnbg-workflow 2026.10.70 — 2026-10-28
+
+Filing a plain issue now ends with an offer to spec-review it: "Spec-review it
+now" spawns the reviewer and the filing session answers its rounds; "Not now"
+gives the `review <URL> as a spec` prompt to paste later. `findings-review` and
+an `orchestrate` closeout ask once for the whole batch of issues they file and
+review them as a set.
+
+`issue-workflow`'s filing steps moved from `references/creating.md` to
+`references/filing.md`, and the spec-review wait mechanics to
+`references/spec-review-wait.md`.
+
+
+## dnbg-workflow 2026.10.69 — 2026-10-28
+
+The retrospective format now lives with `process-review`, the skill that reads
+it, at `process-review/references/retrospective.md`; the orchestrator's own
+retrospective and the findings fold into a tracking issue moved to
+`orchestrate/references/findings-fold.md`. A spec reviewer's retrospective now
+carries the role `issue-reviewer`, apart from a PR reviewer's `reviewer`, and
+`process-review` still counts older files that used `reviewer` for both.
+
+
+## dnbg-workflow 2026.10.68 — 2026-10-28
+
+`process-review` now saves each report under the retrospective root, in
+`_reviews/`, and by default the next run reads only the retrospectives written
+since the last full or delta run, plus the files behind its singletons. A
+problem seen once in one run and again in a later one is now found as a
+pattern, and a pattern already reported with no new evidence is not drafted
+again. Name `all` to force a full read.
+
+
+## dnbg-workflow 2026.10.67 — 2026-10-28
+
+The reviewer now re-verdicts when an author answers its last blocking finding without a new commit, such as a fix made only in the PR description or a rebuttal the reviewer accepts. Before, it resolved the thread and left its CHANGES REQUESTED standing on a head it no longer objected to, and the PR could not merge.
+
+
+## dnbg-workflow 2026.10.66 — 2026-10-27
+
+The old `followup_dir` setting and the `~/.claude/dnbg-followups/` directory are no longer read. 2026.10.65 kept both as fallbacks after the rename to `findings_dir` and `~/.claude/dnbg-findings/`.
+
+## Migration
+If you set `followup_dir`, set `findings_dir` to the same path. Move any open entries under `~/.claude/dnbg-followups/`, or under a custom follow-up directory, into your findings root, keeping the `<owner>/<repo>/` subdirectories. `findings-review` and the closeout no longer see entries left behind.
+
+
+## dnbg-workflow 2026.10.65 — 2026-10-27
+
+Follow-up entries are now **findings entries**. They live in
+`~/.claude/dnbg-findings/` instead of `~/.claude/dnbg-followups/`, and the
+`followup-review` skill is now `findings-review`. The `followup_dir` setting is
+renamed `findings_dir`. A value you set under the old name is still used while
+`findings_dir` is empty, and `findings-review` still sweeps entries left in
+`~/.claude/dnbg-followups/`. Both fallbacks will be dropped in a later release.
+If you had set `followup_dir`, move its entries into the new directory when you
+set `findings_dir`, since nothing sweeps a custom old directory after that. Agents now
+also write an entry for an observation about the code, not only for an
+Actionable item, and for a reviewer's comment the author left unacted on.
+
+A tracking issue's **Friction log** is now its **Findings log**, which holds
+what the project found about its own code, drawn from the findings entries the
+children's runs wrote. Process friction stays in the retrospectives. At
+closeout you decide each finding: file a follow-up issue, drop it, or defer it
+to `findings-review`. The closeout no longer files plugin-tooling issues
+upstream, and `process-review` no longer reads a tracking issue, only the
+retrospective files.
+
+An open tracking issue written before this release still has a
+`## Friction log` heading. Rename it to `## Findings log` by hand before its
+next orchestrated run, or its findings have nowhere to go.
+
+
+## dnbg-workflow 2026.10.64 — 2026-10-27
+
+An issue whose work needs something only the operator can do, such as a
+browser flow, installing an App or providing a credential, now names it under
+`## Operator steps`, and decomposition asks for that section on each child that
+needs it. `orchestrate` asks the operator about those steps before dispatching:
+once at the start of a tracking-issue run, listing every child's steps together,
+or at dispatch for a single issue. The author is told which are already done,
+instead of finding out only when it reaches the step.
+
+
+## dnbg-workflow 2026.10.63 — 2026-10-27
+
+Decomposing a tracking issue now checks whether two children would rewrite the
+same section of a file before leaving them independent. A shared section gets a
+dependency, moves into one child, or is split by sentence between the two
+bodies, so parallel children are told up front who owns the shared text instead
+of finding out in review. A file near a size cap that a test enforces counts as
+one section when both children add to it.
+
+A design review of a tracking issue now checks that each child in the candidate
+decomposition can meet the requirements it covers when it merges: the code each
+one needs ships in that child or in one it depends on. It also checks that a
+requirement moving a write to a different role is covered by the child that owns
+the place the write happens. Either failure is a blocking finding on the parent,
+caught before the children are filed rather than during decomposition.
+
+An author now treats adding to or removing from an interface the issue spelled
+out (its calls, flags, variables, exit codes or outputs), or moving where the
+issue said a value is computed, as a design change to surface, rather than a
+routine choice. A dispatched author asks before building it.
+
+
+## dnbg-workflow 2026.10.62 — 2026-10-27
+
+When a review finding is fixed only in the PR description, the author now
+replies on the finding to say so. Editing the description alone does not wake
+the reviewer's watch, so before this the reviewer could sit idle until someone
+happened to comment.
+
+
+## dnbg-workflow 2026.10.61 — 2026-10-27
+
+Fixed spec reviews stopping after their first round. `issue-reviewer` now arms
+the wait for the author's response as the last step of posting every round that
+did not converge or halt, so a `CHANGES REQUESTED` round is followed up when the
+author answers instead of going unread.
+
+Fixed the merge wait sometimes telling you a PR needed a human to unblock it when
+it was seconds from mergeable. GitHub can briefly report a PR as blocked just
+after its last check finishes; the merge wait now re-reads after a few seconds
+before calling a block final, so it keeps waiting and catches the merge.
+
+
+## dnbg-workflow 2026.10.60 — 2026-10-26
+
+The author is now a role with its own GitHub App. Once you create it with
+`reviewer-setup` (`--roles author`, or alongside the others), the author's
+PRs, pushes, comments, thread replies, claims and filed issues post as the
+author bot, so you can approve its PRs yourself, and your own comments on its
+PRs and issues wake it. Commits stay authored by you. Without an author App,
+everything posts as you, as before, and the session-start notice says so.
+
+Pushes go through a credential helper that `git-workflow` installs in each
+worktree's own git config, minting a fresh token per push; the main checkout is
+untouched. A worktree with an SSH `origin` now pushes over HTTPS, through that
+helper. With no author App, that means `gh`'s token rather than your SSH key,
+which needs the `workflow` scope to push workflow files (`gh auth status`).
+
+
+## dnbg-workflow 2026.10.59 — 2026-10-26
+
+`orchestrate` now posts under its own GitHub App: its claims, `Decision log:`
+rows, questions, tracking-issue body edits and friction-log relays go through
+the new `orchestrator` role, so a watch can tell them from your own comments by
+login. Create the App with `reviewer-setup` (`--roles orchestrator`); it needs
+only `issues` write and the mandatory `metadata` read, with no access to code
+or pull requests.
+
+Until you do, the orchestrator posts as you, exactly as before, and the
+session-start notice names it. `log-row.sh` gains `--as=<role>`, whose result
+line names the login it wrote as.
+
+
+## dnbg-workflow 2026.10.58 — 2026-10-25
+
+Agent roles now get their GitHub identity through one resolver,
+`scripts/as-role.sh`, in place of the reviewer's hand-exported `GH_TOKEN`. Each
+role is data under `roles/<role>/` with its own App, config directory
+(`~/.config/dnbg/<role>/`) and `DNBG_<ROLE>_*` variables; the reviewer is the
+only role so far, and an existing reviewer setup keeps working with no re-setup.
+`reviewer-setup` can create Apps for several roles in one run.
+
+The reviewer's and issue-reviewer's writes, including issue mode's "acting as
+reviewer" comment, now post through the resolver as the bot, and its watches
+take the bot's login from it. `claim-issue.sh` gains `--as=<role>`, which
+claims under a role while assigning your own login. A role without an App falls
+back to your account only if its data allows it, and a session-start notice
+names each one that does; the reviewer never falls back.
+
+
+## dnbg-workflow 2026.10.57 — 2026-10-24
+
+Handing an issue to spec review, after filing a tracking issue or decomposing
+one, now asks who runs the reviewer. The recommended choice has the session spawn
+the reviewer itself and answer its rounds as they come back, so you don't paste
+anything.
+If you'd rather run the reviewer in your own session, where you can talk to it,
+you get one prompt to paste, and the filing session says it will answer the
+findings and starts watching for the first round straight away. Before this,
+nothing told you which session answers, and the filing session didn't watch
+until you told it the reviewer had started.
+
+
+## dnbg-workflow 2026.10.56 — 2026-10-17
+
+Fixed `issue-workflow`'s description being cut off at `#245`, which YAML read as
+the start of a comment. Everything after it never loaded, including the trigger
+to load the skill before reading any file or opening a worktree on issue pickup.
+The full description now loads.
+
+
+## dnbg-workflow 2026.10.55 — 2026-10-17
+
+Filing an issue now includes a check on whether the work is a project. When
+the direction needs more than one PR, carries decisions a second issue would
+cite, or has an acceptance criterion no single PR can run, `issue-workflow`
+offers to file it as a tracking issue instead of a plain one, and the same
+offer comes up when a plain issue grows into one.
+
+
+## dnbg-workflow 2026.10.54 — 2026-10-17
+
+Added the `project-status` skill: ask "what's next on <issue URL>" and it says
+which stage of the project flow the issue or tracking issue is at, the evidence
+for that, and the exact prompt to paste in a fresh session (`review <URL> as a
+spec`, `answer the spec review on <URL>` to accept a passed design,
+`decompose <URL>`, `orchestrate <URL>`, `resolve <URL>`, or merge the closeout
+PR). It only reads; it claims and writes nothing.
+
+The lookup is `scripts/issue-stage.sh`, which prints the stage as one result
+line built from the existing claim, project, ready-set and PR-source scripts.
+
+
+## dnbg-workflow 2026.10.53 — 2026-10-17
+
+Each stage of the project flow now ends by naming the next one. When a spec
+review converges, a plain issue gets the `resolve` or `orchestrate` prompt to
+paste; a tracking issue whose design review is `READY` gets an "Accept the
+design?" question that writes the acceptance row and gives the `decompose`
+prompt; and a decomposition or set review ends with the `orchestrate` prompt for
+the parent. Each recommends running the next stage in a fresh session.
+
+Asking to resolve a tracking issue that has no children yet no longer stops with
+nothing offered: an accepted design gets a "Decompose it now" choice, and one not
+yet accepted gets the design-review prompt.
+
+
+## dnbg-workflow 2026.10.52 — 2026-10-17
+
+A criterion met by a recorded run (an eval, a live exercise) can now name the
+behavior the run proves beside the paths whose change voids it. A later change
+under those paths no longer forces a re-run when the author's record on the PR
+shows it leaves that behavior as it was, and the reviewer grades that statement
+rather than the path list alone. Criteria naming paths alone keep their old
+meaning; the issue reviewer now recommends the behavior sentence for them rather
+than blocking on it.
+
+
+## dnbg-workflow 2026.10.51 — 2026-10-17
+
+Added an operator check before review: an issue can declare, in a
+`## Operator check before review` section, that the operator wants to look at the
+work before it is polished and reviewed. The author brings the work up from the
+recipe in that section once the work is complete, stops with a reachable URL,
+takes the operator's feedback round by round, and only on "proceed" runs its
+self-review and sends the PR to review. The bot review still runs afterward.
+
+`issue-workflow` asks whether to add the check when an issue's approach touches
+anything a person sees or interacts with; an orchestrator records a check the
+operator asks for at dispatch time on the issue, so a restart knows whether the
+check is still pending, and a headless run posts the recipe and worktree for the
+operator to run themselves.
+
+
+## dnbg-workflow 2026.10.50 — 2026-10-16
+
+`orchestrate` now handles a subagent that ends `failed` on an API or usage-limit
+error: the orchestrator resumes it with `SendMessage` once the limit resets, and
+dispatches a replacement only when the agent cannot be reached. A replacement
+author's prompt names the dead author's worktree and unpushed commits, which the
+orchestrator's GitHub reads cannot see, along with the review round it was
+answering and any scratch issues or labels it created.
+
+
+## dnbg-workflow 2026.10.49 — 2026-10-16
+
+`orchestrate` no longer has a session working one child of a tracking issue
+write the parent's decision-log table, which the parent's orchestrator alone
+edits. That session now writes only the `Decision log:` comment on the child,
+and the parent's orchestrator collects those comments into its table on start,
+when a child closes, and before the closeout folds the log into the design.
+
+
+## dnbg-workflow 2026.10.48 — 2026-10-16
+
+Actionable items in agents' reports no longer vanish when the operator doesn't
+act on them at merge time. The author's merge handoff, the reviewer's report and
+the orchestrator's Stop now keep each Actionable item as a follow-up entry under
+`~/.claude/dnbg-followups/<owner>/<repo>/`, and name its path in the report. The
+new `followup_dir` option moves that location.
+
+The new `followup-review` skill sweeps those entries later. It checks each one
+against the repo's current default branch, merges duplicates, and proposes
+filing, dropping or keeping it, with the issue text drafted. Nothing is filed
+until you approve the exact text, and your decision is recorded in the entry so
+it never comes up again.
+
+`git-workflow`'s merge wait now says how to arm the merge-stage watch when there
+is no `── re-arm ──` line to edit, because the review watch died without a result
+or the PR was taken over from another author. The head, the verdict SHA and
+`since` all come from one `pr-verdict.sh` call, which now also prints
+`verdict_at=`, the time the standing verdict was submitted.
+
+
+## dnbg-workflow 2026.10.47 — 2026-10-16
+
+`git-workflow`'s review-watch reference is now two files: arming and re-arming
+the watch, read when a PR goes to review, and what each watch result means, read
+when the watch returns. The reference had nearly reached the size an agent can
+read in one call, past which the read is cut off mid-file. The results file
+says which results the merge-stage instructions handle differently.
+
+
+## dnbg-workflow 2026.10.46 — 2026-10-16
+
+The PR watch's `result=CHECKS` now names the failing tests, as
+`failed_tests='<names>'`, when the failed job's log carries TAP `not ok` lines,
+so an author no longer digs them out of the log by hand.
+
+`git-workflow` now says what to do when a check fails in a test the diff doesn't
+touch: rerun the failed jobs once and wait on the rerun. A pass is a flake to
+report, not a change to the PR; a second failure on the same head is
+investigated as a finding.
+
+
+## dnbg-workflow 2026.10.45 — 2026-10-16
+
+An orchestrator folding a child's retrospective into its tracking issue now edits the parent's Friction log only when it orchestrates the parent. A child orchestrator working the issue alone posts the items as a comment on the parent, opening `Friction log items from <child URL>`, and the closeout folds those comments into the log before disposing of it; `process-review` reads them too. `issue-workflow`'s tracking-issue reference now states that, while the children are being worked, the parent's orchestrator is the body's only writer, and a merge sweep comments on such a parent rather than editing it. The retrospective of a design change's re-review is now folded into the parent's Friction log as well.
+
+The reviewer now posts every review through the reviews endpoint with the body
+read from a file (`jq --rawfile`), so a finding containing an apostrophe or a
+newline no longer breaks the posting command. The review is pinned to the SHA
+that was read (`commit_id`), so a commit pushed while the reviewer was writing no
+longer receives a verdict on code nobody read; the head is also re-read just
+before posting, and a move sends the reviewer back to cover the new commits. The
+`<!-- reviewed-sha -->` stamp is now written from that same SHA. The unpinned
+`gh pr review` verdict-only form is gone; a verdict-only review is the same
+payload without inline comments.
+
+
+## dnbg-workflow 2026.10.44 — 2026-10-16
+
+The reviewer's issue mode no longer arms an issue-level wait while every open PR it found is under its own PR watch, as in an orchestrated run, so a merge wakes it once rather than twice. It arms the wait only when no PR is open or one is held as a draft, with `since` taken after its "acting as reviewer" comment so that comment cannot wake it. A replacement reviewer that finds that comment already on the issue does not post another.
+
+
+## dnbg-workflow 2026.10.43 — 2026-10-16
+
+The reviewer now removes the directories `fetch-tree.sh` extracts PR trees into
+when the PR closes, and the script removes its own directory when a fetch fails.
+They used to stay in the system temp directory. A tree fetched by a session that
+quit before the PR closed still stays there.
+
+
+## dnbg-workflow 2026.10.42 — 2026-10-16
+
+In an issue-set review, when a fix for one issue's finding edits another issue
+that was already `READY`, `issue-workflow` now gives the note the author posts
+there: the finding that caused the edit, the section that changed, and
+`No blocking findings were open here.` The author posts it before the response
+on the finding's own issue and watches the edited issue too. `issue-reviewer`
+treats any edit to a `READY` issue as a new round to verdict.
+
+
+## dnbg-workflow 2026.10.41 — 2026-10-16
+
+`git-workflow`'s self-review now points `/code-review` and its own `git diff` at the worktree's absolute path. A session whose working directory is another repo, as a dispatched author's often is, previously reviewed the wrong diff or none, since the branch does not exist there.
+
+
+## dnbg-workflow 2026.10.40 — 2026-10-16
+
+`git-workflow`'s self-review now skips the code-review tool for a diff made only
+of prose no agent follows as instructions (a user-facing README, a changelog
+entry), or only of a rename the issue fully specifies, as it already did for
+data-only diffs. Prose that instructs an agent, such as a skill or a `CLAUDE.md`,
+still counts as logic and still gets the full review. The PR says when the
+review was skipped and why.
+
+
+## dnbg-workflow 2026.10.39 — 2026-10-16
+
+`reviewer` now tells the agent how to write batched shell reads that survive
+zsh. Where the Bash tool runs zsh, a separator like `echo =====` or a path like
+`"$SHA:src/x"` used to abort the whole batch and cost a round trip. Sessions
+whose shell is bash are unaffected.
+
+
+## dnbg-workflow 2026.10.38 — 2026-10-16
+
+Picking up an issue now asks one question when the issue belongs to a project.
+"Resolve" or "orchestrate" on a child of an open tracking issue offers to
+orchestrate the whole project instead (recommended) or to address the issue on
+its own, and "resolve" on a tracking issue offers to orchestrate it or stop.
+The question comes before the claim, so nothing is claimed until you answer,
+and it is skipped for an author an orchestrator already dispatched. Without an
+operator to ask, it is posted on the issue as a `Delegated question:`.
+
+
+## dnbg-workflow 2026.10.37 — 2026-10-16
+
+The issue sweep after a merge now also covers the open issues that each closed
+issue blocks, so a dependent issue stops asking for work the merge already
+shipped. A swept issue someone else has claimed gets a comment naming what
+shipped instead of an edit to its body.
+
+Under `orchestrate` on a tracking issue, the author reports what its merge
+shipped for each sibling, and the orchestrator applies it: itself to a child no
+one holds, through the child's author to one in flight, and as a comment to one
+held outside the run. The orchestrator also holds a ready child's dispatch
+while any of its blockers is still in flight, so that sweep lands before the
+child's author reads its body.
+
+
+## dnbg-workflow 2026.10.36 — 2026-10-16
+
+A design review of a tracking issue now re-runs each constraint's verification
+when it is a single read-only command, such as a GitHub API or GraphQL read or a
+search of the code, and blocks on a constraint whose result does not match its
+claim. A constraint whose method is described in prose but names one such read
+gets that read composed and run, with the query shown in any finding. The round
+comment says which constraints were re-run and why the rest were not.
+
+
+## dnbg-workflow 2026.10.35 — 2026-10-16
+
+A tracking issue and its children now carry two visible handles for the
+project they belong to: a `[<slug>]` title tag, chosen when the tracking issue
+is filed and written into every child's title at decomposition, and a
+`project:<slug>` label that the decomposition procedure mints and applies.
+GitHub's sub-issue link shows only on issue pages; the tag reaches issue lists,
+search, notification subjects and PR titles, and the label is what to filter on.
+
+`git-workflow` puts the same tag on a PR that resolves a tagged issue, and
+`issue-reviewer`'s set review reports a child missing the tag or the label.
+
+
+## dnbg-workflow 2026.10.34 — 2026-10-16
+
+An author working with no operator to ask, as under `orchestrate`, that finds
+mid-implementation that the issue's design has to change now asks before
+building the change, as a `Delegated question:` on the issue, instead of
+building it and noting it in the PR description or beside its send-to-review
+question. `orchestrate` triages a departure an author reports as already made
+the way it triages a question, and answers it before dispatching the reviewer.
+
+The delegated-mode eval gains a `departure` fixture that checks for exactly
+this: `FIXTURE=departure tests/evals/delegated-mode/run.sh`.
+
+An orchestrated author now pushes its branch and opens the draft PR at its
+first commit, before the self-review, and pushes after each commit, so an
+orchestrator restarted while the author works finds the work on GitHub instead
+of starting over. Before, commits made before the self-review were lost to a
+restart. The cost is CI running on the earlier pushes; sessions outside
+`orchestrate` keep `git-workflow`'s order.
+
+On the same machine, a restarted orchestrator also names the predecessor's
+worktree in the author's dispatch prompt, so the fresh author continues there
+rather than failing at `git worktree add` on the same branch.
+
+Orchestrators, authors and reviewers now stop their background tasks by id
+with the harness's task-stop tool, never with `pkill -f` or a pattern, which
+had stopped another agent's watch on the same PR.
+
+
+## dnbg-workflow 2026.10.33 — 2026-10-16
+
+Decomposing a tracking issue now marks the decision-log rows the spec review
+and the acceptance produced `applied` when it files the children, and a set
+review response that applies a row marks it the same way. Before, those rows
+reached `orchestrate` at `decided`, where each one read as a design change
+still to sweep across every child. `orchestrate` also no longer sweeps a row
+the body and children already carry: it marks the row `applied` and says so
+in one comment on the parent. The set review flags a parent whose filing left
+a row at `decided`.
+
+
+## dnbg-workflow 2026.10.32 — 2026-10-15
+
+PR, merge and issue watches no longer get stopped silently in headless
+`claude -p` sessions. Those sessions stop a background command after 10 minutes
+unless it was given a longer Bash `timeout`, and a watch stopped that way prints
+no result. Every skill now spawns its watches with `timeout: 7200000`, the
+longest the harness allows. A watch window longer than about 105 minutes, such
+as the six-hour merge wait, now runs as several shorter runs: each run returns
+`IDLE` with `window_left=<seconds>`, and its re-arm line carries the rest of the
+window.
+
+
+## dnbg-workflow 2026.10.31 — 2026-10-15
+
+`orchestrate` now launches the fresh session a branch-loaded acceptance run needs
+itself, as a background headless `claude` process, rather than handing you the
+command and waiting. Your part of such a run is only the merges. When that
+session exits partway through, the orchestrator resumes it so the run still
+reaches its merge and cleanup.
+
+
+## dnbg-workflow 2026.10.30 — 2026-10-15
+
+The cycle report under Summary, Observations, and Actionable now comes with the merge handoff, beneath the merge command, rather than after the merge. Deferred findings and follow-ups the reviewer raised are in front of you while you can still send the PR back for one more change.
+
+After the merge, the report covers only what changed since the handoff (the cleanup, and anything that arrived late), saying "nothing new since the handoff" under a heading with nothing to add. An orchestrated author's handoff carries the same report, which the orchestrator relays unchanged.
+
+
+## dnbg-workflow 2026.10.29 — 2026-10-15
+
+A PR or issue watch now prints an `alive` line about once a minute while it
+waits, so its background task output shows whether it is still running. Before,
+a healthy watch and a dead one both left an empty output until the result line.
+The result line and how to read it are unchanged.
+
+
+## dnbg-workflow 2026.10.28 — 2026-10-15
+
+`orchestrate`'s author and reviewer agents now carry the instructions every orchestrated dispatch shares — delegated mode, writing a retrospective when their part ends, and for the author never merging and what each turn ends on — so the dispatch prompts carry only what varies per dispatch. A review you run yourself with `reviewer` or `issue-reviewer` is unchanged.
+
+The `issue-reviewer` that `orchestrate` dispatches to re-review issue bodies after a design change now writes a retrospective too, filed under the parent issue.
+
+
+## dnbg-workflow 2026.10.27 — 2026-10-15
+
+Claude Code's agent panel now shows which of `orchestrate`'s agents is the author
+and which the reviewer. Both used to render as `dnbg-workflow:orchestrated-…`,
+with the role truncated away. They are renamed to
+`dnbg-workflow:author-orchestrated` and `dnbg-workflow:reviewer-orchestrated`.
+
+
+## dnbg-workflow 2026.10.26 — 2026-10-15
+
+Fixed PR watches going blind on a pull request with a lot of review text. Once
+the reviews and comments passed the operating system's argument-size limit
+(128 KB for one body on Linux, 1 MB in total on macOS), every watch tick failed
+with `reason=pr-view-shape` and the watch could no longer see the PR.
+
+
+## dnbg-workflow 2026.10.25 — 2026-10-15
+
+Fixed an orchestrator and its subagents overwriting each other's PR
+descriptions. They share one scratchpad directory, so two agents drafting a
+body at the same chosen name, such as `pr-body.md`, could publish one PR's
+description onto another. Every skill that writes a PR description, issue body,
+comment or review through a file now has it created with `mktemp`, and a test
+checks the skills' body-file commands for it.
+
+
+## dnbg-workflow 2026.10.24 — 2026-10-15
+
+The PR watch no longer reports a failing check from a superseded workflow run.
+When a second run starts on the same commit (marking a PR ready does this), the
+first run's checks stay on the commit. The watch used to read them, so it could
+name a check that was green or still running in the live run, and list one name
+twice. It now reads only the newest run of each check. A cancelled check is no
+longer counted as a failure.
+
+
+## dnbg-workflow 2026.10.23 — 2026-10-15
+
+`orchestrate` no longer watches the issue it drives. Every event it acts on already
+reached it as a subagent's report or as your answer in chat, so the watch's
+wakes on review rounds, progress comments, and the author's own PR bought
+nothing and brought the 40-wake restart closer. The orchestrator now waits on
+its subagents alone.
+
+One case changes for you: when an author's merge watch gives up after six hours
+and the orchestrator relays the "still needs merging" reminder, tell the
+orchestrator once you have merged, and it runs the author's post-merge cleanup.
+
+`watch-issue.sh` drops its `orchestrator` role and refuses `--role=orchestrator`
+with `reason=bad-args`; the `comments=` and `overflowed=` result fields went
+with it.
+
+
+## dnbg-workflow 2026.10.22 — 2026-10-15
+
+`orchestrate` now dispatches its author and reviewer as this plugin's own agents,
+`dnbg-workflow:orchestrated-author` and `dnbg-workflow:orchestrated-reviewer`,
+which keep their prompt cache for an hour instead of five minutes. An agent that
+resumes after a long review round, CI run or merge wait no longer re-sends its
+whole transcript uncached. Writing to the 1-hour cache is billed at a higher rate
+than the 5-minute one.
+
+This relies on an experimental Claude Code agent option. A
+`subagentPromptCacheTtl` setting or `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`
+overrides it, and a Claude subscription in overage stays at five minutes.
+
+
+## dnbg-workflow 2026.10.21 — 2026-10-15
+
+An acceptance criterion met by a run, such as an eval or a live exercise, now
+names the paths whose change invalidates the run, so a later commit outside them
+no longer means running it again. Authors run such criteria before sending the
+PR to review and ask early for any part the operator must do. Reviewers grade
+the recorded run against those paths, and approve conditionally, with an
+observation, when the only thing left is an operator action outside the PR.
+
+When a tracking issue is decomposed, each end-to-end criterion met by a run
+names who records it. The orchestrator runs any criterion that only a main
+session can run, and the author records it. A reviewer watching an issue no
+longer reports the same merge twice.
+
+
+## dnbg-workflow 2026.10.20 — 2026-10-15
+
+Fixed the issue body diff failing on an issue with a long edit history, which
+is the usual state of a tracking issue. `issue-reviewer` and `orchestrate`
+got an error and no diff once the past bodies outgrew the system's limit on
+command arguments; they now get the diff like on any other issue.
+
+
+## dnbg-workflow 2026.10.19 — 2026-10-15
+
+Fixed the issue watch silently ignoring a PR to exclude when it was given as a
+number (`286` or `#286`) rather than its full URL. The watch then woke on that
+PR anyway. It now refuses to start, saying its arguments were bad, and
+`orchestrate` treats that refusal as its own command to fix and re-run rather
+than an authentication problem.
+
+
+## dnbg-workflow 2026.10.18 — 2026-10-15
+
+`git-workflow`'s self-review now says the code-review tool may finish in the
+background, and that the PR waits for its result. A dispatched author that ends
+its turn to wait says so, and `orchestrate` reads that as a wait instead of
+prodding the author toward opening the PR early.
+
+A diff of only generated or data files now skips the defect pass, with the skip
+and its reason stated when the PR is announced and in its description. Size
+alone does not qualify, and config a program acts on counts as logic.
+
+
+## dnbg-workflow 2026.10.17 — 2026-10-15
+
+Fixed the issue-creation hook blocking every `gh issue create` from a subagent
+that had loaded `issue-workflow`, which stopped `orchestrate`'s author agents
+from filing follow-up issues. The hook now checks the subagent's own skill
+loads, so a subagent is allowed once it has loaded the skill and blocked until
+then, whatever the main session loaded.
+
+
+## dnbg-workflow 2026.10.16 — 2026-10-15
+
+Picking up an issue, reviewing one, and handling review rounds and merges no
+longer depend on reading a reference file the harness cuts off partway. The
+longest ones were split into shorter files, each read whole at the step that
+needs it, so an agent no longer acts on the first half of an instruction whose
+second half it never saw.
+
+
+## dnbg-workflow 2026.10.15 — 2026-10-15
+
+An orchestrator running a tracking issue now appends decision-log rows and
+friction-log bullets with one script call instead of fetching, hand-editing and
+rewriting the whole parent body. The script confirms the write survived a
+concurrent edit, retries when it didn't, never adds a line twice, and reports the
+body's length for the archive threshold.
+
+
+## dnbg-workflow 2026.10.14 — 2026-10-15
+
+Fixed a first watch that could never fire. Every skill armed its first issue or
+PR watch from the clock, so a reply, verdict or comment posted while the agent was
+still finishing its own step fell before the watch's start and was never seen. The
+agent then waited out the whole window. A first watch now starts from the time of
+the agent's own last action, and when another party may already have acted, the
+skills say to read the issue before waiting on it.
+
+The issue watch has two new options. One picks which events wake it: comments,
+linked PRs, body edits or closing. The other names further logins to ignore. The
+existing roles behave as before. Every result the watch can be re-armed from now
+also carries the next run's settings as fields, so a script can continue a watch
+without parsing the printed command.
+
+
+## dnbg-workflow 2026.10.13 — 2026-10-15
+
+A tracking issue now resolves the way a plain issue does. When its last child
+closes, `orchestrate` authors the closeout PR itself: the as-built design doc,
+the friction log's dispositions (still filed only after you approve their text),
+and a recorded run for any end-to-end criterion no child ran. The PR carries
+`Closes <tracking issue URL>`, and its merge closes the tracking issue.
+
+The whole-project review now happens on that PR, as one review grading every
+end-to-end criterion, instead of as a verdict comment on the tracking issue that
+had to come back `ACCEPTED` before closeout could start. There is no longer a
+"close out" command to give: an orchestrator restarted on a project whose
+children are all closed picks up the closeout PR where its predecessor left it.
+
+
+## dnbg-workflow 2026.10.12 — 2026-10-15
+
+Fixed `orchestrate` telling its author to continue an unrelated PR on start or
+restart. Every open PR that mentioned the issue was taken for the issue's own
+work, including a PR in another repo that only cited it. Now only a PR that
+closes the issue, or a multi-repo sibling tagged with the closing PR's branch
+name, is handed to the author; any other is named to you instead. PRs found at
+start no longer wake the orchestrator's issue watch the moment it is armed.
+
+
+## dnbg-workflow 2026.10.11 — 2026-10-15
+
+`orchestrate` no longer watches the PR. It dispatches the reviewer when the
+author ends its turn with the PR URL, and treats the author's final report as
+the merge signal, so a run wakes less often. When the review is clean, the
+author ends its turn with its merge handoff and the orchestrator relays it
+as written: the command in a fenced block, the author's report beneath, plus
+the reviewer's verdict and SHA. It no longer rewrites the command or holds it
+until checks finish.
+
+The orchestrator also stops checking the issue against the tree before
+dispatch, since the author's pickup review does that, and no longer edits the
+body of the issue it is resolving: it sends each answer to the author, in the
+dispatch prompt when the answer came first, and the author writes it into the
+body. The scheduled hand-over to a fresh session after 40
+wakes now applies to single-issue runs too.
+
+
+## dnbg-practices 2026.10.1 — 2026-10-15
+
+`coding-practices` now loads at well under half its former size. The body is
+an index of rules, each with a stable ID (`C10`, `V3`) that a review finding can
+cite instead of restating the rule. The long form moved to references the body
+points at, each with the trigger for opening it: the comment bar case by
+case, the test for prose that instructs an agent, and the design argument
+behind extracting, unifying, and logging. A session that never touches a
+comment or a skill file never pays for those.
+
+The skill no longer directs you to the Context7 MCP server for library docs.
+The rule is now the general one: read the installed source or fetch current
+docs rather than writing a call from memory.
+
+Rules that changed in the pass: the "rule of three" is gone; the test is
+whether unifying removes a copy or adds flexibility for an absent requirement.
+The emphasis "budget" is now a severity test a marker passes or is removed. A
+changed test assertion now needs a stated reason in the PR. Code that cannot be
+tested without standing up something unrelated is named as a design signal.
+
+
+## dnbg-workflow 2026.10.10 — 2026-10-15
+
+The always-on "Verify before asserting" rule no longer names the Context7 MCP
+server. It now says to read the source or fetch current docs, which is what the
+rule asked for all along on a machine without that server configured.
+
+
+## dnbg-workflow 2026.10.9 — 2026-10-14
+
+Orchestration is now documented end to end in the README. "How you use it" shows
+one session orchestrating a single issue, with a recording, and then a whole
+project run from a tracking issue: the design reviewed as a spec, decomposed into
+child issues, the set checked against the design, the children orchestrated in
+dependency order, and the project closed out. It names the three points where
+you are needed: approving the design, answering escalations, and merging.
+
+The configuration guide now covers the `retrospective_dir` option.
+
+
+## dnbg-workflow 2026.10.8 — 2026-10-14
+
+`orchestrate` now drives a tracking issue, not only a single issue. Point it at a
+tracking issue and it works through the sub-issues in dependency order, up to
+three at a time. It claims each one before dispatching an author and a reviewer
+to it. A sub-issue waits while a blocker is open, while someone else holds it,
+or, in a project that uses spec review, until its latest review reads READY.
+
+Answers and escalations are logged in the parent's decision-log table as well as
+on the child. A decision that changes the design is applied right away: the
+orchestrator edits the parent, updates the children that cite what changed,
+re-runs their spec review, and tells any agent working on them. It flags
+problems that span several children, such as two questions about the same
+requirement or the same review finding on two PRs. When every child is closed,
+it hands the project to the reviewer's whole-project review and stops on that
+verdict.
+
+
+## dnbg-workflow 2026.10.7 — 2026-10-14
+
+`orchestrate` now ends every run with retrospectives: the author, the reviewer
+and the orchestrator each write a short local file on what slowed them down,
+what a skill got wrong, what they worked around, and what they wished they could
+have asked. They go under `~/.claude/dnbg-retrospectives/<owner>/<repo>/`; set
+the new `retrospective_dir` option from `/plugin` to keep them elsewhere.
+
+New `process-review` skill: say "review the retrospectives" and it reads a batch,
+reports the patterns that recur with counts and quoted examples, and drafts
+upstream issues for the ones the plugin is to blame for. Nothing is filed until
+you approve the exact text.
+
+
+## dnbg-workflow 2026.10.6 — 2026-10-14
+
+New `orchestrate` skill: say "orchestrate the resolution of <issue URL>" and the
+session claims the issue, dispatches an author and a reviewer as subagents, and
+drives them to a merged PR. It answers the author's questions that the issue's
+own body settles, brings you the rest, and records every answer on the issue as
+a `Decision log:` comment. A restarted orchestrator picks up from the issue
+alone, after asking you to confirm its predecessor is gone. Tracking issues with
+sub-issues are not orchestrated yet.
+
+Claiming an issue, and checking whether it is already someone else's, is now one
+script call in `issue-workflow` rather than several hand-typed commands. The
+claim marks themselves are unchanged.
+
+
+## dnbg-workflow 2026.10.5 — 2026-10-14
+
+Skills now know what to do when they need an answer and nobody can give one. An
+agent without `AskUserQuestion`, as in any subagent, posts the question as a
+comment opening with `Delegated question:` on the issue it is working (or the PR,
+when there is no issue) and ends its turn with the question as its report. It no
+longer improvises or picks silently. An answer the dispatcher gave in advance,
+such as "send it to review when done", is used instead of asking.
+
+This replaces the "unattended" branches, which keyed on what the operator had
+said rather than on anything an agent can detect. The reviewer no longer takes
+"wait until ready" on a draft, and `issue-reviewer` no longer takes the spec
+review on an ambiguous request, without being told to.
+
+
+## dnbg-work-summary 2026.10.1 — 2026-10-14
+
+A recap requested by another agent, with no `AskUserQuestion` to ask its
+questions with, now uses the defaults the skill recommends and says which it
+took. Where there is no default (an open audience or format, or no `owners`
+setting), it stops and reports the question instead of guessing.
+
+
+## dnbg-workflow 2026.10.4 — 2026-10-14
+
+`reviewer` can now review a tracking issue as a whole project. Pointed at an issue with sub-issues, it waits until every child is closed, then grades the merged work against the tracking issue's end-to-end acceptance criteria. It posts one verdict on the tracking issue, `ACCEPTED` or `CHANGES REQUESTED`, which names every criterion.
+
+New closeout procedure: say "close out <tracking issue URL>" once that verdict is `ACCEPTED`. It writes the as-built design to `docs/design/` through one PR, turns each friction-log entry into a follow-up issue or an explicit drop, and closes the tracking issue with a link to the doc. Until the orchestrate skill ships, give the agent the path `dnbg-workflow/skills/orchestrate/references/closeout.md`.
+
+
+## dnbg-workflow 2026.10.3 — 2026-10-14
+
+`issue-reviewer` can now review a tracking issue together with its sub-issues. It reads the whole set in one call, and checks it against the design for more problems: a requirement that no child covers and the parent hasn't marked end-to-end or deferred; a child that needs another child's output but isn't marked blocked by it; and a child whose approach contradicts the design section it cites. A finding that the design itself should change goes on the tracking issue. The expected fix is an edit to that issue's body plus a decision-log row, not edits to the children.
+
+
+## dnbg-workflow 2026.10.2 — 2026-10-14
+
+`issue-workflow` can now decompose an accepted tracking issue into child issues.
+It covers grouping requirements into children, the lines each child carries to
+say what it covers and depends on, keeping every child's criteria runnable at its
+own merge, and filing the children as GitHub sub-issues with blocked-by
+relationships. Setting those relationships is safe to re-run after a partial
+failure. It refuses to move an issue that already belongs to another parent.
+
+
+## dnbg-workflow 2026.10.1 — 2026-10-14
+
+`issue-reviewer` now reads a later round's changes from the issue's own edit
+history on GitHub, rather than from a copy of the body it had to keep itself. A
+round no longer depends on the session that wrote the last one still holding that
+copy. The same history is available to you: `scripts/issue-diff.sh` in the
+`dnbg-workflow` plugin prints a unified diff of an issue's body between two times.
+
+New: a shape for **tracking issues** — an issue whose body is a project's design
+and the parent of the issues that implement it. `issue-workflow` now describes
+its sections, stable `C#`/`R#`/`D#`/`Q#`/`A#` IDs, decision and open-question
+formats, decision and friction logs, and what makes a design accepted.
+
+`issue-reviewer` gains a design mode: reviewing a tracking issue's body also
+checks that requirements are checkable, every decision has a rationale and a
+reversal condition, every open question has a default, end-to-end criteria
+exist, and every cited ID resolves. The round comment names the mode and lists
+each check it ran.
+
+
+## dnbg-workflow 2026.9.1 — 2026-09-13
+
+Before asking whether to send a PR to review, the author now self-reviews the
+branch: alongside re-reading the diff against your coding standards, it runs
+`/code-review` over the branch and fixes what that finds. When it announces the
+draft PR, it tells you which findings it declined and why.
+
+The review runs at whichever `/code-review` effort level you last typed, but
+never `ultra`.
+
+
+## dnbg-workflow 2026.8.63 — 2026-08-20
+
+A new `issue-reviewer` skill reviews an issue **body** — before anyone picks the
+issue up — rather than reviewing the work that resolves it. It checks the body
+against the tree, judges whether a cold resolver could finish it, and posts a
+verdict per issue per round under the reviewer bot until the review converges.
+Hand it several issues at once and it also reports what only the set shows: two
+issues claiming the same work, one that depends on another scheduled later, work
+nobody owns. Answering such a review is covered by `issue-workflow`.
+
+"Review this issue" used to mean only one of these. `reviewer` claimed the
+phrasing, so asking for the other silently got you a review of the PRs instead —
+or an open-ended wait for PRs that did not exist. Both skills now route on how you
+phrase it and ask when it is genuinely ambiguous.
+
+## Migration
+
+The reviewer bot now needs permission to write issues. A newly created one gets
+it; a bot you set up earlier does **not**, and reviews of issue bodies cannot post
+until you add it — PR reviews are unaffected. Follow **Repair / rotate** in
+`reviewer-setup`, and note that a permission added to an App stays pending until
+each installation accepts it.
+
+
+## dnbg-practices 2026.8.7 — 2026-08-17
+
+`coding-practices` now names more comment cases to delete: a comment confirming
+what every competent reader already assumes, a warning about what breaks if the
+code changes, and — the one that survives a standards pass today — such a warning
+where a test already fails on the change it warns against.
+
+"Write the why, not the what" is reworded so it no longer reads as a ban on a
+short statement of what a block is for.
+
+
+## dnbg-workflow 2026.8.62 — 2026-08-16
+
+Fixed the PR watch silently dropping a review that arrived while you were
+pushing a fix. `git-workflow` told you to re-arm the watch with a fresh clock
+reading after a push, and anything the reviewer posted between the previous
+watch returning and the new one arming was filtered out for good — not
+deferred. It now says to re-use the line the watch printed and change only the
+head.
+
+Also fixed the watch staying quiet about a red build on the commit you just
+pushed, when that check was already red before the push. Check results belong to
+the commit they ran on, and the watch was matching them by name alone — so the
+second failure looked like the one you had already been told about.
+
+
+## dnbg-workflow 2026.8.61 — 2026-08-16
+
+Reviews from the `reviewer` bot were not counting. GitHub does not let a review
+from an App that lacks write access to repository contents affect a pull
+request's approval state — so on a repo that requires an approval the bot could
+never satisfy it, and threads it opened could not be resolved. The review
+appeared on the PR, read correctly, and did nothing. It asks for that access
+now, and `reviewer-setup` grants it when it creates an App.
+
+Setting up a reviewer also checks what the App was actually granted, and says
+what is missing and how to fix it if anything is. An App holding extra
+permissions for other purposes is fine.
+
+**This widens what a leaked reviewer key can do.** It could already read private
+source on every repo the App is installed on; it can now write there too, and
+merge. That is the cost of the bot's reviews counting, and GitHub offers no
+narrower permission for it — so the repo list you install on is the only lever.
+`SECURITY.md` covers it.
+
+## Migration
+
+**An App created before this release keeps its old permissions.** GitHub fixes
+them when the App is created, so re-running the setup will not change one. Add
+*Contents: Read and write* under your App's permissions, then accept the pending
+request on each installation — the grant does nothing until you do.
+`reviewer-setup`'s **Repair / rotate** section has the steps. If you skip this,
+the reviewer will tell you the next time it runs.
+
+
+## dnbg-workflow 2026.8.60 — 2026-08-16
+
+Fixed a mergeable PR reporting as un-actionable on any repo with pre-receive
+hooks — GitHub reports that state separately, and it was read as one nothing
+recognises.
+
+Merge state now distinguishes "mergeable", "ask again in a moment", and "GitHub
+changed its API", where all three previously wore one answer. Only the last needs
+a person.
+
+
+## dnbg-workflow 2026.8.59 — 2026-08-16
+
+Watching a PR is now a single wait from open through merge. The author's session
+previously swapped between two watchers, and a reviewer who posted findings
+*after* approving landed in the gap between them and was never reported.
+
+Issues can now be watched for conversation — a comment, a body edit, a linked PR
+appearing, or the issue closing — rather than only for a PR showing up. Several
+issues ride one watch.
+
+A check that stops passing now wakes the watch, instead of being noticed
+whenever something else happened to.
+
+
+## dnbg-workflow 2026.8.58 — 2026-08-15
+
+Issues your agent files no longer argue for their own scope — why this is one
+issue and not three, why it isn't a duplicate. Ordering constraints that
+argument tended to carry are kept, attached to whatever they constrain.
+
+
+## dnbg-workflow 2026.8.57 — 2026-08-15
+
+A review run entirely through the GitHub API no longer loads its worktree-cleanup
+instructions at the end, which cost context on every review to say there was
+nothing to clean up.
+
+
+## dnbg-workflow 2026.8.56 — 2026-08-15
+
+The end-of-cycle report no longer pads its **Actionable** section. An item earns
+a place there by naming a concrete next step and where; doubt now resolves toward
+Observations. An empty section is a normal outcome of a clean cycle and simply
+says so.
+
+Applies to both reports — the reviewer's when the PR closes, and the author's
+after a merge.
+
+
+## dnbg-workflow 2026.8.55 — 2026-08-15
+
+PR descriptions keep a measurement the argument rests on, bounding what it does
+and does not establish, rather than cutting it to avoid an unearned claim.
+
+
+## dnbg-workflow 2026.8.54 — 2026-08-15
+
+PR descriptions claim less. A detail earns its place by changing what a reviewer
+does, not merely by being true — a number that scopes the diff stays, a number
+that only describes the work goes. Where a review finding's whole remedy is
+editing prose that ships, the claim is cut rather than corrected, and `reviewer`
+raises it that way.
+
+
+## dnbg-workflow 2026.8.53 — 2026-08-15
+
+Warning markers across the plugin are down to the ones that mark a genuinely
+silent failure, so the remaining ones carry weight again.
+
+
+## dnbg-practices 2026.8.6 — 2026-08-15
+
+`coding-practices`' rule against counting a list you are introducing now covers
+the case where the count scopes a *subset*. "These three carry a handoff" above a
+list of seven is a count doing two jobs, and deleting the number leaves "these",
+now claiming all seven — so name the members instead.
+
+
+## dnbg-workflow 2026.8.52 — 2026-08-15
+
+`git-workflow` is restructured along the path a change actually walks, and the
+always-loaded part drops from about 10,000 words to 2,600. The review-round and
+merge instructions load at the point each one binds, so a session that opens a
+draft PR and stops there never pays for them.
+
+Post-merge cleanup now travels with the merge rather than staying in the opening
+flow, so a session told a PR merged reaches it cold.
+
+
+## dnbg-workflow 2026.8.51 — 2026-08-14
+
+A review round now arrives complete. The watch used to print comment bodies
+without the threads or the diff, so it read as a finished round while carrying
+most of one — a caller could act on it and be wrong, and a caller who fetched the
+rest anyway paid for every body twice. It now hands over the exact command that
+assembles the whole round, and `reviewer` runs it.
+
+
+## dnbg-practices 2026.8.5 — 2026-08-14
+
+`coding-practices` sharpens two rules about detail that costs more than it earns.
+
+**Agent-facing prose gets a test for when rationale earns its line.** A
+`SKILL.md`, rules file, or `CLAUDE.md` has two readers and charges one: the agent
+loads every line on every run, the editor opens the file once. A *why* that
+decides a case the instruction doesn't enumerate stays; a *why* that only defends
+the instruction against a future editor belongs in the PR.
+
+**A comment that counts the list it introduces** is now called out — the list
+counts itself, and any added item silently falsifies the number.
+
+
+## dnbg-workflow 2026.8.50 — 2026-08-14
+
+`git-workflow` adds a step between committing and pushing: re-read your own diff
+against the standards you loaded, with those files reopened rather than recalled,
+and fix what you find before pushing.
+
+
+## dnbg-workflow 2026.8.49 — 2026-08-14
+
+Fixed a force-push carrying a standing approval onto the rewritten commit, so a
+tree nobody had reviewed reported as approved. Both skills now check when the
+approval was given against when the commit at HEAD was created.
+
+Expect one extra review round after a rebase, including a rebase that only
+inherits already-reviewed content. The reviewer re-verdicts unprompted on any
+HEAD move, so the fresh approval arrives on its own.
+
+
+## dnbg-workflow 2026.8.48 — 2026-08-14
+
+Fixed two ways a reviewer silently lost events while watching a PR. Both looked
+exactly like a quiet PR, which is what made them worth stating: re-arming a watch
+with a freshly read clock opened a window nothing observed, and nothing said the
+issue-scoped wait is a singleton, so a session could arm a second one alongside
+the first.
+
+Reviews cost fewer calls. Independent probes go in one call rather than a
+sequence, a check needing the same field across many PRs or issues is one query
+instead of a loop, and reading a repo's tree gains a middle gear between fetching
+files one at a time and checking the whole thing out.
+
+Between watch cycles a reviewer now reports a status line rather than restating
+the review. The full report is owed once, when the PR closes.
+
+None of this changes what a reviewer checks or concludes.
+
+
+## dnbg-workflow 2026.8.47 — 2026-08-13
+
+Reviews carry fewer non-blocking notes. Each minor observation an author acts on
+moves HEAD, which correctly costs a fresh verdict, a fresh CI run, and often a
+fresh round of notes about the fix — so an observation now has to earn its place
+in the review body. Pacing is handed over as a sentence ("none of this needs a
+round before merge") rather than a section headed "Non-blocking".
+
+Nothing is removed from what a reviewer checks. The bar governs what gets
+published, not what gets run.
+
+
+## dnbg-workflow 2026.8.46 — 2026-08-13
+
+`reviewer` is restructured along the review timeline, and the always-loaded part
+drops from 860 to 633 lines — the watch, re-review and worktree instructions load
+at the point each one binds.
+
+**Loading the coding standards is now the review's first step**, ahead of reading
+the diff, and the PR's repo decides which standards apply rather than your
+working directory. A reviewer working remotely previously met nothing telling it
+to load them at all.
+
+
+## dnbg-workflow 2026.8.45 — 2026-08-13
+
+Each review round is one call now, on both sides of the cycle: the round's diff,
+the new activity, the standing verdict and every unresolved thread come back
+together, where each side previously ran a sequence of reads that could be half
+performed. The clean-review path also reads the approving review's body, so CI
+triage or scope notes a reviewer left in an approval stop being re-derived from
+scratch.
+
+
+## dnbg-workflow 2026.8.44 — 2026-08-13
+
+A review reaches you roughly half a minute sooner. The author's watch was waiting
+out a coalescing window sized for an author's burst of separate actions; a
+reviewer files its verdict and inline comments in a single write, so there was
+nothing to coalesce.
+
+
+## dnbg-workflow 2026.8.43 — 2026-08-13
+
+Tightened the reviewer's verification discipline, so a review is less likely to
+publish a finding that isn't real or approve something it never checked. Reviews
+now read the PR at its head commit rather than a local branch, read whole files
+when the question is whether something is *absent*, and run probes under the
+target's real shell and working directory.
+
+Mechanical gates — a formatter, a JSON parse, a required changelog fragment — are
+left to CI, with the reviewer's judgment spent on whether what those gates
+accepted is accurate.
+
+
+## dnbg-workflow 2026.8.42 — 2026-08-13
+
+Fixed every review posting under your personal GitHub account instead of the
+reviewer bot. The token was minted in a tool call of its own, and an agent
+harness starts a fresh shell per call, so it was gone before any command could
+spend it — silently, since posting as yourself succeeds on a PR you did not
+write. Each posting block now mints the token alongside the command that uses it,
+and the review reports the identity it posted under.
+
+
+## dnbg-workflow 2026.8.41 — 2026-08-12
+
+Naming a draft PR for review now recommends **waiting** until it is marked ready,
+and an unattended run takes that arm. Draft is the author's signal that the work
+is not yet endorsed for review.
+
+The finished cycle is reported under three headings — **Summary** (what
+happened), **Observations** (nothing to do), **Actionable** (each naming a
+concrete next step) — with "None" under an empty one. Neither skill acts on its
+own Actionable list; filing and fixing stay your call.
+
+
+## dnbg-workflow 2026.8.40 — 2026-08-12
+
+The version stamp is now opt-in and **off by default**. It was landing an
+invisible `<!-- dnbg-workflow <version> -->` comment on PR descriptions, review
+bodies, and issue claim comments — artifacts published under your name, in repos
+you may share with people who never installed this plugin.
+
+Turn it on with the new `version_stamp` option in `/plugin` (Configure →
+dnbg-workflow).
+
+## Migration
+Nothing to do unless you want the stamp. If you were relying on it to trace a
+published PR or review back to the prompt version that produced it, enable
+`version_stamp`, or the stamps silently stop appearing on everything published
+after this update. Artifacts already stamped keep theirs.
+
+
+## dnbg-practices 2026.8.4 — 2026-08-12
+
+`coding-practices` now names failures specific to prose that instructs an agent —
+a `SKILL.md`, an always-on rules file, a `CLAUDE.md`: an argument made twice, the
+inverse of a condition the section is already scoped by, a read an earlier step
+could have carried, and a branch the deployment never reaches.
+
+The file also meets those rules itself now, and is shorter for it.
+
+
+## dnbg-workflow 2026.8.39 — 2026-08-12
+
+New always-on rule, **Coding standards stack**: load every standard that applies
+before writing or reviewing code — the repo's own, yours, and
+`dnbg-practices:coding-practices` when that plugin is installed — and hold the
+work to all of them, with the project's own winning any disagreement. Authoring
+prose that instructs an agent counts as writing code for this.
+
+Nothing loaded `coding-practices` before, and `reviewer` never mentioned
+standards at all, so a verdict was judged against whatever the model happened to
+bring.
+
+## Migration
+This takes effect on an installed machine as soon as the plugin updates — it
+applies to every session. If your repo has standards you did *not* want applied
+to agent-facing prose (`SKILL.md`, `CLAUDE.md`), say so in the document itself;
+the rule reads them as code.
+
+
+## dnbg-workflow 2026.8.38 — 2026-08-12
+
+Asking `reviewer` to review a draft PR now stops and asks — **"Review it now"**
+(recommended) or **"Wait until it's ready"**, which reviews once the PR is marked
+ready — instead of noting the draft status and reviewing anyway.
+
+The question is skipped when you have already answered it in your request. An
+unattended run, where nobody is there to answer, takes the wait arm; a headless
+run that wants a verdict on a draft says so in its prompt. Drafts *discovered*
+while reviewing an issue are unchanged: still held back without asking.
+
+
+## dnbg-workflow 2026.8.37 — 2026-08-12
+
+Stopped assuming your repo has branch protection. On a repo with no required
+checks nothing is ever reported as blocked, and a fully red build reported as
+merely unstable — which `git-workflow` handed over as a plain "ready to merge".
+
+You still get the merge command immediately, including while checks are running,
+but non-passing checks are named alongside it and a build that has already failed
+is no longer framed as ready.
+
+
+## dnbg-workflow 2026.8.36 — 2026-08-12
+
+Fixed a review that landed while no watch was running being lost for good. Pushes
+were already caught by comparing state, but a verdict posted during a gap in
+watching was invisible and the watch reported idle — which reads as a PR nobody
+has looked at.
+
+A verdict at the current commit now wakes the watch however long it has been
+sitting there. Both skills pass what is needed, so this applies without anything
+on your side.
+
+
+## dnbg-workflow 2026.8.35 — 2026-08-12
+
+The workflow skills and the hooks' shared library shed the narration of the
+defects that prompted their rules — history the skills were carrying into every
+session. Every rule, guard reference and escalation is unchanged.
+
+
+## dnbg-workflow 2026.8.34 — 2026-08-12
+
+Reviews, PR descriptions, and issue claim comments now carry the plugin version
+that produced them, as an HTML comment that renders invisibly. Sessions started
+against a broken install omit the stamp rather than guessing.
+
+
+## dnbg-workflow 2026.8.33 — 2026-08-12
+
+Three `gh`/`jq` blocks that skill prose asked the agent to run verbatim are now
+real scripts, covered by shellcheck and tests rather than by nothing.
+
+Three behaviours the prose described but nothing enforced are now enforced: a
+verdict reversed at the same commit is not an approval, PR discovery that loses a
+source says so instead of reporting an empty set, and the reviewer bot is matched
+by the login GitHub actually returns.
+
+
+## dnbg-workflow 2026.8.32 — 2026-08-12
+
+`reviewer-setup` states its installation-permissions check once instead of twice,
+so there is no second copy to drift.
+
+
+## dnbg-work-summary 2026.8.4 — 2026-08-12
+
+`work-summary` drops Slack composer trivia that had dated itself, keeping the
+part you can act on: emoji shortcodes must exist in the workspace, and
+Cmd-Shift-V is the fix when formatting doesn't survive a paste.
+
+
+## dnbg-workflow 2026.8.31 — 2026-08-12
+
+`git-workflow` and the always-on rules shed prose recording how they got here
+rather than instructing — the loops that preceded the shipped watchers, the
+incidents behind two rules, a consent procedure `issue-workflow` already spells
+out. Every rule is unchanged, and each session loads less.
+
+
+## dnbg-workflow 2026.8.30 — 2026-08-12
+
+`issue-workflow` splits filing an issue from resolving one, so each session loads
+roughly half of what it used to: a filer drops the 2,600 words on claiming and
+freshness probes, a resolver the 1,200 on writing a good body.
+
+
+## dnbg-practices 2026.8.3 — 2026-08-12
+
+Skill descriptions are shorter. A description loads into every session whether or
+not its skill fires, and these had grown into summaries of their own contents.
+They now carry identity, triggers, and skips only, and nothing about when a skill
+loads has changed.
+
+
+## dnbg-workflow 2026.8.29 — 2026-08-12
+
+Skill descriptions are shorter. A description loads into every session whether or
+not its skill fires, and these had grown into summaries of their own contents.
+They now carry identity, triggers, and skips only, and nothing about when a skill
+loads has changed.
+
+
+## dnbg-work-summary 2026.8.3 — 2026-08-12
+
+Skill descriptions are shorter. A description loads into every session whether or
+not its skill fires, and these had grown into summaries of their own contents.
+They now carry identity, triggers, and skips only, and nothing about when a skill
+loads has changed.
+
+
+## dnbg-workflow 2026.8.28 — 2026-08-12
+
+`reviewer` sheds prose that recorded its own development rather than instructing.
+Every rule it surrounded is unchanged, and each review loads less.
+
+
+## dnbg-practices 2026.8.2 — 2026-08-12
+
+`coding-practices` now applies its bar for what a comment must not carry to prose
+that instructs an agent — skill files, always-on rules, `CLAUDE.md` — and loads
+when you are authoring that prose. Its trigger previously skipped "non-code
+questions", so it never reached the sessions where skill prose gets written.
+
+
+## dnbg-workflow 2026.8.27 — 2026-08-12
+
+`reviewer`'s issue-scoped mode moves to a reference file, so a PR-scoped review no
+longer loads the 2,100 words it never uses.
+
+
+## dnbg-workflow 2026.8.26 — 2026-08-12
+
+`reviewer` no longer files style nits as inline comments. An inline comment is a
+review thread, and a thread blocks the merge outright wherever a repo requires
+conversations resolved — so a nit filed on a line held the merge hostage while the
+review body called it non-blocking.
+
+Inline-vs-body is now decided on "would you hold the merge for it", filing a
+thread goes with requesting changes so the verdict and the threads agree, and a
+nit-thread that turns out to be the last blocker gets resolved.
+
+
+## dnbg-workflow 2026.8.25 — 2026-08-11
+
+The worktree hook's block message now names the file and the retry path correctly
+when the repo is reached through a symlink — on macOS, anything under `/tmp`, and
+any symlinked home or project directory. The path it told you to retry with was
+previously a location that could not exist.
+
+The gate itself is unchanged. Only the text you act on after a block was wrong.
+
+
+## dnbg-workflow 2026.8.24 — 2026-08-11
+
+`reviewer-setup` points at current documentation for the reviewer key's sources,
+rather than a README section that no longer exists. The skill relays that pointer
+to you when it sets the bot up, so the stale one was reaching users.
+
+
+## dnbg-workflow 2026.8.23 — 2026-08-10
+
+New always-on rule: when a script, hook, or procedure the plugin ships doesn't
+cover your case, the agent finishes the task the narrow way, then tells you what
+didn't fit and offers to report it upstream.
+
+Filing is never agent-initiated. An issue against this project is published under
+*your* GitHub identity to a repo you don't control, so it happens only if you ask
+for it, is written from the generic case with nothing session-specific in it, and
+is shown to you in full for approval before it is submitted. With no user present
+to ask, nothing is filed.
+
+The rule also states two things that were previously implicit: a hook that blocks
+you is working as intended and should be satisfied rather than routed around, and
+the installed plugin copy under `~/.claude/plugins/` is never a place to edit —
+those edits are unreviewed and are destroyed by the next update.
+
+
+## dnbg-workflow 2026.8.22 — 2026-08-10
+
+The always-on rules now reach subagents, not just the main conversation. Any
+subagent you spawned had never been told to work in a worktree, to reference
+issues by full URL, or about any configuration override you had set.
+
+This is a behavior change on an installed machine: subagents now see the rules
+and act on them, and each spawn costs the tokens the rules occupy.
+
+
+## dnbg-workflow 2026.8.21 — 2026-08-10
+
+The workflow skills now state that they are GitHub-only and decline cleanly on
+another forge, instead of running `gh` commands that cannot work and surfacing a
+cascade of confusing errors.
+
+What decides is the repo holding the work, not your working directory — so
+picking up a GitHub issue from a GitLab checkout, or reviewing a GitHub PR from
+one, works normally. A repo with no `origin` is not treated as a decline: it makes
+no forge claim either way.
+
+The README gains a support matrix naming every forge, and says which plugin ships
+each skill and whether that skill needs a forge at all.
+
+
+## dnbg-work-summary 2026.8.2 — 2026-08-10
+
+`work-summary` now states that it recaps GitHub work specifically, and that it is
+scoped to your GitHub account rather than to any repository.
+
+The practical effect is a guarantee rather than a restriction: asking for a recap
+of your GitHub week while sitting in a GitLab checkout — or in no repo at all — is
+a supported request.
+
+
+## dnbg-workflow 2026.8.20 — 2026-08-10
+
+The issue-scoped wait now wakes on PRs that reference an issue without a closing
+keyword, and the claim check sees them too. Both previously asked GitHub only for
+PRs carrying a closing keyword.
+
+A real resolving PR that linked the issue in prose therefore never woke the
+watch: it ran its full window, reported idle, and then presented the issue number
+as probably wrong — while the unreviewed PR could merge. The same gap made an
+in-flight multi-repo change read as unclaimed the moment its closing PR merged,
+so a second session could start work that was already half shipped.
+
+A timeline source going blind is now reported rather than presenting as a quiet
+issue.
+
+
+## dnbg-workflow 2026.8.19 — 2026-08-10
+
+Two of the workflow's mechanical choices are configurable from `/plugin`,
+alongside `owners`:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `worktree_path` | `.worktrees` | Repo-relative directory worktrees are created in |
+| `claim_label` | `assigned:agent-session` | Label an agent session applies when it claims an issue |
+
+Set one and a note at session start says so, which the skills read as overriding
+their defaults. Set neither and nothing changes. A rejected value falls back to
+the default with the reason printed at session start rather than being silently
+ignored — a worktree path has to stay inside the repo, and a claim label has to
+start with `assigned:`, since that whole namespace is what the check for someone
+else's claim matches.
+
+What stays fixed, deliberately: PRs always open as drafts, the send-to-review
+question and its option order, the sibling-PR title tag, and "only a human
+merges".
+
+
+## dnbg-workflow 2026.8.18 — 2026-08-09
+
+`git-workflow` described the PR watcher's argument handling wrongly in three
+places. All three are corrected; no behaviour changed.
+
+
+## dnbg-workflow 2026.8.17 — 2026-08-09
+
+The PR watcher no longer reports a push that never happened. An abbreviated
+commit SHA could never match the full one GitHub returns, so a watch armed with a
+short one reported a push within seconds of starting, with nothing pushed —
+`reviewer` read that as a delta to re-review and `git-workflow` read it as the
+author pushing, and neither could tell it from the real thing.
+
+A short SHA is now refused outright. Both skills already passed the full one.
+
+
+## dnbg-workflow 2026.8.16 — 2026-08-09
+
+Issue claims use the label `assigned:agent-session` instead of
+`assigned:claude-code`, and the claim comment names the claiming session.
+
+Naming the session turns a question that was previously undecidable — is this
+claim my own earlier mark, or a sibling session's? — into a comparison. Only an
+exact match licenses proceeding, so any claim that can't be positively accounted
+for still stops and asks. The practical gain is unattended runs, which previously
+had to stop on *every* claim from your own account, including their own.
+
+**Claims already on your issues keep working and need no cleanup.** The pickup
+check matches the whole `assigned:*` namespace, so an issue carrying the old
+label is still detected as claimed. There is no relabeling script and none is
+needed.
+
+
+## dnbg-workflow 2026.8.15 — 2026-08-09
+
+The reviewer bot's private key can now come from a secret manager or the
+environment instead of a plaintext file, and its directory is hardened.
+
+The key is resolved from the first source that yields one:
+
+1. `DNBG_REVIEWER_PRIVATE_KEY` — the PEM itself.
+2. `DNBG_REVIEWER_PRIVATE_KEY_COMMAND`, or `private_key_command` in
+   `config.json` — a command whose stdout is the PEM (`op read`, `pass show`,
+   `security find-generic-password -w`, `secret-tool lookup`, `vault kv get`,
+   `sops -d`).
+3. `~/.config/dnbg/reviewer/private-key.pem` — the existing default, unchanged.
+
+Route 1 paired with `DNBG_REVIEWER_APP_ID` needs no config file or PEM on disk at
+all, which makes running the reviewer in CI possible for the first time. A key
+from route 1 or 2 is never written to disk — it goes through a pipe rather than a
+temp file, so a crash cannot strand it.
+
+The key command is read only from your user config or the environment, never from
+a repository. Nothing reads config from the working directory.
+
+## Migration
+Minting now refuses to run against a group- or world-writable config directory or
+key file, the way `ssh` refuses an over-permissive private key. If yours is loose
+it will stop and tell you; fix with `chmod go-w ~/.config/dnbg/reviewer`, or
+re-run the setup, which now tightens the directory to `0700` over an existing
+one.
+
+
+## dnbg-workflow 2026.8.14 — 2026-08-09
+
+`git-workflow` now handles a watcher that returns nothing. Both of its watch
+loops treated a killed watcher as indistinguishable from a quiet one — which
+matters most on the merge watch, which runs for hours while you are away, where a
+kill could swallow the merge and skip the post-merge cleanup entirely. Both now
+re-read the PR's real state rather than trusting the watcher's silence.
+
+A watcher's trace also records its own arguments, so a stray trace says which PR
+it was watching rather than only that a watch died.
+
+
+## dnbg-workflow 2026.8.13 — 2026-08-09
+
+**The issue-creation gate no longer blocks commands that merely talk about
+creating an issue.** It matched the phrase anywhere in a command string —
+including inside a quoted argument or a heredoc body, where it is text rather
+than a command — so any command whose payload discussed issue creation was
+blocked. Review bodies, commit messages and issue text are exactly the payloads
+most likely to do that.
+
+The gate now requires the phrase to be in command position. Genuine invocations
+are unaffected, including ones that follow another command.
+
+
+## dnbg-workflow 2026.8.12 — 2026-08-09
+
+The PR and merge watchers can now explain their own death, and three ways a watch
+could go silently blind are fixed.
+
+**Tracing, on by default.** Both watchers record a line per poll, per signal, and
+at exit, under `${TMPDIR:-/tmp}/dnbg-watch/`, swept after three days.
+`WATCH_LOG=<path>` redirects it and `WATCH_LOG=off` turns it off, after which
+nothing is installed and nothing is spent. A killed watch otherwise leaves no
+evidence anywhere: its one result line is written at exit, so it produces an
+empty output file, and macOS records ordinary process signals nowhere.
+
+Fixed, each of which previously left a watch running and reporting something
+plausible but wrong:
+
+- **Replies behind a page of older comments were invisible.** On a PR with more
+  than 30 inline comments, every new reply sat on a page the watch never fetched.
+  It saw only history, never woke, and idled out looking healthy — most likely to
+  bite on a busy PR with several reviewers.
+- **An API error body passed the shape gate.** It is well-formed JSON, so it was
+  accepted with an empty state, and the watch ran its whole window against it and
+  reported idle on a PR that had already closed.
+- **A zero poll interval was accepted and spun**, turning the watch into a busy
+  loop that could exhaust the hourly API budget in under a minute and leave it
+  blind behind rate-limit failures for the rest of its window.
+
+Also on the shipped path, whether or not you enable tracing: a watch now takes a
+termination signal while napping instead of deferring it for up to a full poll
+interval.
+
+
+## dnbg-workflow 2026.8.11 — 2026-08-09
+
+The plugin now tells you when its enforcement gates are not actually running.
+
+Both blocking hooks parse their input with `jq` and resolve repositories with
+`git`. If either is missing they fail *open* — the edit proceeds, you get a `hook
+error` notice naming the missing binary, and **Claude never sees that notice**,
+so the agent works as though the worktree and issue gates were live. On a machine
+without `jq`, that state was permanent and effectively invisible.
+
+A dependency preflight now runs at session start and prints a warning naming the
+missing binary and what it disables — once per session, and to you *and* Claude.
+Missing `jq`, `git` and `gh` are reported separately, because they break
+different things.
+
+**Nothing new blocks.** The gates keep failing open, deliberately: a gate learns
+which repo an edit targets by parsing its payload, so with no parser it cannot
+tell a covered repo from any other, and the only reachable "fail closed" would
+block every edit on the machine. The silence was the defect, not the fail-open.
+
+The README gains a **Requirements** section listing the binaries the plugin needs
+and what degrades without each, a documented Claude Code floor of **v2.1.207**,
+and an honest platform statement: macOS and Linux are exercised, Windows/Git Bash
+is untested and not claimed.
+
+
+## dnbg-workflow 2026.8.10 — 2026-08-08
+
+Both background watchers now measure time in **laptop-open seconds** and share
+one poll curve.
+
+- **A suspended machine no longer burns a watch.** Closing the lid overnight used
+  to retire the merge watcher's whole window, so it woke to an already-blown
+  deadline and reported "watched the full window, no merge" having never once
+  looked. Suspended time is now discounted from both the window and the poll
+  interval, and a watch comes back at its 10-second floor — fastest at exactly the
+  moment you have reopened the machine.
+- **New poll curve, shared by every watch:** 10s at the start, easing to 30s over
+  half an hour, a minute by the 90-minute mark, then 5 minutes flat. Whatever you
+  are waiting for usually happens in the first few minutes and nearly always
+  within the hour, so the wait is short when it matters and cheap when it
+  doesn't. Tunable via `POLL_CURVE`.
+- **A short outage no longer ends a watch.** Declaring the watch broken now needs
+  both a run of failed ticks and a few minutes of awake time.
+  Lid-open-then-reconnect was previously the likeliest way to lose a watch on a
+  healthy PR.
+
+
+## dnbg-workflow 2026.8.9 — 2026-08-08
+
+**The reviewer no longer re-runs the project's test suite.** A local run
+reproduces the author's environment rather than CI's, so on a timing- or
+load-sensitive defect it argues "flaky, ignore it" — the wrong verdict. It reads
+the check results instead, and never waits for or polls CI. Reproducing one
+doubted claim under instrumentation is still permitted, triggered by doubt about
+a specific claim rather than by a red check.
+
+It also reads less of each file, and a re-review reads only the changes the prior
+verdict did not cover.
+
+Judging test coverage by *reading* tests is unchanged; the restriction is
+narrowly about executing them.
+
+
+## dnbg-workflow 2026.8.8 — 2026-08-08
+
+The reviewer now re-posts its verdict whenever new commits land past the commit
+its standing approval is attached to, even when the verdict is unchanged. It
+previously stayed silent on a change it judged trivial, which left the approval
+pointing at an older commit while GitHub's merge box showed an unqualified green
+check — and left the author's watch waiting for a signal the reviewer had been
+told not to send.
+
+Both skills now answer "is HEAD approved?" by checking the latest verdict
+directly, rather than inferring it from the repo's *Dismiss stale pull request
+approvals* setting. That setting is meaningless where no approval is required —
+the default on a personal repo that gates on CI — so the inference produced
+confidently wrong answers in both directions. Nothing reads branch protection any
+more, which is one less call that needs admin.
+
+
+## dnbg-workflow 2026.8.7 — 2026-08-08
+
+The PR/issue watcher no longer reports a broken watch as a quiet one. If a poll
+source fails repeatedly it says so, and both skills stop and tell you to check
+`gh auth status` rather than re-arming into the same failure forever. Previously
+a watch that never once reached GitHub ran out its window and printed the same
+idle result a genuinely calm PR prints.
+
+A quieter version of the same bug is fixed too: a failed thread-replies query
+read as "no new replies" while the main poll kept succeeding, so the watch looked
+healthy and was partly blind.
+
+Polling is a curve rather than a fixed 30s. It starts at 10s so a reply lands
+almost immediately, holds 30s for an hour after the last activity, then backs off
+to 15 minutes. A 6-hour watch costs roughly a fifth of the API calls it used to,
+while the first minute gets faster.
+
+
+## dnbg-workflow 2026.8.6 — 2026-08-08
+
+The reviewer bot's credentials move from `~/.config/agent-reviewer/` to
+`~/.config/dnbg/reviewer/`, so everything this marketplace writes to disk now
+lives under one `dnbg` directory. The override environment variable is renamed
+`REVIEWER_CONFIG_DIR` → `DNBG_REVIEWER_CONFIG_DIR`.
+
+The GitHub App itself is **not** renamed. It stays `agent-reviewer-<your-login>`,
+because it is your identity on other people's pull requests rather than something
+this marketplace owns.
+
+## Migration
+If you have already set up the reviewer bot, move its directory:
+
+    mkdir -p ~/.config/dnbg && mv ~/.config/agent-reviewer ~/.config/dnbg/reviewer
+
+Nothing reads the old location any more, and there is no compatibility fallback.
+An unmigrated install fails with `reviewer bot is not set up (no credentials in
+<dir>)` naming the directory it searched, so it says exactly what is wrong rather
+than failing silently.
+
+If you set `REVIEWER_CONFIG_DIR`, rename it to `DNBG_REVIEWER_CONFIG_DIR`.
+
+
+## dnbg-practices 2026.8.1 — 2026-08-07
+
+First release. `coding-practices` now ships as its own plugin, so it can be
+installed on its own — no hooks, no `gh`, no forge assumptions, works anywhere.
+
+Previously it was only available inside `dnbg-workflow`, which meant taking two
+enforcement hooks and five GitHub-specific skills to get it.
+
+
+## dnbg-workflow 2026.8.5 — 2026-08-07
+
+`coding-practices` and `work-summary` have moved out into their own plugins,
+`dnbg-practices` and `dnbg-work-summary`. This plugin now carries the GitHub
+workflow: `git-workflow`, `issue-workflow`, `velocity-tradeoff`, `reviewer` and
+`reviewer-setup`, plus the two enforcement hooks.
+
+`prototype-velocity` is renamed `velocity-tradeoff`. The old name described a
+project stage; the skill's own framing is that the trade is a ratio — blast
+radius, reversibility, time-to-notice, test coverage, users — and not a fact about
+the project.
+
+## Migration
+**Any repo whose `CLAUDE.md` opts in must change
+`dnbg-workflow:prototype-velocity` to `dnbg-workflow:velocity-tradeoff`.** The old
+name does not error; it silently stops loading, so the opt-in simply stops taking
+effect.
+
+If you want `coding-practices` or `work-summary`, install them:
+
+    /plugin install dnbg-practices@dnbg
+    /plugin install dnbg-work-summary@dnbg
+
+or `/plugin install dnbg-all@dnbg` for everything. This plugin does **not**
+depend on them.
+
+
+## dnbg-work-summary 2026.8.1 — 2026-08-07
+
+First release. `work-summary` now ships as its own plugin. It has no dependencies
+on the other skills and installs no hooks.
+
+
+## dnbg-all 2026.8.1 — 2026-08-07
+
+First release. Installs `dnbg-practices`, `dnbg-workflow` and `dnbg-work-summary`
+— everything in this marketplace, in one command.
+
+Its dependencies are unversioned, so it tracks whatever version of each sibling
+the marketplace provides rather than pinning them.
+
+
+## dnbg-workflow 2026.8.4 — 2026-08-07
+
+Only `github.com` remotes are covered by the enforcement hooks now. The owner
+match previously ignored the remote's host, so listing a GitHub org also gated a
+same-named org on GitLab or Bitbucket — blocking edits there while every skill
+instructed the agent to run `gh` commands that cannot work against that remote.
+
+Also fixes a remote with an explicit port (`ssh://git@github.com:22/owner/repo`)
+parsing the port as the owner, which made a covered repo read as uncovered and
+silently lose its gate.
+
+## Migration
+If you left `owners` empty because you work on a non-GitHub host, you no longer
+need to — set it to the GitHub accounts you want enforced and non-GitHub remotes
+are ignored regardless. GitHub Enterprise hosts are *not* covered; that is
+deliberate, since the skills' `gh` usage has not been verified against them.
+
+
+## dnbg-workflow 2026.8.3 — 2026-08-07
+
+The plugin no longer updates itself. Its self-update hook is removed, so it now
+makes no network access at all, and what you install is what runs until you
+update it.
+
+Claude Code's own per-marketplace auto-update does the same job and does it
+sooner: it checks after each session starts rather than throttling to once every
+four hours.
+
+## Migration
+Nothing breaks, but **you will stop receiving updates automatically** unless you
+turn them on. In `/plugin` → Marketplaces → dnbg → Enable auto-update. The removed
+hook also left a throttle stamp behind; delete it if you like:
+
+    rm -f "${XDG_CACHE_HOME:-$HOME/.cache}/dnbg-workflow/last-update"
+
+
+## dnbg-workflow 2026.8.2 — 2026-08-07
+
+The PR watcher used by `git-workflow` is now the same hardened script `reviewer`
+uses. The author side previously inlined its own loop, which polled for a review
+on the current commit — right after pushing a fix, wrong after replying in
+threads, where nothing moves and the watcher matched the review it had already
+handled.
+
+`git-workflow` also gains runnable commands for enumerating unresolved review
+threads and for replying in a thread and resolving it, replacing prose that was
+easy to skip.
+
+
+## dnbg-workflow 2026.8.1 — 2026-08-07
+
+Plugin versions move to `YYYY.M.N` — year, unpadded month, Nth release of that
+plugin that month. Each plugin carries its own counter, and releases are driven by
+changelog fragments rather than firing on every merge. Releases are now tagged
+(`{plugin}--v{version}`) and published as GitHub Releases.
+
+Nothing is required of you. The previous two-component scheme (`2026.4`) was not
+semver-parseable, so no tag it produced could be selected by plugin dependency
+resolution; anyone scripting against it should expect three components from now
+on.

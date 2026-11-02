@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "dnbg-workflow",
+  "description": "Opinionated GitHub workflow: worktree + draft PR flow, self-documenting issues, and an independent PR reviewer bot.",
+  "version": "2026.11.15",
+  "author": {
+    "name": "Dan Baggott",
+    "url": "https://github.com/dbaggott"
+  },
+  "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
+  "homepage": "https://github.com/dbaggott/dnbg-plugins",
+  "repository": "https://github.com/dbaggott/dnbg-plugins",
+  "userConfig": {
+    "owners": {
+      "type": "string",
+      "title": "GitHub owners this workflow applies to",
+      "description": "Comma-separated list of GitHub orgs and/or personal logins, e.g. 'acme-corp,yourname'. A repo is covered when its origin remote points at one of them. Leave empty and the enforcement hooks never block anything — the skills still load as guidance.",
+      "default": ""
+    },
+    "worktree_path": {
+      "type": "string",
+      "title": "Where worktrees live",
+      "description": "Repo-relative directory the workflow creates worktrees in, e.g. 'wt' or '.git/wt'. Must stay inside the repo and be a plain path: absolute paths, '~' paths, any '..' segment, a leading '-', and characters outside letters, digits and '. _ - /' are rejected and the default used instead. Leave empty for '.worktrees'.",
+      "default": ".worktrees"
+    },
+    "claim_label": {
+      "type": "string",
+      "title": "Issue claim label",
+      "description": "Label applied when an agent session claims a GitHub issue. Must start with 'assigned:' — the check for someone else's claim matches that whole namespace, so a label outside it makes your claims invisible to other tools and theirs invisible to you. Leave empty for 'assigned:agent-session'.",
+      "default": "assigned:agent-session"
+    },
+    "retrospective_dir": {
+      "type": "string",
+      "title": "Where retrospectives are written",
+      "description": "Directory retrospectives are written under when the retrospectives option is on, one subdirectory per repo (<dir>/<owner>/<repo>/); process-review reads them from there and keeps its own reports under <dir>/_reviews/, and usage-sweep.sh writes its reports under <dir>/_usage/. Must be an absolute path or one under '~/', using only letters, digits and '. _ - /'; anything else is rejected and the default used instead. Leave empty for '~/.claude/dnbg-retrospectives'.",
+      "default": "~/.claude/dnbg-retrospectives"
+    },
+    "findings_dir": {
+      "type": "string",
+      "title": "Where findings entries are written",
+      "description": "Directory agents write a findings entry under for each finding about the code in their reports, one subdirectory per repo (<dir>/<owner>/<repo>/); findings-review and a tracking issue's closeout read them from there. Must be an absolute path or one under '~/', using only letters, digits and '. _ - /'; anything else is rejected and the default used instead. Leave empty for '~/.claude/dnbg-findings'.",
+      "default": "~/.claude/dnbg-findings"
+    },
+    "version_stamp": {
+      "type": "boolean",
+      "title": "Stamp published PRs, reviews and issue claims with the plugin version",
+      "description": "Appends an invisible HTML comment naming this plugin and its version to PR descriptions, review bodies, and issue claim comments, so what a session published can be traced back to the prompts that produced it. Off unless you turn it on — the stamp goes on artifacts other people read.",
+      "default": false
+    },
+    "retrospectives": {
+      "type": "boolean",
+      "title": "Write a retrospective file at every close-out",
+      "description": "On, every agent role writes a retrospective of the process friction it met to the retrospective directory when its part of the work ends, for process-review to count later, and says nothing more about that friction in chat. Off, no file is written, and a report surfaces only the friction where a skill was wrong or had to be worked around, with an offer to file it upstream. Off unless you turn it on — the files are for whoever maintains these prompts.",
+      "default": false
+    }
+  }
+}

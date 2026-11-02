@@ -1,0 +1,364 @@
+#!/usr/bin/env bats
+#
+# Tests for issue->PR discovery. `gh` is stubbed on PATH and told apart by
+# subcommand and path, so each of the three sources can be failed independently —
+# which is the only way to exercise the partial-failure contract this script
+# exists to make legible.
+#
+# The union used to live as a fenced block in two skills plus a third variant
+# inside watch-pr.sh, kept in step by a coupling test that could only prove the
+# copies MENTIONED the same endpoints, never that they behaved alike. These are
+# the behaviours that were never checked.
+
+SOURCES="${BATS_TEST_DIRNAME}/../dnbg-workflow/scripts/pr-sources.sh"
+
+setup() {
+  STUB="$BATS_TEST_TMPDIR/bin"; mkdir -p "$STUB"
+  export CLOSING="$BATS_TEST_TMPDIR/closing"; echo '[]' > "$CLOSING"
+  export XREF="$BATS_TEST_TMPDIR/xref";       echo '[[]]' > "$XREF"
+  export SEARCH="$BATS_TEST_TMPDIR/search";   echo '[]' > "$SEARCH"
+  export FAIL_CLOSING="$BATS_TEST_TMPDIR/fail_closing"
+  export FAIL_TIMELINE="$BATS_TEST_TMPDIR/fail_timeline"
+  export FAIL_SEARCH="$BATS_TEST_TMPDIR/fail_search"
+  export CALLS="$BATS_TEST_TMPDIR/calls"; : > "$CALLS"
+  # One file per PR, named by `pr_key`; a PR with none reads as an open,
+  # untagged PR that closes nothing.
+  export PRS="$BATS_TEST_TMPDIR/prs"; mkdir -p "$PRS"
+  # The repo's default branch, as `gh repo view --jq` prints it; empty is a
+  # read that fails.
+  export DEFAULT_BRANCH="$BATS_TEST_TMPDIR/default_branch"; echo main > "$DEFAULT_BRANCH"
+  cat > "$STUB/gh" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >> "$CALLS"
+case "$1 $2" in
+  "issue view")
+    [ -f "$FAIL_CLOSING" ] && exit 1
+    printf '{"closedByPullRequestsReferences":%s}' "$(cat "$CLOSING")" ;;
+  "pr view")
+    f="$PRS/$(printf '%s' "$3" | tr -c 'A-Za-z0-9' _)"
+    [ -f "$f.fail" ] && exit 1
+    if [ -f "$f" ]; then cat "$f"
+    else echo '{"title":"t","headRefName":"b","closingIssuesReferences":[],"state":"OPEN"}'; fi ;;
+  "repo view")
+    [ -s "$DEFAULT_BRANCH" ] || exit 1
+    cat "$DEFAULT_BRANCH" ;;
+  "search prs")
+    [ -f "$FAIL_SEARCH" ] && exit 1
+    cat "$SEARCH" ;;
+  "api "*|"api")
+    [ -f "$FAIL_TIMELINE" ] && exit 1
+    # `--slurp` shape: an array OF PAGES. The stub emits it because that is what
+    # the script parses (`.[][]`); a flat array here would let a `.[]`
+    # regression pass.
+    cat "$XREF" ;;
+  *) exit 1 ;;
+esac
+EOF
+  chmod +x "$STUB/gh"
+  export PATH="$STUB:$PATH"
+}
+
+urls_of()  { grep -v '^result=' <<<"$1" | cut -d' ' -f1 || true; }
+relevance_of() {  # <output> <url>
+  grep -F "$2 " <<<"$1" | sed -n 's/.* relevance=\([^ ]*\).*/\1/p'
+}
+state_of() {  # <output> <url>
+  grep -F "$2 " <<<"$1" | sed -n 's/.* state=//p'
+}
+pr_key() { printf '%s' "$1" | tr -c 'A-Za-z0-9' _; }
+pr_reads() {  # <url> <title> <head> [closes-issue-url] [state]
+  local closes="[]"
+  [ -n "${4:-}" ] && closes="[{\"url\":\"$4\"}]"
+  printf '{"title":"%s","headRefName":"%s","closingIssuesReferences":%s,"state":"%s"}' \
+    "$2" "$3" "$closes" "${5:-OPEN}" > "$PRS/$(pr_key "$1")"
+}
+result_of() { grep '^result=' <<<"$1"; }
+
+xref() {  # <url> [more...]
+  local out="" u
+  for u in "$@"; do
+    out="$out{\"event\":\"cross-referenced\",\"source\":{\"issue\":{\"pull_request\":{},\"html_url\":\"$u\"}}},"
+  done
+  echo "[[${out%,}]]" > "$XREF"
+}
+
+@test "the three sources are unioned and deduped" {
+  echo '[{"url":"https://x/pull/1"}]' > "$CLOSING"
+  xref https://x/pull/1 https://x/pull/2
+  echo '[{"url":"https://x/pull/3"}]' > "$SEARCH"
+  run "$SOURCES" o/r 5
+  [ "$status" -eq 0 ]
+  [ "$(urls_of "$output" | wc -l | tr -d ' ')" = 3 ]
+  [[ "$output" == *"result=OK count=3"* ]]
+}
+
+# THE SHAPE `git-workflow`'s MULTI-REPO RULE PRODUCES: exactly one sibling
+# carries the closing keyword and the rest merely mention the issue. A site
+# polling only the closing source sees one PR of a set and believes it is whole.
+@test "a mention-only sibling is found even though it closes nothing" {
+  xref https://x/pull/7
+  run "$SOURCES" o/r 5
+  [ "$(urls_of "$output")" = "https://x/pull/7" ]
+}
+
+# A cross-reference to a plain ISSUE has no `pull_request` member. Counting it
+# would report an issue URL as a resolving PR.
+@test "a cross-referenced issue is not mistaken for a PR" {
+  echo '[[{"event":"cross-referenced","source":{"issue":{"html_url":"https://x/issues/9"}}}]]' > "$XREF"
+  run "$SOURCES" o/r 5
+  [ "$(urls_of "$output")" = "" ]
+  [[ "$output" == *"count=0"* ]]
+}
+
+# Deduping across PAGES, not within one. `gh --jq` applies per page, so a jq-side
+# `unique` would pass a single-page test and still emit duplicates on a busy
+# issue — which is exactly where the timeline source matters most.
+@test "duplicates spanning two timeline pages are deduped" {
+  local e='{"event":"cross-referenced","source":{"issue":{"pull_request":{},"html_url":"https://x/pull/4"}}}'
+  echo "[[$e],[$e]]" > "$XREF"
+  run "$SOURCES" o/r 5
+  [ "$(urls_of "$output" | wc -l | tr -d ' ')" = 1 ]
+}
+
+@test "the search is scoped to the owner, never the repo" {
+  run "$SOURCES" acme/api 5
+  grep -q 'search prs --owner acme' "$CALLS"
+  ! grep -q 'search prs.*--repo' "$CALLS"
+}
+
+# A union with one dead source is still a real answer, so it must be reported
+# rather than suppressed — but the failure has to be named, or "nothing found"
+# and "nothing found by what worked" become the same output.
+@test "one dead source still answers, and says which one died" {
+  : > "$FAIL_TIMELINE"
+  echo '[{"url":"https://x/pull/1"}]' > "$CLOSING"
+  run "$SOURCES" o/r 5
+  [ "$status" -eq 0 ]
+  [ "$(urls_of "$output")" = "https://x/pull/1" ]
+  [[ "$output" == *"timeline=fail"* ]]
+  [[ "$output" == *"closing=ok"* ]]
+}
+
+@test "a timeline that stops parsing is a shape failure, not an empty result" {
+  echo 'not json' > "$XREF"
+  run "$SOURCES" o/r 5
+  [[ "$output" == *"timeline=shape"* ]]
+  [[ "$output" == *"result=OK"* ]]
+}
+
+# ONE VOCABULARY ACROSS ALL THREE SOURCES. `closing` once reported a parse
+# failure as `fail` while the other two reported `shape`, so the same condition
+# had two names in the one file whose job is making partial failure legible — and
+# a caller matching a per-source enumeration would not recognise the third value.
+@test "a parse failure is spelled shape whichever source it happens in" {
+  echo 'not json' > "$CLOSING"
+  run "$SOURCES" o/r 5
+  [[ "$output" == *"closing=shape"* ]]
+  echo 'not json' > "$SEARCH"
+  run "$SOURCES" o/r 5
+  [[ "$output" == *"search=shape"* ]]
+}
+
+@test "a request that never comes back is spelled fail, whichever source it is" {
+  : > "$FAIL_CLOSING"
+  run "$SOURCES" o/r 5
+  [[ "$output" == *"closing=fail"* ]]
+
+  rm -f "$FAIL_CLOSING"; : > "$FAIL_TIMELINE"
+  run "$SOURCES" o/r 5
+  [[ "$output" == *"timeline=fail"* ]]
+
+  rm -f "$FAIL_TIMELINE"; : > "$FAIL_SEARCH"
+  run "$SOURCES" o/r 5
+  [[ "$output" == *"search=fail"* ]]
+}
+
+# All three blind is the one case where an empty list would be an outright lie,
+# so it is an ERROR rather than `count=0`.
+@test "every source failing is an error, not an empty set" {
+  : > "$FAIL_CLOSING"; : > "$FAIL_TIMELINE"; : > "$FAIL_SEARCH"
+  run "$SOURCES" o/r 5
+  [ "$status" -eq 0 ]
+  [ "$output" = "result=ERROR reason=all-sources" ]
+}
+
+@test "a genuinely unlinked issue reports count=0 with every source healthy" {
+  run "$SOURCES" o/r 5
+  [ "$output" = "result=OK count=0 closing=ok search=ok timeline=ok" ]
+}
+
+@test "missing or malformed arguments report bad-args" {
+  run "$SOURCES"
+  [ "$status" -eq 0 ]
+  [ "$output" = "result=ERROR reason=bad-args" ]
+  run "$SOURCES" o/r
+  [ "$output" = "result=ERROR reason=bad-args" ]
+  # No slash: the owner cannot be derived, so the search would be scoped wrong.
+  run "$SOURCES" justarepo 5
+  [ "$output" = "result=ERROR reason=bad-args" ]
+  run "$SOURCES" o/r 5 extra
+  [ "$output" = "result=ERROR reason=bad-args" ]
+}
+
+@test "bad arguments query nothing at all" {
+  run "$SOURCES" justarepo 5
+  [ ! -s "$CALLS" ]
+}
+
+# What each PR is to the issue. `orchestrate` hands only a closing PR or a tagged
+# sibling to its author; reading a mention as the issue's work sends that author
+# to continue a PR in another repo that only cites the issue.
+
+# The closing source's word stands even when the PR cannot be read.
+@test "a PR the closing source lists reads closes, even unread" {
+  echo '[{"url":"https://x/pull/1"}]' > "$CLOSING"
+  : > "$PRS/$(pr_key https://x/pull/1).fail"
+  run "$SOURCES" o/r 5
+  [ "$(relevance_of "$output" https://x/pull/1)" = closes ]
+}
+
+# The closing source can fail while the others answer; the PR's own closing
+# references still identify it, so it is not demoted to a mention.
+@test "a PR closing the issue reads closes when the closing source is down" {
+  : > "$FAIL_CLOSING"
+  xref https://x/pull/2
+  pr_reads https://x/pull/2 "Fix it" fix-it https://github.com/O/R/issues/5
+  run "$SOURCES" o/r 5
+  [ "$(relevance_of "$output" https://x/pull/2)" = closes ]
+}
+
+@test "a PR closing a different issue is not read as closing this one" {
+  xref https://x/pull/2
+  pr_reads https://x/pull/2 "Fix it" fix-it https://github.com/o/r/issues/50
+  run "$SOURCES" o/r 5
+  [ "$(relevance_of "$output" https://x/pull/2)" = mention ]
+}
+
+@test "a PR titled with its own head branch in brackets reads sibling" {
+  xref https://y/pull/3
+  pr_reads https://y/pull/3 "[pair-x] Infra half" pair-x
+  run "$SOURCES" o/r 5
+  [ "$(relevance_of "$output" https://y/pull/3)" = sibling ]
+}
+
+# A bracketed title alone is not the pairing: the tag has to BE the head branch.
+@test "a bracket tag that is not the head branch reads mention" {
+  xref https://y/pull/3
+  pr_reads https://y/pull/3 "[orchestration] Closeout" orchestration-closeout
+  run "$SOURCES" o/r 5
+  [ "$(relevance_of "$output" https://y/pull/3)" = mention ]
+}
+
+@test "a tagged PR on the closing PR's branch reads sibling" {
+  echo '[{"url":"https://x/pull/1"}]' > "$CLOSING"
+  pr_reads https://x/pull/1 "[pair-x] App half" pair-x https://github.com/o/r/issues/5
+  xref https://y/pull/3
+  pr_reads https://y/pull/3 "[pair-x] Infra half" pair-x
+  run "$SOURCES" o/r 5
+  [ "$(relevance_of "$output" https://x/pull/1)" = closes ]
+  [ "$(relevance_of "$output" https://y/pull/3)" = sibling ]
+}
+
+# Another multi-repo change carries its own tag, and citing this issue does not
+# make it this issue's sibling.
+@test "a tagged PR on a branch no closing PR shares reads mention" {
+  echo '[{"url":"https://x/pull/1"}]' > "$CLOSING"
+  pr_reads https://x/pull/1 "Fix it" fix-it https://github.com/o/r/issues/5
+  xref https://y/pull/3
+  pr_reads https://y/pull/3 "[other-work] Infra" other-work
+  run "$SOURCES" o/r 5
+  [ "$(relevance_of "$output" https://y/pull/3)" = mention ]
+}
+
+@test "a PR that only cites the issue reads mention" {
+  echo '[{"url":"https://y/pull/4"}]' > "$SEARCH"
+  run "$SOURCES" o/r 5
+  [ "$(relevance_of "$output" https://y/pull/4)" = mention ]
+  [[ "$output" == *"result=OK count=1"* ]]
+}
+
+# Unreadable is not a mention: a caller that drops a mention would drop a PR it
+# never got to look at.
+@test "a PR that cannot be read reads unknown" {
+  xref https://y/pull/6
+  : > "$PRS/$(pr_key https://y/pull/6).fail"
+  run "$SOURCES" o/r 5
+  [ "$status" -eq 0 ]
+  [ "$(relevance_of "$output" https://y/pull/6)" = unknown ]
+}
+
+# Each PR's own state, so a caller filters on it instead of reading every hit:
+# the timeline and the search return PRs merged or closed long ago.
+@test "each source's PR carries its own state" {
+  echo '[{"url":"https://x/pull/1"}]' > "$CLOSING"
+  pr_reads https://x/pull/1 "Fix it" fix-it https://github.com/o/r/issues/5 MERGED
+  xref https://x/pull/2
+  pr_reads https://x/pull/2 "Old try" old-try "" CLOSED
+  echo '[{"url":"https://y/pull/3"}]' > "$SEARCH"
+  run "$SOURCES" o/r 5
+  [ "$(state_of "$output" https://x/pull/1)" = MERGED ]
+  [ "$(state_of "$output" https://x/pull/2)" = CLOSED ]
+  [ "$(state_of "$output" https://y/pull/3)" = OPEN ]
+  [ "$(grep -c ' relevance=[a-z]* state=[A-Za-z]*$' <<<"$output")" = 3 ]
+}
+
+# An unread PR has no state to report. `unknown`, not a guess: read as closed, it
+# would be dropped by a caller looking for open work.
+@test "a PR that cannot be read has state unknown, listed by the closing source or not" {
+  echo '[{"url":"https://x/pull/1"}]' > "$CLOSING"
+  : > "$PRS/$(pr_key https://x/pull/1).fail"
+  xref https://y/pull/6
+  : > "$PRS/$(pr_key https://y/pull/6).fail"
+  run "$SOURCES" o/r 5
+  [ "$(state_of "$output" https://x/pull/1)" = unknown ]
+  [ "$(state_of "$output" https://y/pull/6)" = unknown ]
+}
+
+# A PR based on another PR's branch gets no closing references until it targets
+# the default branch, so its body's keyword is what says it closes the issue.
+stacked_pr() {  # <url> <base> <body>
+  jq -cn --arg b "$2" --arg body "$3" \
+    '{title: "t", headRefName: "h", baseRefName: $b, body: $body, closingIssuesReferences: [], state: "OPEN"}' \
+    > "$PRS/$(pr_key "$1")"
+}
+G=https://github.com/o/r/pull/9
+
+@test "a PR on a non-default base with a closing keyword for the issue reads closes" {
+  local body
+  for body in "Closes https://github.com/o/r/issues/5" "fixes: o/r#5" "Resolved #5." "RESOLVES https://github.com/O/R/issues/5"; do
+    xref "$G"; stacked_pr "$G" feature "$body"
+    run "$SOURCES" o/r 5
+    [ "$(relevance_of "$output" "$G")" = closes ] || { echo "$body: $output"; false; }
+  done
+}
+
+@test "a keyword for another issue, no keyword, or the default base still reads mention" {
+  local body
+  for body in "Closes #50" "Closes https://github.com/o/r/issues/50" "See #5" "Closes o/rx#5" "Closes https://github.com/o/r/issues/5/x"; do
+    xref "$G"; stacked_pr "$G" feature "$body"
+    run "$SOURCES" o/r 5
+    [ "$(relevance_of "$output" "$G")" = mention ] || { echo "$body: $output"; false; }
+  done
+  stacked_pr "$G" main "Closes #5"
+  run "$SOURCES" o/r 5
+  [ "$(relevance_of "$output" "$G")" = mention ]
+}
+
+@test "a bare #n keyword counts only from a PR in the issue's own repo" {
+  local other=https://github.com/o/other/pull/9
+  xref "$other"; stacked_pr "$other" feature "Closes #5"
+  run "$SOURCES" o/r 5
+  [ "$(relevance_of "$output" "$other")" = mention ]
+  stacked_pr "$other" feature "Closes o/r#5"
+  run "$SOURCES" o/r 5
+  [ "$(relevance_of "$output" "$other")" = closes ]
+}
+
+@test "a default branch that cannot be read leaves a stacked PR a mention, and is read only for a keyword" {
+  xref "$G"; stacked_pr "$G" feature "Closes #5"; : > "$DEFAULT_BRANCH"
+  run "$SOURCES" o/r 5
+  [ "$(relevance_of "$output" "$G")" = mention ]
+  echo main > "$DEFAULT_BRANCH"; : > "$CALLS"; stacked_pr "$G" feature "no keyword"
+  run "$SOURCES" o/r 5
+  ! grep -q '^repo view' "$CALLS"
+}
