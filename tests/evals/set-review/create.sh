@@ -3,7 +3,7 @@
 # Set-review eval: does `issue-reviewer`, handed a tracking issue, find what a
 # deliberately incomplete decomposition is missing?
 #
-#   tests/evals/set-review/create.sh [owner/repo]   # default dbaggott/dnbg-watch-testbed
+#   tests/evals/set-review/create.sh [owner/repo]   # default $DNBG_TESTBED_REPO
 #
 # Files fixtures/ as a scratch tracking issue with its sub-issues and one
 # blocked-by edge, under the project slug `notes-export`, then prints the
@@ -35,7 +35,10 @@
 #
 # Prints the parent URL, then one result line, and exits 0:
 #   result=OK parent=<url> children=<url,url,url>
-#   result=ERROR reason=bad-args|create-failed|link-failed [created=<url,…>]
+#   result=ERROR reason=bad-args|no-testbed|create-failed|link-failed [created=<url,…>]
+#
+# `no-testbed`: no argument and DNBG_TESTBED_REPO unset, so there is no repo
+# to write to; nothing has been filed.
 #
 # `created` names any issues already filed when a later step failed, so they can
 # be closed rather than left open in the testbed.
@@ -43,7 +46,7 @@ set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 FIX="$HERE/fixtures"
-REPO="${1:-dbaggott/dnbg-watch-testbed}"
+REPO="${1:-${DNBG_TESTBED_REPO:-}}"
 
 CREATED=""
 fail() { echo "result=ERROR reason=$1${CREATED:+ created=$CREATED}"; exit 0; }
@@ -51,6 +54,7 @@ fail() { echo "result=ERROR reason=$1${CREATED:+ created=$CREATED}"; exit 0; }
 filed() { [ -n "$1" ] || return 1; CREATED="${CREATED:+$CREATED,}$1"; }
 
 [ "$#" -le 1 ] || fail bad-args
+[ -n "$REPO" ] || fail no-testbed
 case "$REPO" in */*/*|/*|*/) fail bad-args ;; */*) ;; *) fail bad-args ;; esac
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT

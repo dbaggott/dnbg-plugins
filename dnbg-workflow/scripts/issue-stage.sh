@@ -59,7 +59,7 @@
 # orchestrate's "On start" recomputes much of this and may adopt the script; it
 # does not yet.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/claude-plugins/issues/149
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins/issues/149
 # replaces the constant below with host detection; the output above is not
 # GitHub-shaped.
 set -euo pipefail

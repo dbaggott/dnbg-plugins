@@ -63,16 +63,16 @@ convenience, not a form to complete. Delete whatever does not apply, or start
 from a blank issue.
 
 The maintainer applies an `area:*` label. If you know which subsystem it is,
-mention it — `gh label list --repo dbaggott/claude-plugins --search area` lists
+mention it — `gh label list --repo dbaggott/dnbg-plugins --search area` lists
 the current set.
 
 ## Opening a PR
 
 The ordinary fork flow: fork, branch from `main`, one logical change, push, and
-open a PR against `dbaggott/claude-plugins:main`. Draft it if it is not
+open a PR against `dbaggott/dnbg-plugins:main`. Draft it if it is not
 finished. Do not merge your own PR.
 
-**Sync your fork's `main` before branching** (`gh repo sync <you>/claude-plugins`).
+**Sync your fork's `main` before branching** (`gh repo sync <you>/dnbg-plugins`).
 Nothing advances a fork's `main` for you, and the PR diffs against the merge-base
 either way — so a stale base looks clean while the change is written against code
 that has moved. With the fork covered, `git-workflow` branches from it too.
@@ -154,6 +154,25 @@ the last two write to a live repository.
 - `tests/evals/set-review/create.sh` files a deliberately incomplete
   decomposition for `issue-reviewer` to review by hand, and the review's round
   comments are the result.
+
+#### A testbed
+
+The live repository is your **testbed**, named by `DNBG_TESTBED_REPO`. The two
+evals that write to one stop before writing anything when it is unset. The
+same repo takes any other live run: dogfooding a watcher, reviewer or
+orchestrator, or a run recorded to meet an acceptance criterion. A testbed is:
+
+- a private repo you own and can delete freely;
+- protected on its default branch: a pull request with **one approving
+  review**, stale reviews dismissed, conversations resolved, and one required
+  status check from a minimal CI workflow of its own;
+- squash-only, with auto-merge allowed and branches deleted on merge;
+- installed with the role Apps from `reviewer-setup` (author and reviewer);
+- exported as `DNBG_TESTBED_REPO=<owner>/<repo>` in your environment.
+
+A run closes what it opens. The testbed is shared across runs, so an issue or
+PR one run leaves open changes what the next one sees.
+`tests/evals/set-review/create.sh` prints what it filed so it can be closed.
 
 ## More
 

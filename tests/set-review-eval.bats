@@ -130,6 +130,24 @@ line() { tail -1 <<<"$1"; }
   [ ! -s "$LOG" ]
 }
 
+@test "no repo and no DNBG_TESTBED_REPO is refused before any call" {
+  DNBG_TESTBED_REPO= run "$CREATE"
+  [ "$output" = "result=ERROR reason=no-testbed" ]
+  [ ! -s "$LOG" ]
+}
+
+@test "with no argument the testbed comes from DNBG_TESTBED_REPO" {
+  DNBG_TESTBED_REPO=t/bed run "$CREATE"
+  [ "$(line "$output")" = "result=OK parent=$U/1 children=$U/2,$U/3,$U/4" ]
+  grep -q -- '--repo t/bed' "$LOG"
+  run ! grep -q -- '--repo o/r' "$LOG"
+}
+
+@test "an argument wins over DNBG_TESTBED_REPO" {
+  DNBG_TESTBED_REPO=t/bed run "$CREATE" o/r
+  run ! grep -q -- '--repo t/bed' "$LOG"
+}
+
 @test "runs under the system bash" {
   [ -x /bin/bash ] || skip "no /bin/bash"
   run /bin/bash "$CREATE" o/r

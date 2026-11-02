@@ -255,3 +255,11 @@ EOF
   run ! grep -q '^pr close' "$LOG"
   [ "$(grep -c '^issue close' "$LOG")" -eq 1 ]
 }
+
+@test "main stops naming DNBG_TESTBED_REPO before any call when no testbed is set" {
+  REPO=
+  run main
+  [ "$status" -eq 2 ]
+  [[ "$output" == *DNBG_TESTBED_REPO* ]]
+  [ ! -s "$LOG" ]
+}

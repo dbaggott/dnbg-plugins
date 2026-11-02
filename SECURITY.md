@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 **Report privately through GitHub:
-[open a draft advisory](https://github.com/dbaggott/claude-plugins/security/advisories/new)**
+[open a draft advisory](https://github.com/dbaggott/dnbg-plugins/security/advisories/new)**
 (repo → **Security** → **Report a vulnerability**). A report there is visible
 only to you and the maintainer — no email address is published, and no
 third-party service is involved.

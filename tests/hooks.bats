@@ -316,7 +316,7 @@ create --title x')"
 # --- the gate matches a COMMAND, not a mention of one -----------------------
 #
 # Every case below is a command that creates no issue. Each was blocked before
-# https://github.com/dbaggott/claude-plugins/issues/59, and the payloads that trip
+# https://github.com/dbaggott/dnbg-plugins/issues/59, and the payloads that trip
 # it are the ones written while working on this repo.
 
 @test "a quoted mention in a commit message is not an issue creation" {

@@ -35,7 +35,7 @@
 # Discovery keeps it for the one thing a poll does not need: finding a sibling in
 # a DIFFERENT repo, which a caller re-runs on wake anyway.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/claude-plugins/issues/149
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins/issues/149
 # replaces the constant below with host detection; nothing above this line is
 # GitHub-shaped.
 set -euo pipefail

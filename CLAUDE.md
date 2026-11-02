@@ -1,4 +1,4 @@
-# claude-plugins
+# dnbg-plugins
 
 This repo is the source of the `dnbg-*` plugins. The skills under
 `dnbg-*/skills/` are the product, so they are held to the same bar as code.
@@ -16,7 +16,7 @@ it from the tree instead: `dnbg-practices/skills/coding-practices/SKILL.md`.
 ## How to size a change here
 
 Load `dnbg-workflow:velocity-tradeoff` when sizing a change or deciding whether
-to split a PR. claude-plugins is on the velocity side of that skill's
+to split a PR. dnbg-plugins is on the velocity side of that skill's
 risk/benefit trade.
 
 Per that skill's own framing this is a ratio, not a fact about the project, so
@@ -38,3 +38,10 @@ passage, write one, within what the header says a case can measure, and keep
 it; where none can, the operator decides. After a Claude Code or model bump the
 same cases run again, and a score that moved from the one recorded on the PR
 that settled it is the same question.
+
+## Live runs
+
+Anything that writes to a live GitHub repo goes to `$DNBG_TESTBED_REPO`, never
+this repo or a real project: an eval under `tests/evals/` that writes, dogfooding
+a watcher, reviewer or orchestrator, or a run recorded to meet a criterion. When
+it is unset, ask the operator. CONTRIBUTING.md's "A testbed" says what one needs.

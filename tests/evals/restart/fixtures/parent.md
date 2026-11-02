@@ -1,4 +1,4 @@
-This is a **tracking issue** for a scratch project filed by the restart eval, `tests/evals/restart/run.sh` in https://github.com/dbaggott/claude-plugins. The eval closes it when the run ends.
+This is a **tracking issue** for a scratch project filed by the restart eval, `tests/evals/restart/run.sh` in https://github.com/dbaggott/dnbg-plugins. The eval closes it when the run ends.
 
 ## Problem
 

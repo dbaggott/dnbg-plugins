@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Restart eval (R26 of https://github.com/dbaggott/claude-plugins/issues/223):
+# Restart eval (R26 of https://github.com/dbaggott/dnbg-plugins/issues/223):
 # kill the orchestrator after a design decision reaches `decided` and before its
 # sweep, start a fresh one, and check that the fresh one finishes the sweep.
 #
@@ -51,17 +51,18 @@
 # eval, gh is real here: the orchestrators run on the operator's own gh login,
 # since what is under test is their behaviour against GitHub.
 #
-# Environment: REPO (default dbaggott/dnbg-watch-testbed), RUNS (default 1),
-# MODEL (default: the CLI's), MAX_BUDGET_USD (per orchestrator, optional),
-# CLAIM_TIMEOUT, KILL_TIMEOUT, RESUME_TIMEOUT (seconds for each phase; defaults
-# 900, 1800, 2700), KEEP, EVAL_OUT, CLAUDE_BIN (default `claude`).
+# Environment: REPO (default $DNBG_TESTBED_REPO; one of the two is required),
+# RUNS (default 1), MODEL (default: the CLI's), MAX_BUDGET_USD (per
+# orchestrator, optional), CLAIM_TIMEOUT, KILL_TIMEOUT, RESUME_TIMEOUT (seconds
+# for each phase; defaults 900, 1800, 2700), KEEP, EVAL_OUT, CLAUDE_BIN (default
+# `claude`).
 
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TREE=$(cd "$HERE/../../.." && pwd)
 SCRIPTS="$TREE/dnbg-workflow/scripts"
-REPO=${REPO:-dbaggott/dnbg-watch-testbed}
+REPO=${REPO:-${DNBG_TESTBED_REPO:-}}
 
 # shellcheck source=../render.sh
 . "$HERE/../render.sh"
@@ -346,6 +347,7 @@ run_once() {
 }
 
 main() {
+  [ -n "$REPO" ] || { echo "no testbed repo: set DNBG_TESTBED_REPO (or REPO) to an owner/repo" >&2; exit 2; }
   RUNS=${RUNS:-1}
   case "$RUNS" in
     ''|*[!0-9]*|0) echo "RUNS must be a positive integer, got '$RUNS'" >&2; exit 2 ;;

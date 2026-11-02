@@ -39,7 +39,7 @@
 # listing the issue's comments or posting the row failed, so the outcome is
 # unknown; `role` means the resolver refused and nothing was read or written.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/claude-plugins/issues/149
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins/issues/149
 # replaces the constant below with host detection; the output above is not
 # GitHub-shaped.
 set -euo pipefail

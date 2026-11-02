@@ -99,7 +99,7 @@ def gh_login() -> str:
 def build_manifest(role: str, name: str, redirect_url: str, public: bool) -> dict:
     return {
         "name": name,
-        "url": "https://github.com/dbaggott/claude-plugins",
+        "url": "https://github.com/dbaggott/dnbg-plugins",
         "redirect_url": redirect_url,
         "public": public,
         # No hook_attributes => no webhook. Every role is driven locally, not

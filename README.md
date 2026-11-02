@@ -1,4 +1,4 @@
-# claude-plugins
+# dnbg-plugins
 
 A Claude Code plugin marketplace, published as `dnbg`. It makes an agent session
 work using sensible best practices: every change goes through a worktree and
@@ -128,7 +128,7 @@ Across the whole flow, you are needed at these points:
 
 You don't read or approve the children; the set review's verdict on each one is
 that gate. The project that built this flow ran under it, so its tracking issue,
-https://github.com/dbaggott/claude-plugins/issues/223, is a worked example of a
+https://github.com/dbaggott/dnbg-plugins/issues/223, is a worked example of a
 design, its children, and its decision log.
 
 **Two sessions on one task -- one for interactive development, one reviewing
@@ -302,8 +302,13 @@ your machine.
 ## Install
 
 ```
-/plugin marketplace add dbaggott/claude-plugins
+/plugin marketplace add dbaggott/dnbg-plugins
 ```
+
+An install added before the repo took this name still works, since GitHub
+redirects the old one, but re-add it under the new name:
+`/plugin marketplace remove dnbg`, then the add above, then install your
+plugins again, since removing a marketplace can uninstall what came from it.
 
 Then, as a separate command — the install can't run until the marketplace add
 completes, and pasting both at once only registers the first as a slash command:
@@ -345,11 +350,11 @@ switch. So what you can adopt on its own is decided by how this project packages
 itself, and the table above is that split: each row installs independently, and
 anything sharing a row arrives together.
 
-> Three names, deliberately different. The **repo** is `claude-plugins`, a
-> **plugin** is e.g. `dnbg-workflow`, and the **marketplace** is `dnbg` — hence
+> Three names, one family. The **repo** is `dnbg-plugins`, a **plugin** is
+> e.g. `dnbg-workflow`, and the **marketplace** is `dnbg` — hence
 > `dnbg-workflow@dnbg`. Claude Code rejects marketplace names containing
 > "claude" as impersonating an Anthropic-official marketplace, which is why the
-> marketplace needed a name of its own.
+> marketplace is `dnbg` rather than the repo's name.
 
 Nothing is enforced until you say where: the hooks block only in repos whose
 owner you list in `owners`, and with it empty they never fire. That setting, the

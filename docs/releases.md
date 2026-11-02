@@ -14,7 +14,7 @@ set it in `~/.claude/settings.json`:
 {
   "extraKnownMarketplaces": {
     "dnbg": {
-      "source": { "source": "github", "repo": "dbaggott/claude-plugins" },
+      "source": { "source": "github", "repo": "dbaggott/dnbg-plugins" },
       "autoUpdate": true
     }
   }

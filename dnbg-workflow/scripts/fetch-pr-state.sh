@@ -22,7 +22,7 @@
 # while the rest answer is a blind watch wearing a healthy one's costume.
 #
 # ⚠️ THE FORGE IS ASSUMED TO BE GITHUB HERE, AND THAT IS THE ONE THING IN THIS
-# FILE THAT IS NOT YET TRUE IN GENERAL. https://github.com/dbaggott/claude-plugins/issues/149
+# FILE THAT IS NOT YET TRUE IN GENERAL. https://github.com/dbaggott/dnbg-plugins/issues/149
 # replaces the constant below with host detection and adds sibling backends; the
 # split between `normalise` and the fetch exists so that change touches one
 # function. Nothing above this line is GitHub-shaped — that is the contract.
