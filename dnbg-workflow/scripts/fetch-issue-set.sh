@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# A tracking issue and every one of its sub-issues, as one forge-neutral object.
+#
+#   fetch-issue-set.sh <owner/repo> <parent> [--json-out=<file>]
+#
+# Prints the object, then exactly one result line, then exits 0:
+#   {"parent":{"url":…,"number":…,"title":…,"body":…,"state":…,"created":…,
+#              "body_edited":…,"labels":["<name>",…]},
+#    "children":[{…the same fields…,"blocked_by":["<issue url>",…]}]}
+#   result=OK now=<iso> children=<count>
+#   result=ERROR reason=bad-args|unsupported-forge|not-found|issue-query|issue-query-shape|set-overflow now=<iso>
+#
+# With `--json-out`, the object goes to <file> instead and stdout is the result
+# line alone. Every <file> named is emptied before anything else can fail, so on
+# ERROR it never holds an earlier run's set. Its directory is created; a <file>
+# that still cannot be written is `bad-args`.
+#
+# `body_edited` is null for a body never edited since filing. `blocked_by` holds
+# URLs rather than numbers because a sub-issue may live in another repo of the
+# same owner, where a bare number names a different issue. A parent with no
+# sub-issues is `children: []`, not an error.
+#
+# `set-overflow` means a page came back short of its total — more sub-issues,
+# blockers or labels on one issue than one query asks for — so the snapshot would
+# silently omit part of the set. A null node, such as an issue the token cannot
+# see, is `issue-query-shape`: the set was not fully read either way.
+#
+# `now` is stamped before the query, so an edit landing while it runs carries a
+# later `body_edited` than `now` and reads as moved.
+#
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/claude-plugins/issues/149
+# replaces the constant below with host detection; the output above is not
+# GitHub-shaped.
+set -euo pipefail
+
+now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+fail() { echo "result=ERROR reason=$1 now=$(now_iso)"; exit 0; }
+
+ARGS=(); OUTS=(); BAD=
+for a in "$@"; do
+  case "$a" in
+    --json-out=?*) OUTS+=("${a#--json-out=}") ;;
+    --*) BAD=1 ;;
+    *) ARGS+=("$a") ;;
+  esac
+done
+# Emptying every named file first is what keeps an earlier set out of it on any
+# ERROR below; it also proves the file writable before the query.
+for o in ${OUTS[@]+"${OUTS[@]}"}; do
+  { mkdir -p "$(dirname "$o")" && : > "$o"; } 2>/dev/null || BAD=1
+done
+[ -z "$BAD" ] && [ "${#OUTS[@]}" -le 1 ] && [ "${#ARGS[@]}" -eq 2 ] || fail bad-args
+JSON_OUT="${OUTS[0]:-}"
+REPO="${ARGS[0]}"; N="${ARGS[1]}"
+case "$REPO" in */*/*|/*|*/) fail bad-args ;; */*) ;; *) fail bad-args ;; esac
+case "$N" in ''|*[!0-9]*) fail bad-args ;; esac
+
+FORGE="${FORGE:-github}"
+[ "$FORGE" = github ] || fail unsupported-forge
+
+OWNER="${REPO%%/*}"; NAME="${REPO##*/}"
+
+# GitHub caps a parent at 100 sub-issues, so one page holds any set.
+# shellcheck disable=SC2016  # GraphQL variables, bound by the flags below.
+Q='fragment Fields on Issue { url number title body state createdAt lastEditedAt
+                              labels(first: 100) { totalCount nodes { name } } }
+query($owner:String!, $repo:String!, $n:Int!) {
+  repository(owner: $owner, name: $repo) {
+    issue(number: $n) {
+      ...Fields
+      subIssues(first: 100) {
+        totalCount
+        nodes {
+          ...Fields
+          blockedBy(first: 50) { totalCount nodes { url } }
+        }
+      }
+    }
+  }
+}'
+
+NOW=$(now_iso)
+# `-F` for the number, which must reach GraphQL as an Int; `-f` for the owner and
+# repo, so an all-digit name stays a String.
+RAW=$(gh api graphql -f query="$Q" -f owner="$OWNER" -f repo="$NAME" -F n="$N" 2>/dev/null) || true
+# Stdout is parsed regardless of exit status: an unresolvable issue or repo
+# answers a null node plus a NOT_FOUND error, and `gh` exits 1 on it.
+[ -n "$RAW" ] || fail issue-query
+ISSUE=$(printf '%s' "$RAW" | jq -c '.data.repository.issue // empty' 2>/dev/null) \
+  || fail issue-query-shape
+if [ -z "$ISSUE" ]; then
+  printf '%s' "$RAW" | jq -e 'any(.errors[]?; .type == "NOT_FOUND")' >/dev/null 2>&1 \
+    && fail not-found
+  fail issue-query
+fi
+
+# Shape first, so a payload that stopped parsing is never reported as a set too
+# large to read.
+printf '%s' "$ISSUE" | jq -e '
+  def page: (.totalCount | type) == "number" and (.nodes | type) == "array"
+            and all(.nodes[]; type == "object");
+  (.labels | page) and (.subIssues | page)
+  and all(.subIssues.nodes[]; (.labels | page) and (.blockedBy | page))' \
+  >/dev/null 2>&1 || fail issue-query-shape
+printf '%s' "$ISSUE" | jq -e '
+  def full: (.nodes | length) == .totalCount;
+  (.labels | full) and (.subIssues | full)
+  and all(.subIssues.nodes[]; (.labels | full) and (.blockedBy | full))' \
+  >/dev/null 2>&1 || fail set-overflow
+
+OUT=$(printf '%s' "$ISSUE" | jq -c '
+  def fields: {url, number, title, body, state, created: .createdAt,
+               body_edited: .lastEditedAt, labels: [.labels.nodes[].name]};
+  { parent: fields,
+    children: [ .subIssues.nodes[] | fields + {blocked_by: [.blockedBy.nodes[].url]} ] }' \
+  2>/dev/null) || fail issue-query-shape
+
+if [ -n "$JSON_OUT" ]; then
+  printf '%s\n' "$OUT" 2>/dev/null > "$JSON_OUT" || { : > "$JSON_OUT"; fail bad-args; } 2>/dev/null
+else
+  echo "$OUT"
+fi
+echo "result=OK now=$NOW children=$(printf '%s' "$OUT" | jq '.children | length')"

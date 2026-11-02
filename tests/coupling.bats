@@ -1,0 +1,2302 @@
+#!/usr/bin/env bats
+#
+# The tool list that check-worktree.sh gates lives in three places, and its own
+# comment says a tool missing from any of them is editable in the main checkout
+# without the gate firing. That is a silent, security-relevant failure with no
+# other check on it — this is the check.
+
+ROOT="${BATS_TEST_DIRNAME}/.."
+
+# The heading of the always-on rule that states the gate. The tool enumeration is
+# read from this section alone, so a slash-run anywhere else in the file — a
+# future rule mentioning GitHub/GitLab, say — can never be read as a tool list.
+GATE_SECTION='All file changes in a covered repo go through a PR'
+
+# The three extractors. Each takes its file as an argument rather than reading a
+# fixed path, so the same code that checks the real files is what the induced
+# failures below run against — a check that can only be pointed at the passing
+# case is a check nobody has seen fail.
+
+# check-worktree.sh's `case` — the set the script itself acts on.
+case_tools() {  # <check-worktree.sh>
+  sed -n 's/^  \(\([A-Za-z]*|\)*[A-Za-z]*\)) ;;$/\1/p' "$1" | tr '|' '\n' | sort -u
+}
+
+# hooks.json — the set Claude Code actually invokes the hook for. A tool here but
+# not in the case is a wasted invocation; a tool in the case but not here never
+# reaches the script at all.
+matcher_tools() {  # <hooks.json>
+  jq -r '.hooks.PreToolUse[] | select(.hooks[].command | test("check-worktree")) | .matcher' "$1" \
+    | tr '|' '\n' | sort -u
+}
+
+# always-on-rules.md — what the agent reads. It is prose, so the enumeration is
+# taken from the one construct in the gate section that enumerates: the
+# slash-delimited run of capitalised names ("Edit/Write/NotebookEdit"). That run
+# is the convention, and it costs the rules file nothing — the prose already
+# wrote the list that way. A tool claimed gated in free prose *outside* the run
+# is not seen here; the run is the enumeration.
+rules_tools() {  # <always-on-rules.md>
+  # awk rather than a sed range: a `/^## x/,/^## /` range ends *inclusive* of the
+  # next heading, so a future heading that itself carried a slash-run would be
+  # read as part of the gate enumeration. This stops before it.
+  awk -v h="## $GATE_SECTION" '$0 == h { inside = 1; next } /^## / { inside = 0 } inside' "$1" \
+    | grep -oE '[A-Z][A-Za-z]+(/[A-Z][A-Za-z]+)+' | tr '/' '\n' | sort -u
+}
+
+# Set equality in both directions, which is the whole point: containment in the
+# case→rules direction alone misses the case check-worktree.sh:15-18 actually
+# warns about — a tool the rules tell the agent is gated while neither the case
+# nor the matcher gates it. Equality also makes the substring accident
+# structurally impossible, where a per-tool `grep` for `Edit` matched inside
+# `NotebookEdit` and passed on a rules file that never named `Edit`.
+gate_agrees() {  # <always-on-rules.md> <check-worktree.sh> <hooks.json>
+  local from_rules from_case from_matcher
+  from_rules=$(rules_tools "$1")
+  from_case=$(case_tools "$2")
+  from_matcher=$(matcher_tools "$3")
+
+  [ -n "$from_case" ] || { echo "no gated tools found in the case"; return 1; }
+  [ "$from_case" = "$from_matcher" ] || {
+    echo "the case and the hooks.json matcher disagree:"
+    echo "  case:    $(echo "$from_case" | tr '\n' ' ')"
+    echo "  matcher: $(echo "$from_matcher" | tr '\n' ' ')"
+    return 1
+  }
+  [ "$from_case" = "$from_rules" ] || {
+    echo "the case and always-on-rules.md disagree:"
+    echo "  case:  $(echo "$from_case" | tr '\n' ' ')"
+    echo "  rules: $(echo "$from_rules" | tr '\n' ' ')"
+    echo "the rules must name the gated tools as one slash-delimited run"
+    echo "(Edit/Write/NotebookEdit) under '## $GATE_SECTION'"
+    return 1
+  }
+}
+
+# A rules file in the shape the extractor expects, with the tool run substituted.
+# The decoy run in the first section is load-bearing, but only through the
+# positive test below: the two negative tests assert a mismatch, and a decoy
+# leaking in through an unscoped extractor only deepens a mismatch they were
+# going to see anyway. It takes a fixture that is supposed to *agree* for the
+# stray tools to break something.
+fixture_rules() {  # <slash-delimited tool run>
+  cat > "$BATS_TEST_TMPDIR/rules.md" <<EOF
+## No flattery
+
+Not the gate section, and it names Read/Glob to prove the scan ignores it.
+
+## $GATE_SECTION
+
+Any edit to a tracked file goes through a worktree + draft PR. Load the
+\`dnbg-workflow:git-workflow\` skill before the first
+$1 call so the worktree/PR flow is in context.
+
+## Reference issues and PRs by full URL
+
+Nothing to enumerate here either.
+EOF
+  echo "$BATS_TEST_TMPDIR/rules.md"
+}
+
+@test "the gated tool list agrees across the case, the matcher, and the rules" {
+  run gate_agrees "$ROOT/dnbg-workflow/always-on-rules.md" \
+    "$ROOT/dnbg-workflow/hooks/check-worktree.sh" \
+    "$ROOT/dnbg-workflow/hooks/hooks.json"
+  echo "$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "a rules file naming exactly the gated set agrees, decoys and all" {
+  # The only one of these fixtures that is supposed to pass, and so the only one
+  # that pins the section scoping: drop the scoping and the decoy `Read/Glob` in
+  # the fixture's first section joins the enumeration, which makes this fail.
+  # It is also the only direction that catches rules_tools returning too little.
+  run gate_agrees "$(fixture_rules 'Edit/Write/NotebookEdit')" \
+    "$ROOT/dnbg-workflow/hooks/check-worktree.sh" \
+    "$ROOT/dnbg-workflow/hooks/hooks.json"
+  echo "$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "a rules file naming NotebookEdit but not Edit is caught" {
+  # The substring accident, induced rather than asserted against the pattern:
+  # `Edit` occurs inside `NotebookEdit`, so the old per-tool containment check
+  # passed on exactly this file.
+  run gate_agrees "$(fixture_rules 'Write/NotebookEdit')" \
+    "$ROOT/dnbg-workflow/hooks/check-worktree.sh" \
+    "$ROOT/dnbg-workflow/hooks/hooks.json"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"always-on-rules.md disagree"* ]]
+}
+
+@test "a rules file naming a tool that is gated nowhere is caught" {
+  # The reverse direction, which the one-directional check missed entirely: the
+  # rules tell the agent Read is gated, the case and the matcher never gate it,
+  # and the agent believes a protection it does not have.
+  run gate_agrees "$(fixture_rules 'Edit/Write/NotebookEdit/Read')" \
+    "$ROOT/dnbg-workflow/hooks/check-worktree.sh" \
+    "$ROOT/dnbg-workflow/hooks/hooks.json"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"always-on-rules.md disagree"* ]]
+}
+
+# The "is HEAD approved?" question has exactly one correct source: an APPROVED
+# review's commit oid compared to headRefOid. It was answered from
+# `dismiss_stale_reviews` instead, in two skills independently, and that field is
+# meaningless on a repo with `required_approving_review_count: 0` — which both
+# repos these skills run against are. The wrong answer merged two PRs over
+# unreviewed diffs. Prose alone did not hold the line, so this pins it.
+#
+# This test once also pinned the two skills' fenced copies of the comparison
+# against each other. That half is gone with the copies: both now call
+# `scripts/pr-verdict.sh`, and a single implementation cannot disagree with
+# itself. `tests/pr-verdict.bats` covers what the pin could only approximate —
+# that the check takes the last VERDICT rather than the last approval, which is
+# the bug the pin was written for and which it could only detect as a missing
+# grep hit.
+@test "nothing reaches for branch protection to decide whether an approval counts" {
+  # Any reintroduction is a regression regardless of intent: the endpoint needs
+  # admin (403/404 on write-only access) and answers the wrong question. The
+  # skills may still *name* the setting to explain why not to read it, so match
+  # the call, not the words.
+  #
+  # `scripts/` is in scope alongside `skills/` now that the check lives there —
+  # the wrong approach is reintroducible wherever the right one is implemented,
+  # and scoping this to prose would leave the actual implementation unguarded.
+  if grep -rn 'branches/[^ ]*/protection' \
+       "$ROOT/dnbg-workflow/skills" "$ROOT/dnbg-workflow/scripts"; then
+    echo "the admin-gated protection endpoint is called — use pr-verdict.sh instead"
+    false
+  fi
+}
+
+# The manifest and lib.sh both state a default for each mechanical knob, and they
+# are read by different audiences at different times: the manifest's is what the
+# configuration dialog pre-fills, lib.sh's is what an unconfigured session
+# actually uses. Two statements of one value is a drift risk taken deliberately —
+# the manifest cannot supply the running default (an option nobody configured
+# exports nothing to a hook), and dropping it from the manifest would leave the
+# dialog offering an empty box for a knob that has a documented default. So they
+# are pinned together instead.
+@test "the manifest's declared defaults match the ones lib.sh falls back to" {
+  local manifest="$ROOT/dnbg-workflow/.claude-plugin/plugin.json"
+  # shellcheck source=../dnbg-workflow/hooks/lib.sh
+  . "$ROOT/dnbg-workflow/hooks/lib.sh"
+
+  local from_manifest
+  from_manifest=$(jq -r '.userConfig.worktree_path.default' "$manifest")
+  [ "$from_manifest" = "$DEFAULT_WORKTREE_PATH" ] || {
+    echo "worktree_path default disagrees: manifest '$from_manifest', lib.sh '$DEFAULT_WORKTREE_PATH'"
+    false
+  }
+
+  from_manifest=$(jq -r '.userConfig.claim_label.default' "$manifest")
+  [ "$from_manifest" = "$DEFAULT_CLAIM_LABEL" ] || {
+    echo "claim_label default disagrees: manifest '$from_manifest', lib.sh '$DEFAULT_CLAIM_LABEL'"
+    false
+  }
+
+  from_manifest=$(jq -r '.userConfig.retrospective_dir.default' "$manifest")
+  [ "$from_manifest" = "$DEFAULT_RETROSPECTIVE_DIR" ] || {
+    echo "retrospective_dir default disagrees: manifest '$from_manifest', lib.sh '$DEFAULT_RETROSPECTIVE_DIR'"
+    false
+  }
+
+  from_manifest=$(jq -r '.userConfig.findings_dir.default' "$manifest")
+  [ "$from_manifest" = "$DEFAULT_FINDINGS_DIR" ] || {
+    echo "findings_dir default disagrees: manifest '$from_manifest', lib.sh '$DEFAULT_FINDINGS_DIR'"
+    false
+  }
+}
+
+# `version_stamp` is pinned separately rather than as another arm above, because
+# it has no lib.sh constant to compare against: it is a gate, and what an
+# unconfigured session does is decided by how `version_stamp_enabled` reads an
+# unset variable. A constant nothing consults would pin nothing.
+#
+# Its default is also the one here that is a safety property rather than a
+# convenience — it puts text on PR descriptions, review bodies and issue comments
+# that people who never installed this plugin will read. A dialog pre-ticked to
+# on would opt every existing install in at the next update, which no amount of
+# documentation undoes after the fact.
+@test "the version stamp defaults to off on both sides" {
+  local manifest="$ROOT/dnbg-workflow/.claude-plugin/plugin.json"
+  # shellcheck source=../dnbg-workflow/hooks/lib.sh
+  . "$ROOT/dnbg-workflow/hooks/lib.sh"
+
+  [ "$(jq -r '.userConfig.version_stamp.default' "$manifest")" = "false" ] || {
+    echo "the manifest offers the version stamp pre-enabled"
+    false
+  }
+  # The resolver, not the constant: what an unconfigured session gets is decided
+  # by how the resolver reads an unset variable, and a constant nothing consults
+  # would pin nothing.
+  ( unset CLAUDE_PLUGIN_OPTION_VERSION_STAMP; ! version_stamp_enabled ) || {
+    echo "an unconfigured session stamps"
+    false
+  }
+}
+
+# `retrospectives` is pinned the same way and for a sibling reason: on, every
+# close-out writes a file under the operator's home directory, which only whoever
+# maintains these prompts reads. Pre-ticked, the next update would start leaving
+# those files on every install that never asked for them.
+@test "retrospectives default to off on both sides" {
+  local manifest="$ROOT/dnbg-workflow/.claude-plugin/plugin.json"
+  # shellcheck source=../dnbg-workflow/hooks/lib.sh
+  . "$ROOT/dnbg-workflow/hooks/lib.sh"
+
+  [ "$(jq -r '.userConfig.retrospectives.default' "$manifest")" = "false" ] || {
+    echo "the manifest offers retrospectives pre-enabled"
+    false
+  }
+  ( unset CLAUDE_PLUGIN_OPTION_RETROSPECTIVES; ! retrospectives_enabled ) || {
+    echo "an unconfigured session writes retrospectives"
+    false
+  }
+}
+
+# The exclusion decision in reverse. "Configurable opinions with opinionated
+# defaults" draws its line at mechanical-vs-behavioral, and the behavioral side —
+# drafts always, the send-to-review picker and its fixed option order, the
+# `[<branch-name>]` sibling title tag, "only a human merges" — is meant to have no
+# key at all. Nothing else notices a new key appearing, so the surface is
+# pinned by equality: a new knob is a decision to make deliberately, and this is
+# the test that makes someone make it.
+#
+# `version_stamp` is the one key that is neither a mechanical name nor a
+# workflow step, and it earns its place on a third ground: what it publishes is a
+# marker addressed to *tooling*, meaningless to the humans it lands in front of.
+# Nobody reading the PR can act on it, so it is theirs to decline. Content
+# addressed to those readers is not covered — the `[<branch-name>]` title tag
+# above writes onto a PR title people read, and stays an opinion because it is
+# there to be read. "The operator might prefer otherwise" is not a ground either,
+# or every behavioral choice above qualifies.
+#
+# `retrospectives` earns its place on the same third ground: what it writes is a
+# file addressed to whoever maintains these prompts, which a user who is not that
+# person has no use for and should not be left carrying.
+@test "the plugin exposes exactly the intended configuration keys" {
+  local keys
+  keys=$(jq -r '.userConfig | keys_unsorted[]' "$ROOT/dnbg-workflow/.claude-plugin/plugin.json" | sort | tr '\n' ' ')
+  [ "$keys" = "claim_label findings_dir owners retrospective_dir retrospectives version_stamp worktree_path " ] || {
+    echo "userConfig keys are: $keys"
+    echo "adding one means deciding it is mechanical, or that it governs what gets published — see docs/configuration.md"
+    false
+  }
+}
+
+# "Which PRs belong to this issue?" is asked in three places, and each answer gates
+# something different: whether the reviewer wakes, whether it discovers, and whether a
+# coder believes the issue is unclaimed. They drifted — discovery grew the timeline
+# source and the other two kept only `closedByPullRequestsReferences`, which lists PRs
+# carrying a CLOSING KEYWORD and nothing else. Since `git-workflow` has exactly one
+# sibling close an issue and the rest merely mention it, the narrow sources miss the
+# shape that skill mandates: the reviewer's wait sat out its whole window on a real PR,
+# and the claim check reads an in-flight multi-repo change as unclaimed.
+#
+# The failure is silent at every site — a wait that never fires and a claim check that
+# finds nothing look exactly like a quiet issue — so prose could not hold it. This is
+# the check.
+#
+# Two of the three sites now CALL `scripts/pr-sources.sh` rather than carrying their
+# own copy, so for them the question is only whether they still invoke it. The third
+# is `fetch-issue-state.sh`, which asks both sources inside one batched query — it
+# reads `state`, the conversation and the linked PRs together, and splitting the
+# linked-PR half back out to a CLI call would cost a request per tick to buy nothing.
+# So it is the one site that can still narrow alone, and it is compared against the
+# script rather than against prose: real code on both sides.
+
+# Each extractor returns the API surfaces its site queries, one per line, under names
+# shared across the three files so they can be compared as sets. Taking the file as an
+# argument is what lets the induced-failure tests below run the real code against
+# fixtures rather than only against the passing case.
+
+# Only the lines a site actually runs — fenced-block contents for a skill, the whole
+# file for a script, minus comments in both. A plain grep over the file counts a source
+# NAMED in prose as a source QUERIED, and worse, counts the exemption marker's own text
+# (which has to name the source it exempts) as coverage of it. Either way the check
+# passes while the site stays blind, which is the single failure it exists to prevent.
+pr_command_lines() {  # <file>
+  case "$1" in
+    # Indented fences count: a fence inside a numbered list item is still a
+    # command block, and anchoring at column 0 would make every command in one
+    # invisible to the checks below — a place to hide exactly what they look for.
+    *.md) awk '/^[[:space:]]*```/ { inside = !inside; next } inside' "$1" ;;
+    *)    cat "$1" ;;
+  esac | grep -v '^[[:space:]]*#'
+}
+
+pr_sources() {  # <file>
+  # `<n>` in a skill, `$PR` in the watcher, `$ISSUE` in pr-sources.sh: the same
+  # endpoint spelled for three audiences, so all of them normalise to `timeline`.
+  pr_command_lines "$1" \
+    | grep -oE 'closedByPullRequestsReferences|issues/(<n>|\$PR|\$ISSUE)/timeline|timelineItems|gh search prs' \
+    | sed 's|issues/.*/timeline|timeline|; s|timelineItems|timeline|' | sort -u
+}
+
+# A site may decline a source, but only out loud. The marker carries the reason inline,
+# so the exemption is a decision on the record rather than a gap that accumulated.
+pr_exemptions() {  # <file>
+  # `[a-z]+( [a-z]+)*` rather than `[a-z ]+`: the latter is greedy over the space too,
+  # so it captures the one before the em-dash and every exemption arrives with trailing
+  # whitespace that no exact-match comparison can ever satisfy.
+  grep -oE 'PR-SOURCE-EXEMPT: [a-z]+( [a-z]+)*' "$1" | sed 's/PR-SOURCE-EXEMPT: //' | sort -u
+}
+
+# Every source discovery uses must be either polled by the site or exempted by it.
+# Deliberately one-directional: a site querying something discovery does not is not a
+# drift this test can judge, while a site quietly seeing LESS than discovery is exactly
+# the bug above.
+covers_discovery() {  # <site-file> <discovery-file>
+  local want have exempt missing=""
+  want=$(pr_sources "$2")
+  have=$(pr_sources "$1")
+  exempt=$(pr_exemptions "$1")
+
+  [ -n "$want" ] || { echo "no PR sources found in the discovery file"; return 1; }
+
+  local s
+  while IFS= read -r s; do
+    [ -n "$s" ] || continue
+    printf '%s\n' "$have"   | grep -qxF "$s" && continue
+    printf '%s\n' "$exempt" | grep -qxF "$s" && continue
+    missing="$missing $s"
+  done <<EOF
+$want
+EOF
+
+  [ -z "$missing" ] || {
+    echo "$(basename "$1") is narrower than discovery — unhandled source(s):$missing"
+    echo "  discovery: $(echo "$want" | tr '\n' ' ')"
+    echo "  this site: $(echo "$have" | tr '\n' ' ')"
+    echo "  exempted:  $(echo "$exempt" | tr '\n' ' ')"
+    echo "poll the source, or declare 'PR-SOURCE-EXEMPT: <source> — <reason>' at the site"
+    return 1
+  }
+}
+
+# The canonical union, and now the thing every other site is measured against.
+# Deliberately the script and not `reviewer`'s prose: the old reference could only
+# ever prove a site NAMED the same endpoints, never that it queried them the same
+# way, and `covers_discovery`'s own extractor exists because a prose mention had to
+# be told apart from a query.
+DISCOVERY="$ROOT/dnbg-workflow/scripts/pr-sources.sh"
+
+@test "the issue-scoped wait sees every PR source discovery does" {
+  run covers_discovery "$ROOT/dnbg-workflow/scripts/fetch-issue-state.sh" "$DISCOVERY"
+  echo "$output"
+  [ "$status" -eq 0 ]
+}
+
+# The two prose sites can no longer narrow by rewriting a query, because they have
+# no query — so what is left to protect is that they still call the union rather
+# than growing a private one back. A site that reintroduced its own copy would fail
+# this by dropping the invocation, which is the reachable regression; one that kept
+# BOTH would be caught by review, not by a grep.
+@test "the prose discovery sites call the union rather than carrying a copy" {
+  local f
+  for f in "$ROOT/dnbg-workflow/skills/issue-workflow/references/claiming.md" \
+           "$ROOT/dnbg-workflow/skills/reviewer/references/issue-mode.md"; do
+    grep -q 'pr-sources\.sh' "$f" || {
+      echo "$(basename "$f") no longer invokes pr-sources.sh"; false; }
+    # And it must be an invocation, not a mention: the same distinction
+    # `pr_command_lines` draws, applied to the call itself.
+    pr_command_lines "$f" | grep -q 'pr-sources\.sh' || {
+      echo "$(basename "$f") names pr-sources.sh in prose but never runs it"; false; }
+  done
+}
+
+# merge-wait.md names pr-verdict.sh elsewhere, for a terminal block, so the
+# check is scoped to the "No re-arm line" section and to its fenced commands.
+@test "the merge stage without a re-arm line reads pr-verdict.sh and arms the merge-stage watch" {
+  local f="$ROOT/dnbg-workflow/skills/git-workflow/references/merge-wait.md" section
+  section=$(awk '/^### No re-arm line$/{inside=1; next} inside && /^##/{exit} inside' "$f")
+  [ -n "$section" ] || { echo "merge-wait.md has no '### No re-arm line' section"; false; }
+  printf '%s\n' "$section" > "$BATS_TEST_TMPDIR/section.md"
+  pr_command_lines "$BATS_TEST_TMPDIR/section.md" | grep -q 'pr-verdict\.sh' || {
+    echo "the No re-arm line recipe never runs pr-verdict.sh"; false; }
+  # The arm is a continued command, so its lines are joined before matching.
+  pr_command_lines "$BATS_TEST_TMPDIR/section.md" | tr '\n' ' ' \
+    | grep -q -- 'WINDOW=21600 [^#]*--merge-stage' || {
+    echo "the No re-arm line recipe does not arm WINDOW=21600 ... --merge-stage"; false; }
+}
+
+# Claims have one implementation, so a coder's pickup and an orchestrator's read
+# the same marks the same way.
+@test "the claim sites call claim-issue.sh rather than carrying the gh commands" {
+  local f
+  for f in "$ROOT/dnbg-workflow/skills/issue-workflow/references/claiming.md" \
+           "$ROOT/dnbg-workflow/skills/orchestrate/SKILL.md"; do
+    grep -q 'claim-issue\.sh' "$f" || {
+      echo "$(basename "$f") no longer invokes claim-issue.sh"; false; }
+    ! grep -qE 'gh issue (edit .*--add-label|comment .*Claimed by)' "$f" || {
+      echo "$(basename "$f") carries its own claim commands"; false; }
+  done
+}
+
+# issue-workflow's pickup skips claiming.md on the dispatch prompt's claim
+# sentence, so a reworded sentence in either dispatch recipe silently sends
+# every orchestrated author back through the full claim read. The files wrap
+# and blockquote the sentences, so each is read as one line with `>` dropped.
+@test "the pickup's claimed-exception names both dispatch recipes' claim sentence" {
+  flat() { tr '\n' ' ' < "$1" | tr -d '>' | tr -s ' '; }
+  flat "$ROOT/dnbg-workflow/skills/orchestrate/SKILL.md" \
+    | grep -qF 'The issue is already claimed under your session id.' || {
+    echo "orchestrate's dispatch recipe no longer says the issue is already claimed under your session id"; false; }
+  flat "$ROOT/dnbg-workflow/skills/orchestrate/references/several-issues.md" \
+    | grep -qF 'The issues are already claimed under your session id.' || {
+    echo "several-issues.md's one-author recipe no longer says the issues are already claimed under your session id"; false; }
+  flat "$ROOT/dnbg-workflow/skills/issue-workflow/SKILL.md" \
+    | grep -qF 'the issue is, or the issues are, already claimed under your session id' || {
+    echo "issue-workflow's pickup exception no longer names both claim sentences"; false; }
+}
+
+# A site file in the shape the extractor expects: commands inside a fence, everything
+# else prose. Shaped as `.md` because that is the harder case — a script has no prose
+# for a mention to hide in.
+fixture_site() {  # <fenced-body>
+  cat > "$BATS_TEST_TMPDIR/site.md" <<EOF
+Prose above the block, mentioning gh search prs and closedByPullRequestsReferences
+in passing — neither is a query, and neither may count as one.
+
+\`\`\`bash
+$1
+\`\`\`
+
+Prose below, same rule.
+EOF
+  echo "$BATS_TEST_TMPDIR/site.md"
+}
+
+@test "a site polling only the closing-keyword source is caught" {
+  # The exact regression, induced: the shape both sites had before, which no test
+  # could distinguish from a quiet issue.
+  run covers_discovery \
+    "$(fixture_site 'gh issue view <n> --json closedByPullRequestsReferences')" \
+    "$DISCOVERY"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"narrower than discovery"* ]]
+  [[ "$output" == *"timeline"* ]]
+}
+
+@test "a source only NAMED in prose does not count as one queried" {
+  # The fixture's prose names every source; the block queries two. Were mentions
+  # counted, this would pass while the site never runs the third — and the same
+  # accident would let the exemption marker vouch for the source it exempts.
+  run covers_discovery "$(fixture_site 'gh issue view <n> --json closedByPullRequestsReferences
+gh api repos/x/issues/<n>/timeline --paginate')" "$DISCOVERY"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"gh search prs"* ]]
+}
+
+@test "a marked exemption does count, so a fourth source is a decision not a silence" {
+  run covers_discovery "$(fixture_site 'gh issue view <n> --json closedByPullRequestsReferences
+gh api repos/x/issues/<n>/timeline --paginate
+# PR-SOURCE-EXEMPT: gh search prs — rate-limited well below core REST.')" \
+    "$DISCOVERY"
+  echo "$output"
+  [ "$status" -eq 0 ]
+}
+
+# What counts as a verdict is asked in two places that cannot share a query: `pr-verdict.sh`
+# fetches its own payload, while `watch-pr.sh`'s level-triggered check reads the `reviews`
+# already in the poll it just made — a CLI boundary there would double the request rate of
+# every tick. So the SET is what has to stay pinned, and it is exactly the kind that drifts
+# quietly: adding a state to one side leaves the watch waking on something the author's
+# ready-to-merge check does not treat as a verdict, or missing one it does.
+#
+# Same extraction rule as above — run lines only, no comments. Both files have to NAME the
+# excluded states to explain themselves, and a grep over whole files would read those
+# explanations as agreement no matter what the queries did.
+verdict_states() {  # <file>
+  pr_command_lines "$1" \
+    | grep -oE 'APPROVED|CHANGES_REQUESTED|DISMISSED|COMMENTED' | sort -u
+}
+
+@test "the watcher and pr-verdict.sh agree on what a verdict is" {
+  local a b
+  a=$(verdict_states "$ROOT/dnbg-workflow/scripts/pr-verdict.sh")
+  b=$(verdict_states "$ROOT/dnbg-workflow/scripts/watch-pr.sh")
+  echo "pr-verdict.sh: $(echo "$a" | tr '\n' ' ')"
+  echo "watch-pr.sh:   $(echo "$b" | tr '\n' ' ')"
+  [ -n "$a" ]
+  [ "$a" = "$b" ]
+}
+
+# Two conventions that a suite opts into by `load`ing a file, and whose absence is
+# invisible from inside the suite that forgot: a watch spawned without `trace-dir`
+# files its trace in the DEVELOPER'S real directory, and one spawned without `reap`
+# is stopped by nothing if an assertion fails before its kill. Both failures are
+# silent and land outside the run, which is exactly the shape tests/reap.bash argues
+# cannot be left to convention — "the next spawn in the suite without it inherits the
+# belief and not the protection".
+@test "every suite that spawns a watch loads the reaper and contains its traces" {
+  local f missing=0
+  # The watcher scripts and the library are the only things that start a watch, so
+  # RUNNING one is what makes a suite a watch-spawning suite.
+  #
+  # Comment lines are excluded, and that is the selection rather than tidying. A grep
+  # over whole files reads a suite that merely MENTIONS a watcher — "the gate
+  # watch-pr.sh applies to .state", explaining where a rule came from — as one that
+  # spawns it, and then fails it for not loading two helpers it has no use for. The
+  # diagnosis is true of the text and useless about the suite, and the pressure it
+  # creates is to delete the explanation. Same distinction `pr_command_lines` draws
+  # above, for the same reason.
+  for f in "$ROOT"/tests/*.bats; do
+    grep -v '^[[:space:]]*#' "$f" \
+      | grep -q 'watch-pr\.sh\|watch-issue\.sh\|lib-poll\.sh' || continue
+    # Skip self. This file has to name the watcher scripts to select on them, and
+    # the pattern above sits on a line the exclusion does not reach — so without this
+    # coupling.bats selects itself and fails with "coupling.bats spawns a watch but
+    # never loads reap": true of the text, useless as a diagnosis.
+    if [ "$(basename "$f")" = "$(basename "$BATS_TEST_FILENAME")" ]; then continue; fi
+    grep -q '^load reap$' "$f" || {
+      echo "$(basename "$f") spawns a watch but never loads reap"; missing=1; }
+    grep -q '^load trace-dir$' "$f" || {
+      echo "$(basename "$f") spawns a watch but never loads trace-dir"; missing=1; }
+    # `load`ing it is not the same as calling it, and only the call sets TMPDIR.
+    grep -q 'contain_traces' "$f" || {
+      echo "$(basename "$f") loads trace-dir but never calls contain_traces"; missing=1; }
+  done
+  [ "$missing" -eq 0 ]
+}
+
+# The README's skill table is a *promise per skill*, and its second and
+# third columns are only true if every skill the repo ships has actually been
+# classified. A skill added without a row inherits neither claim, and the table
+# keeps asserting complete coverage it no longer has — the rot this pins against.
+#
+# The "What's in it" table is the single classification (plugin + forge);
+# docs/forge-support.md points at it rather than repeating the lists, so there is
+# one place to update and this check has one place to read.
+readme_skill_rows() {  # <README.md> -> "<skill> <plugin> <forge>"
+  # Rows of the four-column table, keyed on the leading `| \`skill\` |`. The
+  # forge cell is normalised to coupled/neutral: it is prose ("GitHub only",
+  # "**Any**") so that a reader gets a sentence, and matching on "any" rather
+  # than the exact spelling keeps the emphasis markup free to change.
+  #
+  # Scoped to the table, and every cell capture excludes `|`. The second is the
+  # subtle one: with a greedy `\(.*\)` for the forge cell, a row whose
+  # description contained a pipe would fold the Forge cell into the description
+  # and read as `coupled`. The table-diff check below compares only the skill
+  # and plugin columns, so a neutral skill would be misclassified in silence —
+  # the exact drift these checks exist to catch.
+  #
+  # `What.s` rather than the apostrophe: the heading is matched inside a
+  # single-quoted awk program, where a literal `'` cannot appear.
+  awk '/^## What.s in it$/{inside=1; next} inside && /^## /{exit} inside' "$1" \
+    | sed -n 's/^| `\([a-z-]*\)` | `\([a-z-]*\)` | \([^|]*\) | [^|]* |$/\1 \2 \3/p' \
+    | while read -r skill plugin forge; do
+        case "$(printf '%s' "$forge" | tr -d '*' | tr '[:upper:]' '[:lower:]')" in
+          any) printf '%s %s neutral\n' "$skill" "$plugin" ;;
+          *)   printf '%s %s coupled\n' "$skill" "$plugin" ;;
+        esac
+      done
+}
+
+tree_skills() {  # -> "<skill> <plugin>"
+  local d
+  for d in "$ROOT"/dnbg-*/skills/*/; do
+    [ -f "$d/SKILL.md" ] || continue
+    printf '%s %s\n' "$(basename "$d")" "$(basename "$(dirname "$(dirname "$d")")")"
+  done | sort
+}
+
+@test "every skill in the tree is classified in the README, under the plugin that ships it" {
+  # Both directions. A missing row is the rot above; a stale row is the table
+  # promising a skill that no longer exists, or naming the wrong plugin — which
+  # is the specific claim `velocity-tradeoff` exists to keep honest, since its
+  # value is precisely that a neutral skill sits in the coupled plugin.
+  run diff <(tree_skills) <(readme_skill_rows "$ROOT/README.md" | cut -d' ' -f1,2 | sort)
+  echo "$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "the README classifies velocity-tradeoff as neutral inside the coupled plugin" {
+  # Pinned by name rather than left to the table check above, because this exact
+  # pairing is the trap: it is the only neutral skill in `dnbg-workflow`, and a
+  # future edit that "tidies" the table by making the plugin's rows uniform would
+  # satisfy every other check here while inverting the promise.
+  run readme_skill_rows "$ROOT/README.md"
+  echo "$output"
+  [[ "$output" == *"velocity-tradeoff dnbg-workflow neutral"* ]]
+}
+
+# Degradation is decided per skill, and for three of the coupled skills the
+# working directory is the wrong input entirely: `reviewer` judges the repo
+# holding the PR it was given, and `reviewer-setup` and `work-summary` touch no
+# repo at all. A cwd check in any of them refuses a flow that works — a recap of
+# your GitHub week asked from a GitLab checkout. The forge-neutral pair must not
+# read a remote for the same reason, one step further out.
+#
+# This is the shape a later consistency pass reintroduces ("all the GitHub skills
+# should check the host"), so the rule is pinned rather than merely written down.
+#
+# Match the *call*, not the words — the same distinction the protection-endpoint
+# check above draws, and for the same reason. Three of these skills name the
+# command in prose precisely to say they do not run it, and a bare substring
+# match reads that disclaimer as the violation it warns against. A call is the
+# command at the start of a line (a fenced code block) or inside a substitution;
+# an inline mention is backtick-wrapped mid-sentence. That leaves an unusual
+# spelling — a call piped into on one line, say — invisible here, which is the
+# accepted cost of not failing on the disclaimers.
+remote_read_calls() {  # <SKILL.md>
+  grep -nE '^[[:space:]]*git remote get-url|\$\([[:space:]]*git remote get-url' "$1"
+}
+
+@test "only the repo-scoped skills read the remote to decide whether to run" {
+  local f skill plugin bad=0
+  while read -r skill plugin; do
+    case "$skill" in git-workflow|issue-workflow|issue-reviewer) continue ;; esac
+    f="$ROOT/$plugin/skills/$skill/SKILL.md"
+    if remote_read_calls "$f"; then
+      echo "$skill is not repo-scoped but reads the origin remote — see docs/forge-support.md 'What happens on an unsupported forge'"
+      bad=1
+    fi
+  done < <(tree_skills)
+  [ "$bad" -eq 0 ]
+}
+
+@test "the two repo-scoped skills do read the remote, and say what a non-GitHub host means" {
+  # The other direction: deleting the check would pass the test above trivially.
+  local skill f
+  for skill in git-workflow issue-workflow; do
+    f="$ROOT/dnbg-workflow/skills/$skill/SKILL.md"
+    # The same call-not-words matcher, so "it reads the remote" means an actual
+    # runnable line and not a sentence mentioning one.
+    remote_read_calls "$f" >/dev/null || {
+      echo "$skill/SKILL.md never reads the origin remote, so it cannot detect the host"; false; }
+    grep -qi 'github-only' "$f" || {
+      echo "$skill/SKILL.md reads the host but never states the flow is GitHub-only"; false; }
+    # No `origin` is explicitly not a decline. Without this the safest-looking
+    # reading of "not github.com" — treat unknown as unsupported — silently
+    # breaks every local-only repo, which has no forge claim either way.
+    grep -q 'No `origin`\|no `origin`' "$f" || {
+      echo "$skill/SKILL.md does not say what to do in a repo with no origin"; false; }
+  done
+}
+
+# `issue-workflow` is repo-scoped, but the repo is the one the ISSUE lives in —
+# which the working directory only reveals when the issue is named by a bare
+# number. The always-on rule requires full URLs, so the URL case is the common
+# path, and resolving it from cwd breaks it in both directions: a GitHub issue
+# URL declines from a GitLab checkout, and a GitLab issue URL proceeds from a
+# GitHub one into the `gh issue view` cascade the section exists to prevent.
+#
+# Structural rather than keyword-matched, because "reads the remote" is true of
+# the fixed file too — the fallback is still there. What must hold is the
+# precedence: the URL rule is stated BEFORE the command, so the command reads as
+# the fallback rather than as the rule.
+@test "issue-workflow resolves the host from the issue URL, and the remote only as a fallback" {
+  local f url_rule remote_line
+  f="$ROOT/dnbg-workflow/skills/issue-workflow/SKILL.md"
+
+  url_rule=$(grep -niE 'the host is in the URL' "$f" | head -1 | cut -d: -f1)
+  [ -n "$url_rule" ] || {
+    echo "issue-workflow never says the host comes from the issue URL"; false; }
+
+  remote_line=$(remote_read_calls "$f" | head -1 | cut -d: -f1)
+  [ -n "$remote_line" ] || {
+    echo "issue-workflow has no remote read at all, so a bare issue number cannot be resolved"; false; }
+
+  [ "$url_rule" -lt "$remote_line" ] || {
+    echo "issue-workflow reads the remote before establishing that the URL decides the host"; false; }
+
+  # And the command is framed as the fallback, not merely placed after the rule.
+  grep -qi 'fall back' "$f" || {
+    echo "issue-workflow's remote read is not framed as a fallback"; false; }
+}
+
+# The decline table drifted from the skill it describes, one round after
+# the skill was corrected — `issue-workflow`'s rule cell read `same`, inheriting
+# `git-workflow`'s origin rule, so when issue-workflow stopped deciding that way
+# the cell could not go visibly stale: it still pointed at a neighbour whose rule
+# was still right *for the neighbour*.
+#
+# This bans the inheriting placeholder, nothing more. It cannot tell whether a
+# spelled-out rule is correct — checking prose against behavior would mean
+# parsing one into the other, which is a worse trade than the drift it prevents.
+# What it does buy is that a rule change has to touch the cell that states it,
+# which is the step that was skipped. Keeping the artifacts honest past that
+# stays a manual step, deliberately.
+@test "every row of the decline table states its own rule instead of inheriting one" {
+  local offenders
+  # `|| true` because finding nothing is the passing case, and bats runs with
+  # errexit — without it a clean table fails the assignment rather than the test.
+  offenders=$(awk '/^## What happens on an unsupported forge$/{inside=1; next} inside && /^##/{exit} inside' \
+      "$ROOT/docs/forge-support.md" \
+    | grep -E '^\| `[a-z-]+` \|' \
+    | grep -iE '\|[[:space:]]*(same|as above|ditto|likewise)[[:space:]]*\|' || true)
+  if [ -n "$offenders" ]; then
+    echo "$offenders"
+    echo "a decline-table row inherits its rule from a neighbour — spell it out, or it cannot go visibly stale"
+    false
+  fi
+}
+
+# Banning an inheriting rule cannot see a row that was never added, which is how a
+# coupled skill reaches the docs with no decline rule stated anywhere. The README's
+# Forge column is the source: a skill it marks GitHub-only declines somewhere, and
+# this is where users look for where.
+@test "every forge-coupled skill has a row in the decline table" {
+  local rows skill plugin forge bad=0
+  rows=$(awk '/^## What happens on an unsupported forge$/{inside=1; next} inside && /^##/{exit} inside' \
+      "$ROOT/docs/forge-support.md" | grep -oE '^\| `[a-z-]+`' | tr -d '|` ')
+  [ -n "$rows" ] || { echo "no rows parsed out of the decline table — the extractor broke"; false; }
+
+  while read -r skill plugin forge; do
+    [ "$forge" = coupled ] || continue
+    grep -qx "$skill" <<<"$rows" || {
+      echo "$skill is forge-coupled in README.md but has no row in docs/forge-support.md"
+      echo "  a reader hitting its decline has nowhere to look up what it checks"
+      bad=1; }
+  done < <(readme_skill_rows "$ROOT/README.md")
+  [ "$bad" -eq 0 ]
+}
+
+# Every file under `reviewer/references/` is reachable only through the pointer
+# SKILL.md carries for it — nothing else in the plugin names one, and the discovery
+# check above reads issue-mode.md directly, so dropping a pointer leaves that file
+# unreachable with the whole suite green. That is the silent direction, and this is
+# the check for it. It matters most for the files the reviewer needs *mid-cycle*:
+# an agent that never loads watch.md branches on `result=` from the names alone.
+#
+# Deliberately a bare filename grep: what must not vanish is the *name*, since an
+# agent reading SKILL.md can only find the file by seeing it mentioned. Asserting
+# the wording of the surrounding paragraph would fail on every edit that keeps the
+# pointer working, which is how a check gets deleted rather than fixed.
+#
+# Globbed rather than enumerated so a reference file added later is covered without
+# anyone remembering to come back here.
+@test "SKILL.md points at every one of its reference files" {
+  local ps s plugin skill f bad=0
+  # Every skill whose references/ are reachable only from its own SKILL.md, as
+  # <plugin>/<skill>, so a new one is covered by adding its name rather than by
+  # copying the loop. issue-workflow is not here: other skills point at its
+  # references directly, and `issue-workflow SKILL.md still points at each of
+  # its paths` covers its own pointers.
+  for ps in dnbg-workflow/reviewer dnbg-workflow/issue-reviewer \
+            dnbg-workflow/git-workflow dnbg-workflow/orchestrate \
+            dnbg-practices/coding-practices dnbg-agent-summaries/summary-review; do
+    plugin=${ps%/*}; s=${ps#*/}
+    local found=0
+    skill="$ROOT/$plugin/skills/$s/SKILL.md"
+    # `nullglob` so an emptied references/ yields no iterations rather than one over
+    # the literal pattern — without it the count below can never reach zero, and the
+    # emptied case reports a missing pointer to a file named `*.md`.
+    shopt -s nullglob
+    for f in "$ROOT/$plugin/skills/$s/references/"*.md; do
+      found=$((found + 1))
+      grep -q "$(basename "$f" | sed 's/\./\\./g')" "$skill" || {
+        echo "$s/SKILL.md no longer names $(basename "$f") — nothing can reach it"
+        bad=1
+      }
+    done
+    shopt -u nullglob
+    # Zero files is the one way this check goes quiet: every assertion is in the loop.
+    [ "$found" -gt 0 ] || { echo "$s/references/ has no .md files at all"; bad=1; }
+  done
+  [ "$bad" -eq 0 ]
+}
+
+# A reference is read whole, in one call, at the moment its flow needs it. This
+# cap guards against that read being lost, and nothing else: token usage is not
+# its concern. Measured 2026-11-01 on Claude Code 2.1.316, a dispatched subagent
+# matching the main session:
+# - Bash output (`cat`) is the limit that binds, and it is a size, not a token
+#   count (probed with ASCII only, so bytes and characters were not told
+#   apart). The harness prints no threshold: 29,618 bytes came through whole and
+#   30,658 went to a saved file with only a short preview inline, so the agent
+#   gets a near-empty result, not a half-read.
+# - The Read tool cuts at 25,000 tokens, a cap its notice names, and returns the
+#   lines before the cut. This repo's prose runs about 2.7 bytes per token,
+#   roughly 66 KB.
+# The cap is about two thirds of the Bash limit, leaving room for the shell's
+# trailing notices and a small second file in the same call. Re-measure with
+# numbered 80-byte lines ending in a sentinel line, at sizes stepping down from
+# 150 KB toward 12 KB and bisecting the first gap between a cut and a whole
+# read, with the Read tool and with `cat`, each from the main session and from a
+# dispatched subagent, stopping each of the four once two consecutive sizes read
+# whole. Globbed over every plugin so a new file is covered.
+@test "no skill reference is too long to read in one call" {
+  local f size bad=0 found=0
+  shopt -s nullglob
+  for f in "$ROOT"/*/skills/*/references/*.md; do
+    found=$((found + 1))
+    size=$(wc -c <"$f")
+    [ "$size" -le 20000 ] || {
+      echo "${f#"$ROOT"/} is $((size)) bytes — split it at a heading to 20000 or under; raise the cap only with a new measurement recorded in this test's comment"
+      bad=1; }
+  done
+  shopt -u nullglob
+  [ "$found" -gt 0 ] || { echo "no reference files found — the glob broke"; bad=1; }
+  [ "$bad" -eq 0 ]
+}
+
+# A watcher's `act=` values and the tables its callers act on are one mapping,
+# written twice: a token the script prints that no table defines is a hint
+# nobody can follow, and a table row for a token the script never prints is a
+# branch nobody takes. Checked as sets per script, over the union of its tables.
+act_tokens_script() {  # <script>
+  awk '/^act_for\(\)/ { on = 1 } on { print } on && /^}/ { exit }' "$1" \
+    | grep -o 'echo [a-z]*' | sed 's/^echo //' | sort -u
+}
+act_tokens_tables() {  # <reference>...
+  sed -n 's/^| `\([a-z]*\)` |.*/\1/p' "$@" | sort -u
+}
+
+@test "each watcher's act= values are the ones its callers' tables define" {
+  local w="$ROOT/dnbg-workflow/scripts" s="$ROOT/dnbg-workflow/skills"
+  local script tables
+  script=$(act_tokens_script "$w/watch-pr.sh")
+  tables=$(act_tokens_tables "$s/reviewer/references/watch.md" \
+    "$s/git-workflow/references/watch-results.md")
+  [ -n "$script" ] || { echo "no act= values found in watch-pr.sh"; false; }
+  [ "$script" = "$tables" ] || { echo "watch-pr.sh: script [$script] tables [$tables]"; false; }
+  script=$(act_tokens_script "$w/watch-issue.sh")
+  tables=$(act_tokens_tables "$s/reviewer/references/issue-mode-wait.md" \
+    "$s/issue-workflow/references/spec-review-wait.md")
+  [ -n "$script" ] || { echo "no act= values found in watch-issue.sh"; false; }
+  [ "$script" = "$tables" ] || { echo "watch-issue.sh: script [$script] tables [$tables]"; false; }
+}
+
+# A tracking issue's parent resolves through the closeout PR its orchestrator
+# authors, so the operator has no second command to give at the end of a
+# project. A site still telling them to say "close out" sends them to an entry
+# no skill answers. Matched as the bare phrase, since every form of that
+# instruction carries it and the noun "closeout" does not.
+close_out_sites() {  # <dir> -> each line naming the command
+  grep -rniE 'close out' "$1"
+}
+
+@test "nothing under orchestrate/ tells the operator to say close out" {
+  run close_out_sites "$ROOT/dnbg-workflow/skills/orchestrate"
+  [ "$status" -eq 1 ] || { echo "$output"; false; }
+}
+
+@test "a reference telling the operator to say close out is caught" {
+  mkdir -p "$BATS_TEST_TMPDIR/orchestrate/references"
+  printf 'On ACCEPTED, tell the operator: "close out <parent URL>".\n' \
+    > "$BATS_TEST_TMPDIR/orchestrate/references/multi-issue.md"
+  run close_out_sites "$BATS_TEST_TMPDIR/orchestrate"
+  [ "$status" -eq 0 ]
+}
+
+# coding-practices' references cite rules by ID (`C10`, `E2`) and the body says
+# an ID is never reused, so a renumbered or dropped rule turns every citation of
+# it into a pointer at the wrong rule with nothing going red. The body's bolded
+# IDs are the one definition; this holds the references to it.
+practice_ids() {  # <SKILL.md> -> the IDs the body defines, one per line
+  grep -oE '^- \*\*[A-Z][0-9]+\b' "$1" | sed 's/^- \*\*//'
+}
+
+@test "every rule ID a coding-practices reference cites is defined once in its SKILL.md" {
+  local dir="$ROOT/dnbg-practices/skills/coding-practices"
+  local defined dupes cited bad=0
+  defined=$(practice_ids "$dir/SKILL.md")
+  [ -n "$defined" ] || { echo "no rule IDs found in SKILL.md — the extractor broke"; false; }
+  dupes=$(printf '%s\n' "$defined" | sort | uniq -d)
+  [ -z "$dupes" ] || { echo "IDs defined more than once: $dupes"; bad=1; }
+  # A citation is a bare ID token; the letters are the groups the body defines.
+  cited=$(grep -ohE "\b[$(printf '%s\n' "$defined" | cut -c1 | sort -u | tr -d '\n')][0-9]+\b" "$dir/references/"*.md | sort -u)
+  local id
+  for id in $cited; do
+    printf '%s\n' "$defined" | grep -qx "$id" || { echo "references cite $id, which SKILL.md does not define"; bad=1; }
+  done
+  [ "$bad" -eq 0 ]
+}
+
+# `process-review` groups by the retrospective's headings, so a heading the
+# writer spells one way and the reader another is a whole section that never
+# joins a pattern. The template in retrospective.md is the one spelling; the
+# fixture batch process-review is exercised on has to match it too.
+retrospective_headings() {  # <file> -> the `## ` headings, in order
+  grep '^## ' "$1"
+}
+
+@test "every retrospective fixture carries the template's headings and frontmatter" {
+  local tmpl="$ROOT/dnbg-workflow/skills/process-review/references/retrospective.md"
+  local want f n=0 bad=0
+  want=$(awk '/^```markdown$/{inside=1; next} /^```$/{inside=0} inside' "$tmpl" | grep '^## ')
+  [ "$(printf '%s\n' "$want" | wc -l)" -eq 5 ] || {
+    echo "retrospective.md's template does not carry five headings:"; echo "$want"; false; }
+  for f in "$ROOT"/tests/fixtures/retrospectives/*/*/*.md; do
+    n=$((n + 1))
+    [ "$(retrospective_headings "$f")" = "$want" ] || {
+      echo "$(basename "$f") headings differ from the template"; bad=1; }
+    local field
+    for field in tags role issue plugin_version date; do
+      sed -n '2,/^---$/p' "$f" | grep -q "^$field:" || {
+        echo "$(basename "$f") has no $field in its frontmatter"; bad=1; }
+    done
+  done
+  [ "$n" -ge 3 ] || { echo "fewer than three retrospective fixtures"; bad=1; }
+  [ "$bad" -eq 0 ]
+}
+
+# Without the session-start note, a retrospective's version comes from the
+# manifest path retrospective.md gives relative to the skill's base directory. A
+# path that no longer resolves leaves every default install writing `none`.
+@test "the manifest path retrospective.md reads plugin_version from resolves" {
+  local tmpl="$ROOT/dnbg-workflow/skills/process-review/references/retrospective.md"
+  local rel
+  rel=$(grep -oE '"<skill-dir>/[^"]*plugin\.json"' "$tmpl" | tr -d '"' | sed 's|^<skill-dir>/||')
+  [ -n "$rel" ] || { echo "retrospective.md names no manifest path"; false; }
+  jq -e '.version | length > 0' "$ROOT/dnbg-workflow/skills/process-review/$rel" >/dev/null || {
+    echo "<skill-dir>/$rel does not resolve to a manifest with a version"; false; }
+}
+
+# The same path, from the findings entry format. Its writers come from three
+# skills, and `<skill-dir>/../../` reaches the manifest from any of them.
+@test "the manifest path entry.md reads plugin_version from resolves" {
+  local tmpl="$ROOT/dnbg-workflow/skills/findings-review/references/entry.md"
+  local rel
+  rel=$(grep -oE '"<skill-dir>/[^"]*plugin\.json"' "$tmpl" | tr -d '"' | sed 's|^<skill-dir>/||')
+  [ -n "$rel" ] || { echo "entry.md names no manifest path"; false; }
+  jq -e '.version | length > 0' "$ROOT/dnbg-workflow/skills/git-workflow/$rel" >/dev/null || {
+    echo "<skill-dir>/$rel does not resolve to a manifest with a version"; false; }
+}
+
+# The three-heading report is defined once, and every site that produces it
+# cites that definition, which in turn cites the findings entry format. A site
+# that stops citing it grows its own copy, and the copies drift.
+@test "every report site cites the shared report, and it the findings entry format" {
+  local report="findings-review/references/report.md" f
+  grep -q '<skill-dir>/\.\./findings-review/references/entry\.md' \
+    "$ROOT/dnbg-workflow/skills/$report" || { echo "$report no longer cites entry.md"; false; }
+  for f in git-workflow/references/merge.md git-workflow/references/post-merge.md \
+           reviewer/references/watch.md orchestrate/SKILL.md \
+           issue-reviewer/references/rounds.md issue-workflow/references/spec-review-rounds.md; do
+    grep -q "<skill-dir>/\.\./$report" "$ROOT/dnbg-workflow/skills/$f" || {
+      echo "$f no longer cites <skill-dir>/../$report"; false; }
+  done
+}
+
+# Prose here is hard-wrapped, so a phrase can straddle a line break; matching
+# over the file joined onto one line finds it wherever the wrap falls.
+joined() {  # <file> -> the file on one line, runs of spaces squeezed
+  tr '\n' ' ' < "$1" | tr -s ' '
+}
+
+# Wording that only retrospectives' on state produces. Retrospectives are off by
+# default, so a site that names one of these unconditionally has an agent write a
+# file, or ask for a path, that the default forbids.
+ON_STATE_WORDING='retrospective section|retrospective path|write the retrospective'
+on_state_wording() {  # <file> -> each on-state phrase it carries
+  joined "$1" | grep -oiE "$ON_STATE_WORDING"
+}
+
+# A retrospective is written at the end of a role's work, by the role's own
+# skill, so a standalone session writes one as a dispatched agent does. An
+# agent definition that asks for one makes it depend on the dispatch again.
+#
+# Whether that close-out writes a file is decided by the gate, "When a
+# retrospective is written", so each site cites the gate by name rather than
+# describing one state's result.
+@test "each role's close-out cites the retrospective gate, and no agent definition asks for one" {
+  local retro="process-review/references/retrospective.md" f text
+  for f in git-workflow/references/post-merge.md reviewer/references/watch.md \
+           reviewer/references/issue-mode-wait.md orchestrate/SKILL.md \
+           orchestrate/references/findings-fold.md \
+           issue-reviewer/references/rounds.md issue-workflow/references/spec-review-rounds.md; do
+    text=$(joined "$ROOT/dnbg-workflow/skills/$f")
+    [[ $text == *"<skill-dir>/../$retro"* ]] || {
+      echo "$f no longer cites <skill-dir>/../$retro"; false; }
+    [[ $text == *'"When a retrospective is written"'* ]] || {
+      echo "$f no longer cites \"When a retrospective is written\""; false; }
+  done
+  if grep -n retrospective "$ROOT"/dnbg-workflow/agents/*.md; then
+    echo "an agent definition asks for a retrospective"; false
+  fi
+}
+
+# retrospective.md is the gate and states both states; report.md is the shared
+# report definition and names both too.
+@test "no skill names a retrospective's path, section or writing outside the gate" {
+  local f rel bad=0 n=0
+  while IFS= read -r f; do
+    rel=${f#"$ROOT"/dnbg-workflow/skills/}
+    case "$rel" in
+      process-review/*|findings-review/references/report.md) continue ;;
+    esac
+    n=$((n + 1))
+    if on_state_wording "$f"; then
+      echo "  ^ in $rel: route it through retrospective.md's \"When a retrospective is written\""
+      bad=1
+    fi
+  done < <(find "$ROOT/dnbg-workflow/skills" -name '*.md')
+  [ "$n" -gt 0 ] || { echo "found no skill files to scan"; false; }
+  [ "$bad" -eq 0 ]
+}
+
+# Two of the fixture's three phrases straddle a line break, so a line-by-line
+# match finds one and fails this.
+@test "the on-state wording check finds a phrase wrapped across lines" {
+  printf '%s\n' "Name each agent's retrospective path; yours goes in the report's Retrospective" \
+    "  section, and write the" "  retrospective per the file." > "$BATS_TEST_TMPDIR/wrapped.md"
+  run on_state_wording "$BATS_TEST_TMPDIR/wrapped.md"
+  [ "$status" -eq 0 ]
+  [ "${#lines[@]}" -eq 3 ] || { echo "found: $output"; false; }
+}
+
+tree_agents() {  # -> each agent definition's path
+  local f
+  for f in "$ROOT"/dnbg-*/agents/*.md; do
+    [ -f "$f" ] && printf '%s\n' "$f"
+  done
+}
+
+# A plain (unquoted) `description:` scalar is not valid YAML, or is not the
+# string it looks like, on any of these:
+#
+# - `#` at the start or after whitespace starts a comment, so the description
+#   ends there and every trigger after it is never seen. The frontmatter still
+#   parses.
+# - `:` before a space or at the end, or a leading YAML indicator such as a
+#   backtick, is a YAML syntax error.
+#
+# `claude plugin validate --strict` passed ` #`, `a: b` and a leading backtick
+# when checked, so this check holds plain scalars to the spec rather than to the
+# validator's leniency. The validator does reject a quoted value that fails to
+# parse, such as an invalid `\` escape, so quoted values are left to it.
+#
+# A block scalar (`|` or `>`) is valid YAML, but this check reads one line, so a
+# description stays on that line.
+@test "every skill and agent description survives YAML plain-scalar parsing" {
+  local f rel v skill plugin bad=0 skills=0 agents=0
+  local tab=$'\t'
+  while read -r f; do
+    rel=${f#"$ROOT"/}
+    # Read the frontmatter alone: a body that shows example frontmatter is not
+    # this file's own.
+    v=$(sed -n '2,/^---$/{s/^description: //p;}' "$f")
+    sed -n '2,/^---$/p' "$f" | grep -q '^name:' || { echo "$rel has no name: in its frontmatter"; bad=1; }
+    [ -n "$v" ] || { echo "$rel has no description:"; bad=1; continue; }
+    case "$v" in
+      \"*|\'*) ;;
+      \|*|\>*)
+        echo "$rel: description is a block scalar — keep it on the description: line"
+        echo "  quote the value if it needs YAML-special characters"
+        bad=1 ;;
+      \#*)
+        echo "$rel: description starts with '#' — YAML reads it as a comment and the description is empty"
+        echo "  quote the value"
+        bad=1 ;;
+      [\`@\*\&\!\[\{%]*|"- "*|"? "*)
+        echo "$rel: description starts with a YAML indicator — the whole frontmatter is dropped"
+        echo "  quote the value"
+        bad=1 ;;
+      *": "*|*":$tab"*|*:)
+        echo "$rel: description contains an unquoted ':' before a space or at the end — YAML will drop the whole frontmatter"
+        echo "  use an em dash, or quote the value"
+        bad=1 ;;
+      *" #"*|*"$tab#"*)
+        echo "$rel: description contains an unquoted '#' after whitespace — YAML truncates it there"
+        echo "  quote the value"
+        bad=1 ;;
+    esac
+  done < <(
+    while read -r skill plugin; do printf '%s\n' "$ROOT/$plugin/skills/$skill/SKILL.md"; done < <(tree_skills)
+    tree_agents
+  )
+  skills=$(tree_skills | wc -l); agents=$(tree_agents | wc -l)
+  [ "$skills" -gt 0 ] || { echo "found no SKILL.md files — tree_skills broke"; false; }
+  [ "$agents" -gt 0 ] || { echo "found no agent files — tree_agents broke"; false; }
+  [ "$bad" -eq 0 ]
+}
+
+# An ERROR reason the prose does not name falls into a catch-all, and all three
+# consumers say that must not happen — a watch that could not see gets reported as
+# a quiet issue. The set now lives in four places, so it is pinned to the one that
+# emits it. Only this direction is checked: a reason the script gained and the
+# prose lacks. The reverse needs an extractor over prose, which would be fragile
+# in exactly the way this test is not.
+@test "every watch-issue ERROR reason is documented wherever the watch is dispatched" {
+  local src="$ROOT/dnbg-workflow/scripts/fetch-issue-state.sh"
+  local reasons r f bad=0
+  reasons=$(grep -oE '\bfail [a-z-]+' "$src" | sed 's/^fail //' | sort -u)
+  [ -n "$reasons" ] || { echo "no fail reasons found in $(basename "$src") — the extractor broke"; false; }
+
+  for f in "$ROOT/dnbg-workflow/skills/reviewer/references/issue-mode-wait.md" \
+           "$ROOT/dnbg-workflow/skills/issue-reviewer/references/rounds.md" \
+           "$ROOT/dnbg-workflow/skills/issue-workflow/references/spec-review-wait.md"; do
+    for r in $reasons; do
+      # Hyphen-aware boundary: without it `issue-query` matches inside
+      # `issue-query-shape` and an undocumented reason reads as covered.
+      grep -qE "(^|[^a-z-])${r}([^a-z-]|\$)" "$f" || {
+        echo "${f#"$ROOT"/} does not name ERROR reason '$r' — it would fall to the catch-all"
+        bad=1; }
+    done
+  done
+
+  # The script's own header is a fifth copy, and the one a reader builds a
+  # dispatch table from.
+  for r in $reasons; do
+    sed -n '1,40p' "$src" | grep -q "$r" || {
+      echo "$(basename "$src") emits '$r' but its header does not declare it"
+      bad=1; }
+  done
+  [ "$bad" -eq 0 ]
+}
+
+@test "every fetch-issue-set ERROR reason is named where the set is snapshotted" {
+  local src="$ROOT/dnbg-workflow/scripts/fetch-issue-set.sh"
+  local skill="$ROOT/dnbg-workflow/skills/issue-reviewer/SKILL.md"
+  local reasons r bad=0
+  reasons=$(grep -oE '\bfail [a-z-]+' "$src" | sed 's/^fail //' | sort -u)
+  [ -n "$reasons" ] || { echo "no fail reasons found in $(basename "$src") — the extractor broke"; false; }
+  # The prose that dispatches on the result: after the call's closing fence, up to
+  # the next fence. A reason named in another section of SKILL.md does not count.
+  local para
+  para=$(awk '/fetch-issue-set\.sh" <owner>/ { call = 1; next }
+              call && /^```/ { if (inside) exit; inside = 1; next }
+              inside' "$skill")
+  [ -n "$para" ] || { echo "SKILL.md no longer calls fetch-issue-set.sh — the extractor broke"; false; }
+  for r in $reasons; do
+    # Hyphen-aware boundary, so `issue-query` is not satisfied by `issue-query-shape`.
+    grep -qE "(^|[^a-z-])${r}([^a-z-]|\$)" <<<"$para" || {
+      echo "issue-reviewer/SKILL.md's fetch-issue-set paragraph does not name ERROR reason '$r'"; bad=1; }
+    sed -n '/^# Prints/,/^set -euo/p' "$src" | grep -qE "(^|[^a-z-])${r}([^a-z-]|\$)" || {
+      echo "$(basename "$src") emits '$r' but its header does not declare it"; bad=1; }
+  done
+  [ "$bad" -eq 0 ]
+}
+
+# Both pickup entry points, resolving an issue and orchestrating one, ask the same
+# question of an issue in a project. One reference carries it, so each site must
+# send the reader there, and before its claim: asked after the claim, the question
+# would leave a child claimed by a session the operator then routes elsewhere.
+@test "both pickup entry points send the reader to the one project check, before claiming" {
+  local ref="$ROOT/dnbg-workflow/skills/issue-workflow/references/project-pickup.md"
+  local f at claim bad=0
+  for f in "$ROOT/dnbg-workflow/skills/issue-workflow/references/claiming.md" \
+           "$ROOT/dnbg-workflow/skills/orchestrate/SKILL.md"; do
+    at=$(grep -n 'references/project-pickup\.md' "$f" | head -1 | cut -d: -f1)
+    claim=$(grep -nE -- '--claim`|\*\*2\. Claim it\.\*\*' "$f" | head -1 | cut -d: -f1)
+    [ -n "$at" ] || { echo "$(basename "$f") no longer names references/project-pickup.md"; bad=1; continue; }
+    [ -n "$claim" ] || { echo "$(basename "$f") has no claim step — the extractor broke"; bad=1; continue; }
+    [ "$at" -lt "$claim" ] || {
+      echo "$(basename "$f") sends the reader to the project check after its claim"; bad=1; }
+  done
+  grep -q 'scripts/issue-project\.sh' "$ref" || {
+    echo "project-pickup.md no longer calls issue-project.sh"; bad=1; }
+  local o
+  for o in 'Orchestrate it (Recommended)' 'Decompose it now (Recommended)' 'Stop' \
+           'Orchestrate the project (Recommended)' 'Address this issue on its own'; do
+    grep -qF "**\"$o\"**" "$ref" || { echo "project-pickup.md lost the picker option '$o'"; bad=1; }
+  done
+  [ "$(grep -cF '**"Stop"**' "$ref")" -ge 2 ] || {
+    echo "project-pickup.md lost one of its two Stop options"; bad=1; }
+  local rounds="$ROOT/dnbg-workflow/skills/issue-workflow/references/spec-review-rounds.md"
+  for o in 'Accept (Recommended)' 'Not yet'; do
+    grep -qF "**\"$o\"**" "$rounds" || { echo "spec-review-rounds.md lost the acceptance option '$o'"; bad=1; }
+  done
+  [ "$bad" -eq 0 ]
+}
+
+# Each place that sends an issue body to spec review hands it over through one
+# section, which offers to spawn the reviewer and otherwise tells the operator
+# this session answers the rounds and arms the first watch. A site that names
+# the reviewer prompt on its own leaves the operator not knowing who answers,
+# and nobody watching for round 1.
+@test "every spec-review handoff goes through the one handoff section" {
+  local refs="$ROOT/dnbg-workflow/skills/issue-workflow/references"
+  local section='Handing the issue to its reviewer' o f bad=0
+  grep -qF "## $section" "$refs/spec-review-rounds.md" || {
+    echo "spec-review-rounds.md lost the '$section' section"; bad=1; }
+  for o in 'Spawn the reviewer (Recommended)' 'My own session'; do
+    grep -qF "**\"$o\"**" "$refs/spec-review-rounds.md" || {
+      echo "spec-review-rounds.md lost the handoff option '$o'"; bad=1; }
+  done
+  for f in creating decomposing project-pickup; do
+    grep -qF "\"$section\"" "$refs/$f.md" || {
+      echo "$f.md no longer hands over through '$section'"; bad=1; }
+  done
+  [ "$bad" -eq 0 ]
+}
+
+# A plain issue filed on its own, and each batch filed by findings-review,
+# process-review or a closeout, is offered its spec review with one question whose first option
+# enters the spawn branch by its heading, skipping the "Who runs the spec
+# review?" picker.
+@test "filing offers the spec review and enters the spawn branch by heading" {
+  local refs="$ROOT/dnbg-workflow/skills/issue-workflow/references" o bad=0
+  grep -qF '### Spawn the reviewer' "$refs/spec-review-rounds.md" || {
+    echo "spec-review-rounds.md lost the 'Spawn the reviewer' heading"; bad=1; }
+  sed -n '/^## Offer the spec review$/,/^### /p' "$refs/filing.md" | tr '\n' ' ' | tr -s ' ' \
+    | grep -qF '"Spawn the reviewer"' || {
+    echo "filing.md's per-issue offer no longer enters the spawn branch by its heading"; bad=1; }
+  for o in 'Spec-review it now (Recommended)' 'Not now'; do
+    grep -qF "**\"$o\"**" "$refs/filing.md" || {
+      echo "filing.md lost the offer option '$o'"; bad=1; }
+  done
+  [ "$bad" -eq 0 ]
+}
+
+# The batch offer is written once, in filing.md, and each flow that files a
+# batch cites it rather than carrying its own copy, which drifts.
+@test "every batch-filing flow offers the spec review through filing.md's batch form" {
+  local section='Offer the spec review for a batch' f filing bad=0
+  filing="$ROOT/dnbg-workflow/skills/issue-workflow/references/filing.md"
+  grep -qF "### $section" "$filing" || {
+    echo "filing.md lost the '$section' heading"; bad=1; }
+  sed -n "/^### $section\$/,/^## /p" "$filing" | tr '\n' ' ' | tr -s ' ' \
+    | grep -qF '"Spawn the reviewer"' || {
+    echo "filing.md's '$section' no longer enters the spawn branch by its heading"; bad=1; }
+  for f in findings-review/SKILL.md process-review/SKILL.md orchestrate/references/closeout.md; do
+    joined "$ROOT/dnbg-workflow/skills/$f" | grep -qF "\"$section\"" || {
+      echo "$f no longer cites '$section'"; bad=1; }
+  done
+  [ "$bad" -eq 0 ]
+}
+
+@test "every issue-project ERROR reason is named where the lookup is read" {
+  local src="$ROOT/dnbg-workflow/scripts/issue-project.sh"
+  local ref="$ROOT/dnbg-workflow/skills/issue-workflow/references/project-pickup.md"
+  local reasons r bad=0
+  reasons=$(grep -oE '\bfail [a-z-]+' "$src" | sed 's/^fail //' | sort -u)
+  [ -n "$reasons" ] || { echo "no fail reasons found in $(basename "$src") — the extractor broke"; false; }
+  for r in $reasons; do
+    grep -qE "(^|[^a-z-])${r}([^a-z-]|\$)" "$ref" || {
+      echo "project-pickup.md does not name issue-project ERROR reason '$r'"; bad=1; }
+    sed -n '/^# Exactly one/,/^set -euo/p' "$src" | grep -qE "(^|[^a-z-])${r}([^a-z-]|\$)" || {
+      echo "$(basename "$src") emits '$r' but its header does not declare it"; bad=1; }
+  done
+  [ "$bad" -eq 0 ]
+}
+
+@test "every ready-set ERROR reason is named where the loop reads the set" {
+  local src="$ROOT/dnbg-workflow/scripts/ready-set.sh"
+  local doc="$ROOT/dnbg-workflow/skills/orchestrate/references/multi-issue.md"
+  local reasons r bad=0
+  reasons=$(grep -oE '\bfail [a-z-]+' "$src" | sed 's/^fail //' | sort -u)
+  [ -n "$reasons" ] || { echo "no fail reasons found in $(basename "$src") — the extractor broke"; false; }
+  # From the call's fence to the end of that list item: the prose that dispatches
+  # on the result.
+  local para
+  para=$(awk '/ready-set\.sh" <owner>/ { call = 1; next }
+              call && /^ *```/ { inside = 1; next }
+              inside && /^[0-9]+\. / { exit }
+              inside' "$doc")
+  [ -n "$para" ] || { echo "multi-issue.md no longer calls ready-set.sh — the extractor broke"; false; }
+  for r in $reasons; do
+    grep -qE "(^|[^a-z-])${r}([^a-z-]|\$)" <<<"$para" || {
+      echo "multi-issue.md's ready-set paragraph does not name ERROR reason '$r'"; bad=1; }
+    sed -n '/^# Prints/,/^set -euo/p' "$src" | grep -qE "(^|[^a-z-])${r}([^a-z-]|\$)" || {
+      echo "$(basename "$src") emits '$r' but its header does not declare it"; bad=1; }
+  done
+  [ "$bad" -eq 0 ]
+}
+
+# <skill file> -> the issue-blocking reasons the paragraph after its call does
+# not name, one line each, then any the script's header does not declare.
+issue_blocking_reason_gaps() {
+  local src="$ROOT/dnbg-workflow/scripts/issue-blocking.sh"
+  local reasons r para
+  reasons=$(grep -oE '\bfail [a-z-]+' "$src" | sed 's/^fail //' | sort -u)
+  [ -n "$reasons" ] || { echo "no fail reasons found in $(basename "$src") — the extractor broke"; return; }
+  # The prose that dispatches on the result: the paragraph after the call's
+  # closing fence.
+  para=$(awk '/issue-blocking\.sh" <owner>/ { call = 1; next }
+              call && /^```/ { inside = 1; next }
+              inside && NF { text = 1; print; next }
+              inside && text { exit }' "$1")
+  [ -n "$para" ] || { echo "$(basename "$1") no longer calls issue-blocking.sh — the extractor broke"; return; }
+  for r in $reasons; do
+    grep -qE "(^|[^a-z-])${r}([^a-z-]|\$)" <<<"$para" \
+      || echo "the issue-blocking paragraph does not name ERROR reason '$r'"
+    sed -n '/^# Prints/,/^set -euo/p' "$src" | grep -qE "(^|[^a-z-])${r}([^a-z-]|\$)" \
+      || echo "$(basename "$src") emits '$r' but its header does not declare it"
+  done
+}
+
+@test "every issue-blocking ERROR reason is named where the merge sweep reads it" {
+  run issue_blocking_reason_gaps "$ROOT/dnbg-workflow/skills/issue-workflow/SKILL.md"
+  [ -z "$output" ] || { echo "$output"; false; }
+}
+
+@test "a merge-sweep paragraph missing an issue-blocking reason is caught" {
+  local f="$BATS_TEST_TMPDIR/SKILL.md"
+  sed 's/, and `set-overflow` that/, and that/' \
+    "$ROOT/dnbg-workflow/skills/issue-workflow/SKILL.md" > "$f"
+  run issue_blocking_reason_gaps "$f"
+  [ "$output" = "the issue-blocking paragraph does not name ERROR reason 'set-overflow'" ]
+}
+
+# The ready set holds a child until its latest spec or set review verdict reads
+# READY, and finds that verdict by the first line `issue-reviewer` posts. A
+# reworded heading would hold every child of a reviewed project forever, with
+# `no-ready-verdict` as the only sign. So each form the reviewer is told to write
+# is fed through the script as the verdict on a child, which must come out ready.
+documented_verdict_lines() {  # -> one first line per documented form, filled in
+  cat "$ROOT/dnbg-workflow/skills/issue-reviewer/SKILL.md" \
+      "$ROOT/dnbg-workflow/skills/issue-reviewer/references/design-review.md" \
+    | tr '\n' ' ' \
+    | grep -oE '`[^`]*(Spec|Set) review[^`]*, round *<n>: *(<verdict>|READY)[^`]*`' \
+    | tr -d '`' | sed -E 's/ +/ /g; s/<n>/1/; s/<verdict>/READY/'
+  # Set review is named by word only, as a substitution into the spec form.
+  grep -q '`Set review` in a set' "$ROOT/dnbg-workflow/skills/issue-reviewer/SKILL.md" \
+    && echo '**Set review, round 1: READY**'
+}
+
+@test "every verdict line issue-reviewer documents is one the ready set reads" {
+  local stub="$BATS_TEST_TMPDIR/bin" lines line n=0
+  mkdir -p "$stub"
+  printf '#!/usr/bin/env bash\ncat "$ANSWER"\n' > "$stub/gh"; chmod +x "$stub/gh"
+  lines=$(documented_verdict_lines)
+  [ "$(grep -c . <<<"$lines")" -ge 3 ] || { echo "found only: $lines — the extractor broke"; false; }
+  while IFS= read -r line; do
+    n=$((n + 1))
+    jq -cn --arg v "$line" '
+      def c: {nodes: [{author: {login: "bot[bot]"}, body: $v}]};
+      {data: {repository: {issue: {url: "u/1", number: 1, oldest: c, newest: (c + {totalCount: 1}),
+        subIssues: {totalCount: 1, nodes: [{url: "u/2", number: 2, title: "t", state: "OPEN",
+          assignees: {totalCount: 0, nodes: []}, labels: {totalCount: 0, nodes: []},
+          blockedBy: {totalCount: 0, nodes: []}, comments: c}]}}}}}' > "$BATS_TEST_TMPDIR/a.json"
+    run env PATH="$stub:$PATH" ANSWER="$BATS_TEST_TMPDIR/a.json" \
+      "$ROOT/dnbg-workflow/scripts/ready-set.sh" o/r 1 --slug=bot
+    if [[ "$(tail -1 <<<"$output")" != *" ready=1 "* ]] \
+       || [ "$(head -1 <<<"$output" | jq .parent.spec_review)" != true ]; then
+      echo "documented verdict line not read: $line"; echo "$output"; return 1
+    fi
+  done < <(printf '%s\n' "$lines")
+  [ "$n" -ge 3 ]
+}
+
+@test "the two issue reviews each name the other" {
+  local spec="$ROOT/dnbg-workflow/skills/issue-reviewer/SKILL.md"
+  local pr="$ROOT/dnbg-workflow/skills/reviewer/SKILL.md"
+
+  grep -q 'issue-mode\.md' "$spec" || {
+    echo "issue-reviewer/SKILL.md no longer names issue-mode.md — a resolution review routes nowhere"
+    false; }
+  grep -q 'issue-reviewer' "$pr" || {
+    echo "reviewer/SKILL.md no longer names issue-reviewer — a spec review routes nowhere"
+    false; }
+
+  local desc
+  desc=$(sed -n '/^description:/p' "$pr")
+  grep -q 'issue-reviewer' <<<"$desc" || {
+    echo "reviewer's description does not name issue-reviewer — routing happens before"
+    echo "  any file is read, so a counterpart named only in the body is never seen"
+    false; }
+}
+
+# The harness's code-review tool can return after the turn that started it, so
+# step 7's wait is what holds the PR until those findings land, and the
+# orchestrator has to read the author's turn-ending wait as a wait.
+@test "git-workflow's self-review waits for the code-review result, and orchestrate reads that wait" {
+  local step
+  step=$(awk '/^7\. /{inside=1} /^8\. /{exit} inside' \
+    "$ROOT/dnbg-workflow/skills/git-workflow/SKILL.md")
+  [ -n "$step" ] || { echo "git-workflow/SKILL.md has no step 7"; false; }
+
+  grep -q 'wait for that result before step 8' <<<"$step" || {
+    echo "step 7 no longer says to wait for the code-review tool's result"; false; }
+  grep -qi 'generated or data files' <<<"$step" || {
+    echo "step 7 no longer names the data-only floor"; false; }
+  grep -q 'background review' <<<"$step" || {
+    echo "step 7 no longer has a dispatched author report its wait on the review"; false; }
+  grep -q '/code-review <worktree-path> origin/' <<<"$step" || {
+    echo "step 7's /code-review no longer names the worktree path, so a session"
+    echo "  working from another repo reviews the wrong diff or none"; false; }
+  grep -q 'background review' "$ROOT/dnbg-workflow/skills/orchestrate/SKILL.md" || {
+    echo "orchestrate no longer reads an author's wait on a background review as a wait"
+    false; }
+}
+
+# Step 7 of issue-mode-tracking.md, the reviewer's parent watch beside the
+# closeout PR.
+tracking_watch_step() {  # <issue-mode-tracking.md>
+  awk '/^7\. /{inside=1} /^8\. /{exit} inside' "$1"
+}
+
+# Prints the sentences of step 7 that name `--exclude` without naming step 4's
+# set (step 4, or the parent's `pr-sources.sh` run), one per line.
+tracking_watch_unsourced_exclude() {  # <issue-mode-tracking.md>
+  tracking_watch_step "$1" | tr '\n' ' ' | tr -s ' ' \
+    | sed 's/\. /.\
+/g' | grep -e '--exclude' | grep -v -e 'step 4' -e 'pr-sources\.sh'
+}
+
+@test "the tracking-issue parent watch arms with step 4's exclude set" {
+  local f="$ROOT/dnbg-workflow/skills/reviewer/references/issue-mode-tracking.md"
+  grep -q '^7\. .*Keep watching the parent' "$f" || {
+    echo "issue-mode-tracking.md has no step 7 parent watch"; false; }
+  tracking_watch_step "$f" | grep -q -e '--exclude' || {
+    echo "step 7 no longer names --exclude"; false; }
+  run tracking_watch_unsourced_exclude "$f"
+  [ -z "$output" ] || {
+    echo "step 7 names --exclude without step 4's set: $output"; false; }
+
+  # A step 7 that excludes the closeout PR alone has to fail the check.
+  cat > "$BATS_TEST_TMPDIR/tracking.md" <<'MD'
+7. **Keep watching the parent while you watch the PR**, with step 2's call on
+   the parent alone and the closeout PR's URL in its `--exclude`, since the
+   PR's own watch covers it, so a child added or reopened reaches you even when
+   the PR does not move.
+MD
+  run tracking_watch_unsourced_exclude "$BATS_TEST_TMPDIR/tracking.md"
+  [ -n "$output" ] || {
+    echo "the check passed a step 7 that excludes the closeout PR alone"; false; }
+}
+
+@test "issue-workflow SKILL.md still points at each of its paths" {
+  local skill="$ROOT/dnbg-workflow/skills/issue-workflow/SKILL.md" f
+  for f in creating filing claiming project-pickup resolving spec-review-rounds spec-review-wait; do
+    [ -f "$ROOT/dnbg-workflow/skills/issue-workflow/references/$f.md" ] || {
+      echo "references/$f.md is missing"; false; }
+    grep -q "references/$f\.md" "$skill" || {
+      echo "issue-workflow/SKILL.md no longer names references/$f.md — that path is unreachable"
+      false; }
+  done
+}
+
+# `verdict=` is now answered in three places — pr-verdict.sh, watch-pr.sh's
+# level-triggered check, and the round packet — but only the first two can hold a
+# copy of the RULE. The packet delegates, so the set stays pinned by the test
+# above rather than needing a third arm that would have to be kept in step.
+@test "pr-round.sh delegates the verdict rather than carrying a third copy" {
+  local f="$ROOT/dnbg-workflow/scripts/pr-round.sh"
+  local states
+  states=$(verdict_states "$f")
+  [ -z "$states" ] || {
+    echo "pr-round.sh names verdict states itself: $(echo "$states" | tr '\n' ' ')"
+    echo "call pr-verdict.sh instead — tests/coupling.bats pins the set across two files, not three"
+    false
+  }
+  pr_command_lines "$f" | grep -q 'pr-verdict\.sh' || {
+    echo "pr-round.sh no longer invokes pr-verdict.sh, so its verdict comes from nowhere"; false; }
+  pr_command_lines "$f" | grep -q 'pr-threads\.sh' || {
+    echo "pr-round.sh no longer invokes pr-threads.sh"; false; }
+}
+
+# The watcher emits the activity it already polled and the packet fetches the
+# same thing; a caller reads both, so the objects have to match field for field.
+# One sourced definition is what makes that true — spelling the filter inline in
+# either file is the drift, and it is silent (the two just disagree).
+#
+# The selection predicate is pinned, not only the object shape, and it is the half
+# that costs data. `watch-pr.sh` counts what it emits in order to set `activity=1`;
+# a count filtered differently from the emission prints `activity=1` above an EMPTY
+# payload, which a caller now told the payload is the conversation reads as nothing
+# landed — and it then re-arms with `since_iso` set to now, losing it permanently.
+# Deriving both counts from the shared filters is what makes that unreachable, so a
+# reintroduced inline `select(...)` on those fields is the regression to catch.
+@test "both activity producers source the shared filters instead of spelling them" {
+  local f runlines
+  for f in "$ROOT/dnbg-workflow/scripts/watch-pr.sh" \
+           "$ROOT/dnbg-workflow/scripts/pr-round.sh"; do
+    grep -q 'lib-activity\.sh' "$f" || {
+      echo "$(basename "$f") no longer sources lib-activity.sh"; false; }
+    # Run lines only: both files have to NAME these fields in prose to explain
+    # themselves, and a whole-file grep would read the explanation as the offence.
+    runlines=$(grep -v '^[[:space:]]*#' "$f" || true)
+    printf '%s\n' "$runlines" | grep -q 'kind: *"' && {
+      echo "$(basename "$f") spells an activity object inline — use lib-activity.sh"; false; }
+    printf '%s\n' "$runlines" | grep -qE 'select\(\.(submittedAt|createdAt|created_at)' && {
+      echo "$(basename "$f") spells an activity predicate inline — use lib-activity.sh"
+      echo "a count filtered differently from the emission prints activity=1 over an empty payload"
+      false; }
+  done
+  # And the shared file really does define both, or the greps above pass on a
+  # source that supplies nothing.
+  local lib="$ROOT/dnbg-workflow/scripts/lib-activity.sh"
+  grep -q '^ACTIVITY_JQ_REVIEWS=' "$lib"
+  grep -q '^ACTIVITY_JQ_INLINE=' "$lib"
+  # The summary is a projection of those two, not a third description of the
+  # shape. Spelled anywhere else it drifts from what it claims to be a subset of.
+  grep -q '^ACTIVITY_JQ_SUMMARY=' "$lib"
+  grep -q 'ACTIVITY_JQ_SUMMARY' "$ROOT/dnbg-workflow/scripts/watch-pr.sh"
+}
+
+# The whole-tree fetch is a script for one reason: a failed fetch leaves an EMPTY
+# tree, and the caller's next move is usually a repo-wide sweep, where zero hits
+# reads as "nothing references it" rather than "nothing was fetched". A fenced
+# `gh api .../tarball/... | tar xz` in the prose reports neither failure — a bad
+# SHA only fails the pipeline, which nothing downstream reads, and an archive with
+# no members lets both sides exit 0 — so re-inlining it silently restores the
+# hazard. Catch the re-inlining, not the mention: the prose may describe what the
+# script does.
+@test "the tree fetch calls fetch-tree.sh rather than piping a tarball inline" {
+  local f bad=0
+  while IFS= read -r f; do
+    pr_command_lines "$f" | grep -qE '/tarball/' && {
+      echo "${f#"$ROOT"/} pipes a tarball inline — call fetch-tree.sh, which fails on an empty tree"
+      bad=1; }
+  done < <(find "$ROOT" -path "$ROOT/.git" -prune -o -name '*.md' -path '*/skills/*' -print)
+  [ "$bad" -eq 0 ]
+
+  # The other direction: deleting the call would pass the check above trivially.
+  local skill="$ROOT/dnbg-workflow/skills/reviewer/SKILL.md"
+  pr_command_lines "$skill" | grep -q 'fetch-tree\.sh' || {
+    echo "reviewer/SKILL.md names no tree fetch — the third access mode is unreachable"; false; }
+}
+
+# A stub is a grandchild of the script under test, so it inherits that script's
+# environment. Assigning to a name the harness exported keeps the export, and the
+# stub then receives the script's internal value in place of the path it expects
+# — `cat`s it, fails, and silently serves its default for the rest of the run.
+# The test still passes, on a payload nobody chose.
+@test "no exported stub variable shares a name a watcher assigns" {
+  local bad=0 f v
+  for f in "$ROOT"/tests/watch-pr.bats "$ROOT"/tests/watch-issue.bats; do
+    [ -f "$f" ] || continue
+    for v in $(grep -oE '^[[:space:]]*export [A-Z_]+=' "$f" \
+                 | sed 's/.*export //; s/=//' | sort -u); do
+      case "$v" in PATH) continue ;; esac
+      grep -lE "^[[:space:]]*$v=" "$ROOT"/dnbg-workflow/scripts/watch-*.sh 2>/dev/null \
+        | while read -r s; do
+            echo "$(basename "$f") exports \$$v, which $(basename "$s") assigns —"
+            echo "  the stub will receive the script's value, not the harness's path"
+          done | grep . && bad=1
+    done
+  done
+  [ "$bad" = 0 ]
+}
+
+# A script that calls `gh` either carries the forge seam — the header marker naming
+# https://github.com/dbaggott/claude-plugins/issues/149 and the `FORGE` guard that
+# refuses with `unsupported-forge` — or is listed here as GitHub-shaped throughout, so a
+# new forge call is one or the other by decision rather than by omission.
+GITHUB_ONLY_SCRIPTS="fetch-tree.sh pr-round.sh pr-sources.sh pr-threads.sh pr-verdict.sh watch-pr.sh"
+# The role resolver is the seam itself: it reads the forge from the repo it is
+# given rather than assuming one, so it needs only the refusal for a forge with
+# no backend.
+FORGE_DISPATCH_SCRIPTS="as-role.sh"
+
+calls_forge() {  # <script>
+  grep -v '^[[:space:]]*#' "$1" | grep -qE '(^|[^[:alnum:]_./-])gh[[:space:]]+[a-z]'
+}
+
+# shellcheck disable=SC2016  # the guard is matched as literal text
+has_forge_seam() {  # <script>
+  grep -A1 'THE FORGE IS ASSUMED TO BE GITHUB' "$1" \
+      | grep -qF 'https://github.com/dbaggott/claude-plugins/issues/149' \
+    && grep -qF 'FORGE="${FORGE:-github}"' "$1" \
+    && grep -qE '\bfail unsupported-forge\b' "$1"
+}
+
+forge_seam_problems() {  # <scripts-dir> <github-only list>
+  local f name listed
+  for f in "$1"/*.sh; do
+    name=$(basename "$f")
+    case " $2 " in *" $name "*) listed=1 ;; *) listed=0 ;; esac
+    case " $FORGE_DISPATCH_SCRIPTS " in *" $name "*)
+      grep -qE '\bfail unsupported-forge\b' "$f" \
+        || echo "$name picks a forge but never refuses one with unsupported-forge"
+      continue ;;
+    esac
+    if [ "$listed" = 1 ]; then
+      calls_forge "$f" || echo "$name is listed GitHub-only but calls no forge"
+      ! has_forge_seam "$f" || echo "$name carries the forge seam — take it off the GitHub-only list"
+    elif calls_forge "$f" && ! has_forge_seam "$f"; then
+      echo "$name calls gh without the forge marker and FORGE guard, and is not listed GitHub-only"
+    fi
+  done
+  for name in $2; do
+    [ -f "$1/$name" ] || echo "$name is listed GitHub-only but does not exist"
+  done
+}
+
+@test "every script that calls the forge carries the forge seam or is listed GitHub-only" {
+  run forge_seam_problems "$ROOT/dnbg-workflow/scripts" "$GITHUB_ONLY_SCRIPTS"
+  [ -z "$output" ] || { echo "$output"; false; }
+}
+
+@test "a forge-calling script with neither the seam nor a listing is caught" {
+  local d="$BATS_TEST_TMPDIR/scripts"; mkdir -p "$d"
+  sed '/THE FORGE IS ASSUMED TO BE GITHUB/d' \
+    "$ROOT/dnbg-workflow/scripts/issue-diff.sh" > "$d/issue-diff.sh"
+  run forge_seam_problems "$d" ""
+  [[ "$output" == *"issue-diff.sh calls gh without the forge marker"* ]]
+
+  cp "$ROOT/dnbg-workflow/scripts/issue-diff.sh" "$d/issue-diff.sh"
+  run forge_seam_problems "$d" "issue-diff.sh gone.sh"
+  [[ "$output" == *"issue-diff.sh carries the forge seam"* ]]
+  [[ "$output" == *"gone.sh is listed GitHub-only but does not exist"* ]]
+}
+
+# The watch arm contract (watch-issue.sh's header): a re-arm runs the
+# `── re-arm ──` line the watch printed, and a first arm takes `since` from the
+# caller's last action under the first-arm rule. Neither half reads the clock at
+# arm time, and nothing but a reviewer reading prose stops a site that says
+# otherwise, so this reads every skill for the two shapes a wrong site takes.
+#
+# arm_violations <file>... prints `<file>:<line>: <why>` per violation:
+#   - a fenced block invoking a watcher that reads the clock, or a paragraph
+#     telling the reader to stamp `since` from it, which is a first arm stamped
+#     at arm time;
+#   - a paragraph telling the reader to spawn, arm or re-arm a watch that names
+#     neither the printed re-arm line nor the first-arm rule, which is a re-arm
+#     left to the reader to compose. That catches a site naming no timestamp at
+#     all ("spawn a fresh background poll"), where a grep for the clock cannot.
+#     The pointer to the first-arm rule is what marks a first arm, so the
+#     exception costs the skills no markup.
+arm_violations() {  # <file>...
+  awk '
+    function flush() {
+      if (para != "" && tolower(para) ~ ARM && para !~ /── re-arm ──|re-arm line|first-arm rule/)
+        printf "%s:%d: arms a watch without naming the printed re-arm line or the first-arm rule\n", FILENAME, pstart
+      if (para ~ /date -u|arm time/ && tolower(para) ~ /since|first arm/)
+        printf "%s:%d: stamps since from the clock\n", FILENAME, pstart
+      para = ""
+    }
+    function flushfence() {
+      if (fence ~ /watch-(pr|issue)\.sh/ && fence ~ /\$\(date /)
+        printf "%s:%d: a watcher block reads the clock\n", FILENAME, fstart
+      fence = ""
+    }
+    BEGIN {
+      ARM = "(spawn|re-arm|arm)(s|ed)? (it|them|(the|a|one) (fresh |new |second )?(background )?(issue |pr |set |merge )?(watch|watcher|wait|poll)|`?watch-(pr|issue)\\.sh)"
+    }
+    FNR == 1 { flush(); infence = 0 }
+    /^[[:space:]]*```/ {
+      if (infence) { infence = 0; flushfence() } else { flush(); infence = 1; fstart = FNR; fence = "" }
+      next
+    }
+    infence { fence = fence "\n" $0; next }
+    /^[[:space:]]*$/ { flush(); next }
+    { if (para == "") pstart = FNR; para = para " " $0 }
+    END { flush() }
+  ' "$@"
+}
+
+@test "every watch arm in the skills follows the re-arm contract" {
+  run arm_violations $(find "$ROOT/dnbg-workflow/skills" -name '*.md' | sort)
+  echo "$output"
+  [ -z "$output" ]
+}
+
+@test "a re-arm that names no timestamp at all is caught" {
+  printf '%s\n' "After pushing the fix, spawn a fresh background poll on the new head." \
+    > "$BATS_TEST_TMPDIR/site.md"
+  run arm_violations "$BATS_TEST_TMPDIR/site.md"
+  [[ "$output" == *"site.md:1: arms a watch"* ]]
+}
+
+@test "a first arm stamped from the clock is caught" {
+  cat > "$BATS_TEST_TMPDIR/site.md" <<'MD'
+Spawn the wait under the first-arm rule:
+
+```bash
+watch-issue.sh o/r 1 --role=author --since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+```
+MD
+  run arm_violations "$BATS_TEST_TMPDIR/site.md"
+  [[ "$output" == *"site.md:3: a watcher block reads the clock"* ]]
+}
+
+@test "a first arm told in prose to read the clock is caught" {
+  printf '%s\n' 'Record a timestamp (`date -u +%Y-%m-%dT%H:%M:%SZ` on the first arm only).' \
+    > "$BATS_TEST_TMPDIR/site.md"
+  run arm_violations "$BATS_TEST_TMPDIR/site.md"
+  [[ "$output" == *"site.md:1: stamps since from the clock"* ]]
+}
+
+@test "a first arm that names the rule and a re-arm that names the line both pass" {
+  cat > "$BATS_TEST_TMPDIR/site.md" <<'MD'
+Spawn the wait, with `--since` per the first-arm rule:
+
+```bash
+watch-issue.sh o/r 1 --role=author --since=<when you posted the response>
+```
+
+On `IDLE`, re-arm the watch from the `── re-arm ──` line it printed.
+MD
+  run arm_violations "$BATS_TEST_TMPDIR/site.md"
+  [ -z "$output" ]
+}
+
+# An orchestrator's subagents share its scratchpad, so a body drafted at a name
+# the agent chose there, or found again by listing it, can be a sibling's text
+# published as its own. Every site that reads a drafted body file therefore
+# names it as a placeholder and says, in its own paragraph or the one leading
+# into its fenced block, that it is in the agent's draft directory, which only
+# that agent writes (git-workflow's references/draft-files.md).
+#
+# draft_file_violations <file>... prints `<file>:<line>: <why>` per violation.
+# A site is `--body-file`, gh's `-F <file>` short form, `--input`, `body=@` or
+# jq's `--rawfile <name>`, with its argument; `--input -` reads stdin and `-F key=value` sets a field, so
+# neither is one. An argument that is neither a `<placeholder>` nor a shell
+# variable is a fixed name. A fenced block's lead-in is the paragraph right
+# before it, so a block straight after another block has none.
+draft_file_violations() {  # <file>...
+  awk '
+    function check(line, n, ctx,    s, tok, arg) {
+      s = line
+      while (match(s, /(--body-file|--input|--rawfile [A-Za-z_][A-Za-z_0-9]* |body=@|(^|[ `(])-F )[ =]?(<[^>]*>|[^ `\047")]*)/)) {
+        tok = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+        arg = tok; sub(/^.*(--body-file|--input|--rawfile [A-Za-z_][A-Za-z_0-9]* |body=@|-F )[ =]?/, "", arg)
+        if (arg == "-" || (tok ~ /-F $/) || arg ~ /=/) continue
+        if (arg != "" && arg !~ /^<[^>]+>$/ && arg !~ /^"?\$/)
+          printf "%s:%d: names a fixed draft file (%s)\n", file, n, arg
+        if (ctx !~ /draft directory/)
+          printf "%s:%d: does not say the body file is in the draft directory\n", file, n
+      }
+    }
+    function flush(    i) {
+      for (i = 1; i <= pn; i++) check(pline[i], pnum[i], para)
+      if (pn) prev = para
+      para = ""; pn = 0
+    }
+    function flushfence(    i) {
+      for (i = 1; i <= fn; i++) check(fline[i], fnum[i], fence " " prev)
+      fence = ""; fn = 0; prev = ""
+    }
+    FNR == 1 { flush(); flushfence(); infence = 0; prev = ""; file = FILENAME }
+    /^[[:space:]]*```/ {
+      if (infence) { infence = 0; flushfence() } else { flush(); infence = 1 }
+      next
+    }
+    infence { fence = fence " " $0; fline[++fn] = $0; fnum[fn] = FNR; next }
+    /^[[:space:]]*$/ { flush(); next }
+    { para = para " " $0; pline[++pn] = $0; pnum[pn] = FNR }
+    END { flush(); flushfence() }
+  ' "$@"
+}
+
+@test "every body-file site in the plugin's prose names a draft-directory file" {
+  run draft_file_violations $(find "$ROOT/dnbg-workflow" -name '*.md' | sort)
+  echo "$output"
+  [ -z "$output" ]
+}
+
+@test "a body-file site written with a fixed name is caught" {
+  printf '%s\n' 'Draft it in a file in your draft directory, then run `gh pr edit 12 --body-file pr-body.md`.' \
+    > "$BATS_TEST_TMPDIR/site.md"
+  run draft_file_violations "$BATS_TEST_TMPDIR/site.md"
+  [[ "$output" == *"site.md:1: names a fixed draft file (pr-body.md)"* ]]
+}
+
+@test "a fenced body-file site that never names the draft directory is caught" {
+  cat > "$BATS_TEST_TMPDIR/site.md" <<'MD'
+Write the body back:
+
+```bash
+gh issue edit 3 --body-file <file>
+```
+MD
+  run draft_file_violations "$BATS_TEST_TMPDIR/site.md"
+  [[ "$output" == *"site.md:4: does not say the body file is in the draft directory"* ]]
+}
+
+@test "a draft-directory placeholder site and a stdin --input both pass" {
+  cat > "$BATS_TEST_TMPDIR/site.md" <<'MD'
+Write the body to a file in your draft directory first:
+
+```bash
+gh api repos/o/r/issues/1/comments -F body=@<path>
+```
+
+Pipe the payload in:
+
+```bash
+jq -n '{}' | gh api repos/o/r/pulls/1/reviews --input -
+```
+MD
+  run draft_file_violations "$BATS_TEST_TMPDIR/site.md"
+  [ -z "$output" ]
+}
+
+@test "a --rawfile body named by a fixed file is caught" {
+  printf '%s\n' 'Write it in a file in your draft directory, then `jq -n --rawfile body review.md`.' \
+    > "$BATS_TEST_TMPDIR/site.md"
+  run draft_file_violations "$BATS_TEST_TMPDIR/site.md"
+  [[ "$output" == *"site.md:1: names a fixed draft file (review.md)"* ]]
+}
+
+# A dispatched agent finds its draft directory only on its prompt's `Your draft
+# directory:` line, so every paragraph that dispatches one of the plugin's agents
+# says to give it that line.
+dispatch_violations() {  # <file>...
+  awk '
+    function flush() {
+      if (para ~ /dnbg-workflow:(author|reviewer)-orchestrated/ && para !~ /draft directory/)
+        printf "%s:%d: dispatches an agent without its draft directory line\n", file, start
+      para = ""; start = 0
+    }
+    FNR == 1 { flush(); file = FILENAME }
+    /^[[:space:]]*$/ { flush(); next }
+    { if (!start) start = FNR; para = para " " $0 }
+    END { flush() }
+  ' "$@"
+}
+
+@test "every dispatch of a dnbg-workflow agent names its draft directory" {
+  run dispatch_violations $(find "$ROOT/dnbg-workflow/skills" -name '*.md' | sort)
+  echo "$output"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "a dispatch paragraph with no draft directory line is caught" {
+  printf '%s\n' 'Dispatch it as `dnbg-workflow:reviewer-orchestrated`, in the background.' \
+    > "$BATS_TEST_TMPDIR/site.md"
+  run dispatch_violations "$BATS_TEST_TMPDIR/site.md"
+  [[ "$output" == *"site.md:1: dispatches an agent without its draft directory line"* ]]
+}
+
+# An inline `--arg body "<…>"` breaks the shell command on the first apostrophe
+# or newline in a finding, and a payload with no `commit_id` attaches the verdict
+# to whatever HEAD is when the POST lands, not the one that was read.
+@test "reviewer posts from --rawfile files, pinned to the reviewed SHA after re-reading the head" {
+  local skill="$ROOT/dnbg-workflow/skills/reviewer/SKILL.md" cmds f
+  cmds=$(pr_command_lines "$skill")
+  grep -q -- '--rawfile body <body-file>' <<<"$cmds" || {
+    echo "reviewer/SKILL.md's post recipe no longer reads the body with --rawfile"; false; }
+  grep -q 'commit_id: \$sha' <<<"$cmds" && grep -q -- '--arg sha "<head-sha>"' <<<"$cmds" || {
+    echo "reviewer/SKILL.md's post recipe no longer pins commit_id to <head-sha>"; false; }
+  grep -q '\[ "\$HEAD_NOW" = "<head-sha>" \]' <<<"$cmds" || {
+    echo "reviewer/SKILL.md's post recipe no longer re-reads the head before posting"; false; }
+  grep -q 'reviewed-sha: \\(\$sha)' <<<"$cmds" || {
+    echo "reviewer/SKILL.md's post recipe no longer stamps reviewed-sha from \$sha"; false; }
+  for f in "$ROOT"/dnbg-workflow/skills/reviewer/*.md "$ROOT"/dnbg-workflow/skills/reviewer/references/*.md \
+           "$ROOT"/dnbg-workflow/agents/reviewer-orchestrated.md; do
+    if pr_command_lines "$f" | grep -nE -- '--arg body|gh pr review '; then
+      echo "${f#"$ROOT"/} posts a review with an inline body or without commit_id"; return 1
+    fi
+  done
+}
+
+@test "a short-form -F file, a multi-word placeholder and the file it is in are read right" {
+  printf '%s\n' 'Post it with `gh pr comment 4 -F review.md`.' > "$BATS_TEST_TMPDIR/a.md"
+  cat > "$BATS_TEST_TMPDIR/b.md" <<'MD'
+Write the body in a file in your draft directory, then run
+`gh issue edit 3 --body-file <draft path>` and `gh api x -F per_page=100`.
+MD
+  run draft_file_violations "$BATS_TEST_TMPDIR/a.md" "$BATS_TEST_TMPDIR/b.md"
+  [[ "$output" == *"a.md:1: names a fixed draft file (review.md)"* ]]
+  [[ "$output" != *"b.md"* ]]
+}
+
+@test "a block straight after another block, or left unclosed, is still checked" {
+  cat > "$BATS_TEST_TMPDIR/site.md" <<'MD'
+Write the body to a file in your draft directory first:
+
+```bash
+gh api repos/o/r/issues/1/comments -F body=@<path>
+```
+```bash
+gh issue edit 3 --body-file <file>
+```
+
+```bash
+gh pr edit 3 --body-file <file>
+MD
+  run draft_file_violations "$BATS_TEST_TMPDIR/site.md"
+  [[ "$output" == *"site.md:7: does not say"* ]]
+  [[ "$output" == *"site.md:11: does not say"* ]]
+  [[ "$output" != *"site.md:4:"* ]]
+}
+
+# A headless session stops a background command at its Bash `timeout`, 600 s
+# when none is passed, and a watch stopped that way prints no result line. So
+# every spawn site has to pass one, and lib-poll.sh's WINDOW_CEILING, the most a
+# run lasts before its settle, has to fit inside it with the settle to spare.
+#
+# spawn_timeouts <file>... prints `<file>:<line>: <ms>` per fenced block that
+# invokes a watcher, `<ms>` being the `timeout: <ms>` named in that block or in
+# the paragraph leading into it, or `none`.
+spawn_timeouts() {  # <file>...
+  awk '
+    function flushfence(    ctx, ms) {
+      if (fence ~ /watch-(pr|issue)\.sh/) {
+        ctx = lead " " fence; ms = "none"
+        if (match(ctx, /timeout: [0-9]+/)) ms = substr(ctx, RSTART + 9, RLENGTH - 9)
+        printf "%s:%d: %s\n", FILENAME, fstart, ms
+      }
+      fence = ""; lead = ""; para = ""; last = ""
+    }
+    FNR == 1 { infence = 0; lead = ""; para = ""; last = ""; fence = "" }
+    /^[[:space:]]*```/ {
+      if (infence) { infence = 0; flushfence() } else { infence = 1; fstart = FNR; lead = (para != "") ? para : last }
+      next
+    }
+    infence { fence = fence " " $0; next }
+    /^[[:space:]]*$/ { if (para != "") last = para; para = ""; next }
+    { para = para " " $0 }
+  ' "$@"
+}
+
+@test "every watch spawn site passes the same timeout, and the ceiling fits inside it" {
+  local sites ms ceiling settle
+  sites=$(spawn_timeouts $(find "$ROOT/dnbg-workflow/skills" -name '*.md' | sort))
+  echo "$sites"
+  [ -n "$sites" ] || { echo "no spawn sites found — the extractor broke"; false; }
+  [ -z "$(grep ': none$' <<<"$sites")" ] || { echo "a spawn site passes no timeout"; false; }
+  ms=$(sed 's/.*: //' <<<"$sites" | sort -u)
+  [ "$(wc -l <<<"$ms")" -eq 1 ] || { echo "spawn sites disagree on the timeout: $ms"; false; }
+
+  ceiling=$(sed -n 's/^WINDOW_CEILING=\${WINDOW_CEILING:-\([0-9]*\)}$/\1/p' "$ROOT/dnbg-workflow/scripts/lib-poll.sh")
+  settle=$(sed -n 's/^SETTLE_MAX=\${SETTLE_MAX:-\([0-9]*\)}$/\1/p' \
+    "$ROOT/dnbg-workflow/scripts/watch-pr.sh" "$ROOT/dnbg-workflow/scripts/watch-issue.sh" | sort -n | tail -1)
+  [ -n "$ceiling" ] && [ -n "$settle" ] || { echo "could not read WINDOW_CEILING or SETTLE_MAX"; false; }
+  [ $(( (ceiling + settle) * 1000 )) -lt "$ms" ] || {
+    echo "WINDOW_CEILING ${ceiling}s + SETTLE_MAX ${settle}s does not fit in timeout: $ms"; false; }
+}
+
+@test "a spawn site whose lead-in names no timeout is caught" {
+  cat > "$BATS_TEST_TMPDIR/site.md" <<'MD'
+Some other command takes `timeout: 7200000`.
+
+Spawn it in the background:
+
+```bash
+watch-pr.sh o/r 1 --role=author
+```
+
+Then, with `timeout: 7200000`:
+
+```bash
+watch-issue.sh o/r 1 --role=author --since=<when you posted>
+```
+MD
+  run spawn_timeouts "$BATS_TEST_TMPDIR/site.md"
+  [[ "$output" == *"site.md:5: none"* ]]
+  [[ "$output" == *"site.md:11: 7200000"* ]]
+}
+
+# A run also ends at lib-poll.sh's wall-clock WINDOW_CEILING, which a long suspend
+# reaches whatever the window, so any IDLE handler can see `window_left=`. A
+# handler that does not name it reads a cut-short run as an empty window, and
+# the author's and merge-stage handlers stop watching on one.
+@test "every skill file with an IDLE handler says what window_left= means" {
+  local f bad=0
+  for f in $(grep -rlE '^[[:space:]]*- \*\*`(result=)?IDLE|bare `result=IDLE`' "$ROOT/dnbg-workflow/skills"); do
+    grep -q 'window_left=' "$f" || { echo "${f#"$ROOT"/} handles IDLE but never names window_left="; bad=1; }
+  done
+  [ "$bad" -eq 0 ]
+}
+
+# Several agents watch one PR, so a pattern kill reaches another agent's watch.
+# The rule against it is the only `pkill` these files may carry: an example of
+# the pattern form anywhere else is one an executor can copy.
+@test "under agents/ and orchestrate/, every pkill is the rule forbidding it" {
+  local rule='never with `pkill -f`' f others
+  for f in "$ROOT"/dnbg-workflow/agents/author-orchestrated.md \
+           "$ROOT"/dnbg-workflow/agents/reviewer-orchestrated.md \
+           "$ROOT"/dnbg-workflow/skills/orchestrate/SKILL.md; do
+    grep -q "$rule" "$f" || {
+      echo "$(basename "$f") no longer says to stop background tasks by id"; false; }
+  done
+  others=$(grep -rn pkill "$ROOT"/dnbg-workflow/agents "$ROOT"/dnbg-workflow/skills/orchestrate \
+    | grep -v "$rule" || true)
+  [ -z "$others" ] || { echo "a pkill outside the rule:"; echo "$others"; false; }
+}
+
+# An orchestrated author's unpushed work is the one state a restarted
+# orchestrator cannot see, so the author pushes before its self-review and the
+# orchestrator's dispatch names the pushed branch and any worktree left on it.
+@test "the orchestrated author pushes before its self-review, and orchestrate continues that branch" {
+  local author="$ROOT/dnbg-workflow/agents/author-orchestrated.md"
+  local orch="$ROOT/dnbg-workflow/skills/orchestrate/SKILL.md" prompt
+  grep -q 'open the draft PR as soon as the first commit exists' "$author" || {
+    echo "author-orchestrated.md no longer opens the draft PR at the first commit"; false; }
+  grep -q 'before the self-review' "$author" || {
+    echo "author-orchestrated.md no longer puts the push before the self-review"; false; }
+  grep -q 'headRefName' "$orch" || {
+    echo "orchestrate step 3 no longer reads the PR's branch"; false; }
+  prompt=$(sed -n '/^> Resolve `<issue URL>`/,/^$/p' "$orch")
+  grep -q 'on its branch' <<<"$prompt" && grep -q '`<path>`' <<<"$prompt" || {
+    echo "orchestrate's dispatch prompt no longer names the PR's branch and the predecessor's worktree"; false; }
+}
+
+# A child orchestrated on its own writes its decisions only as `Decision log:`
+# comments on itself, and the parent's orchestrator collects them by their first
+# line. A collector filtering on another prefix than the one triage.md writes
+# collects nothing, silently.
+row_prefix() {  # <triage.md> -> the text before the first placeholder in the row's first line
+  awk '/^## The row/ { s = 1 } s && /^```/ { getline; print; exit }' "$1" | sed 's/<.*//'
+}
+
+collector_prefixes() {  # <file> -> each prefix the file filters comments on, quoted prompts included
+  sed 's/^>[[:space:]]*//' "$1" | tr -s '\n ' ' ' | grep -o 'first line starts with `[^`]*`' | sed 's/^[^`]*`//; s/`$//'
+}
+
+@test "the decision-log collectors filter on the prefix triage.md's row starts with" {
+  local refs="$ROOT/dnbg-workflow/skills/orchestrate/references" prefix f found
+  prefix=$(row_prefix "$refs/triage.md")
+  [ -n "$prefix" ] || { echo "no row fence found under triage.md's '## The row'"; false; }
+  for f in multi-issue.md closeout.md; do
+    found=$(collector_prefixes "$refs/$f")
+    [ -n "$found" ] || { echo "$f names no collector prefix"; false; }
+    [ "$(sort -u <<<"$found")" = "$prefix" ] || {
+      echo "$f filters on '$found', not triage.md's '$prefix'"; false; }
+  done
+}
+
+# A subagent that died on an API or usage-limit error is resumed, keeping its
+# context; a replacement author learns the dead one's unpushed commits from its
+# prompt, since they are not on the forge.
+@test "orchestrate resumes a dead agent, and its replacement's prompt names the unpushed commits" {
+  local orch="$ROOT/dnbg-workflow/skills/orchestrate/SKILL.md" prompt
+  local dead="$ROOT/dnbg-workflow/skills/orchestrate/references/predecessor.md"
+  grep -q '^\*\*An agent died on an error\*\*' "$orch" && grep -q 'references/predecessor\.md' "$orch" || {
+    echo "orchestrate no longer points at its handling of an agent that died on an error"; false; }
+  grep -q '^\*\*An agent died on an error\*\*' "$dead" && grep -q 'Resume it with `SendMessage`' "$dead" || {
+    echo "predecessor.md no longer resumes an agent that died on an error"; false; }
+  prompt=$(sed -n '/^> Resolve `<issue URL>`/,/^$/p' "$orch")
+  grep -q 'unpushed commits' <<<"$prompt" && grep -q '`<review URL>`' <<<"$prompt" || {
+    echo "orchestrate's dispatch prompt no longer carries a dead author's unpushed commits and review round"; false; }
+}
+
+# `work-summary` carries its own copy of the delegated-mode rule, because the
+# `dnbg-work-summary` plugin cannot reach `issue-workflow/references/delegated.md`.
+# The copy is worded for a recap, which has no issue or PR to post a question on,
+# so the two are not compared byte for byte. What is pinned is the rule's
+# load-bearing phrases: each must appear in the rule and in the copy, so a change
+# to one of them on either side fails here and sends someone to check the other.
+DELEGATED_RULE="$ROOT/dnbg-workflow/skills/issue-workflow/references/delegated.md"
+DELEGATED_COPY="$ROOT/dnbg-work-summary/skills/work-summary/SKILL.md"
+DELEGATED_PHRASES=(
+  'Without `AskUserQuestion`'
+  'take the default'
+  'Never choose silently'
+  'end the turn with the question as your report'
+)
+# The copy is the one paragraph of SKILL.md that names itself a copy. Matching the
+# whole file would let the phrases' other uses there, such as the time-zone
+# prompt's "Without `AskUserQuestion`", stand in for a copy that lost them.
+DELEGATED_COPY_MARKER='A copy of the rule in'
+
+delegated_copy_paragraph() {  # <SKILL.md>
+  awk -v RS= -v m="$DELEGATED_COPY_MARKER" 'index($0, m)' "$1"
+}
+
+# Whitespace collapsed, so a phrase that wraps across a line break still matches.
+delegated_collapsed() {  # stdin
+  tr -s '[:space:]' ' '
+}
+
+delegated_copy_agrees() {  # <delegated.md> <work-summary SKILL.md>
+  local rule copy p missing=0
+  rule=$(delegated_collapsed < "$1")
+  copy=$(delegated_copy_paragraph "$2" | delegated_collapsed)
+  [ -n "$copy" ] || {
+    echo "no paragraph in $2 says '$DELEGATED_COPY_MARKER'"
+    return 1
+  }
+  for p in "${DELEGATED_PHRASES[@]}"; do
+    [[ "$rule" == *"$p"* ]] || { echo "'$p' is missing from $1"; missing=1; }
+    [[ "$copy" == *"$p"* ]] || { echo "'$p' is missing from the copy in $2"; missing=1; }
+  done
+  [ "$missing" -eq 0 ] || {
+    echo "the delegated-mode rule and work-summary's copy of it must both carry each phrase"
+    return 1
+  }
+}
+
+@test "work-summary's copy of the delegated-mode rule carries the rule's phrases" {
+  run delegated_copy_agrees "$DELEGATED_RULE" "$DELEGATED_COPY"
+  echo "$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "removing any one phrase from the rule, or from the copy's paragraph, is caught" {
+  local p text rule="$BATS_TEST_TMPDIR/rule.md" copy="$BATS_TEST_TMPDIR/copy.md"
+  for p in "${DELEGATED_PHRASES[@]}"; do
+    text=$(delegated_collapsed < "$DELEGATED_RULE")
+    printf '%s\n' "${text//"$p"/}" > "$rule"
+    run delegated_copy_agrees "$rule" "$DELEGATED_COPY"
+    [ "$status" -ne 0 ] || { echo "removing '$p' from the rule passed"; false; }
+    [[ "$output" == *"'$p' is missing from $rule"* ]] || {
+      echo "removing '$p' from the rule did not name it: $output"; false; }
+
+    # Only the copy's paragraph is edited, so the phrase's uses elsewhere in
+    # SKILL.md stay and the check has to be scoped to see it gone.
+    awk -v RS= -v ORS='\n\n' -v m="$DELEGATED_COPY_MARKER" -v p="$p" '
+      index($0, m) { gsub(/[[:space:]]+/, " "); i = index($0, p)
+                     if (i) $0 = substr($0, 1, i - 1) substr($0, i + length(p)) }
+      { print }' "$DELEGATED_COPY" > "$copy"
+    run delegated_copy_agrees "$DELEGATED_RULE" "$copy"
+    [ "$status" -ne 0 ] || { echo "removing '$p' from the copy passed"; false; }
+    [[ "$output" == *"'$p' is missing from the copy in $copy"* ]] || {
+      echo "removing '$p' from the copy did not name it: $output"; false; }
+  done
+}
+
+# project-status hands the operator a prompt to paste, and that prompt only works
+# if it fires the skill it is meant for. Each prompt's verb is matched against
+# the description of the skill that owns it, since routing reads descriptions
+# before any file.
+@test "every prompt project-status gives fires the skill it names" {
+  local status="$ROOT/dnbg-workflow/skills/project-status/SKILL.md"
+  local prompts verb owner desc bad=0 n=0
+  prompts=$(grep -E '^\| `[a-z-]+` \|' "$status" | grep -oE '`[a-z ]+ <URL>[^`]*`' | tr -d '`')
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    n=$((n + 1)); verb=${p%% *}
+    case "$verb" in
+      orchestrate) owner=orchestrate; want='"orchestrate <issue URL>"' ;;
+      resolve)     owner=issue-workflow; want='"resolve ' ;;
+      decompose)   owner=issue-workflow; want='decompose an accepted tracking issue' ;;
+      answer)      owner=issue-workflow; want="answering a reviewer's findings on an issue body" ;;
+      # A bare "review <URL>" is a question for the operator (reviewer's
+      # description), so the prompt has to carry "as a spec".
+      review)      owner=issue-reviewer; want='as a spec'
+                   [[ "$p" == *"as a spec"* ]] || { echo "'$p' is a bare review"; bad=1; } ;;
+      *) echo "prompt '$p' has no owning skill in this test"; bad=1; continue ;;
+    esac
+    desc=$(sed -n '/^description:/p' "$ROOT/dnbg-workflow/skills/$owner/SKILL.md")
+    grep -qF "$want" <<<"$desc" || { echo "$owner's description lost '$want', which '$p' relies on"; bad=1; }
+  done <<<"$prompts"
+  [ "$n" -ge 5 ] || { echo "found only $n prompts — the extractor broke"; false; }
+  [ "$bad" -eq 0 ]
+}
+
+@test "every next and ERROR reason issue-stage emits is one project-status reads" {
+  local src="$ROOT/dnbg-workflow/scripts/issue-stage.sh"
+  local status="$ROOT/dnbg-workflow/skills/project-status/SKILL.md"
+  local nexts reasons x bad=0
+  nexts=$(sed -nE 's/.*say [a-z"$A-Z]+ [a-z-]+ ([a-z-]+) .*/\1/p' "$src" | sort -u)
+  [ "$(grep -c . <<<"$nexts")" -ge 5 ] || { echo "found only: $nexts — the extractor broke"; false; }
+  for x in $nexts; do
+    grep -qE "^\| \`$x\` \|" "$status" || { echo "project-status has no row for next=$x"; bad=1; }
+  done
+  reasons=$(grep -oE '\bfail [a-z-]+' "$src" | sed 's/^fail //' | sort -u)
+  for x in $reasons unsupported-forge; do
+    grep -qF "\`$x\`" "$status" || { echo "project-status does not name ERROR reason '$x'"; bad=1; }
+    sed -n '/^# Exactly one/,/^set -euo/p' "$src" | grep -qE "(^|[^a-z-])${x}([^a-z-]|\$)" || {
+      echo "$(basename "$src") emits '$x' but its header does not declare it"; bad=1; }
+  done
+  [ "$bad" -eq 0 ]
+}
+
+# The one-issue-or-project rule in creating.md fires on any of three tests. A
+# test dropped from the section stops the rule firing on that property, and no
+# other check would notice.
+PROJECT_TESTS_FILE="$ROOT/dnbg-workflow/skills/issue-workflow/references/creating.md"
+PROJECT_TESTS_HEADING='### Is this one issue or a project?'
+PROJECT_TESTS=('more than one PR' 'stable IDs' 'no single PR can run')
+
+project_tests_section() {  # <creating.md> -> the section, collapsed to one line
+  awk -v h="$PROJECT_TESTS_HEADING" '$0 == h { s = 1; next } s && /^##/ { exit } s' "$1" \
+    | tr -s '\n ' ' '
+}
+
+project_tests_present() {  # <creating.md>
+  local section p missing=0
+  section=$(project_tests_section "$1")
+  [ -n "$section" ] || { echo "no '$PROJECT_TESTS_HEADING' section in $1"; return 1; }
+  for p in "${PROJECT_TESTS[@]}"; do
+    [[ "$section" == *"$p"* ]] || { echo "'$p' is missing from the section in $1"; missing=1; }
+  done
+  return "$missing"
+}
+
+@test "creating.md's one-issue-or-project section carries all three tests" {
+  run project_tests_present "$PROJECT_TESTS_FILE"
+  echo "$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "removing any one of the three tests from the section is caught" {
+  local p section copy="$BATS_TEST_TMPDIR/creating.md"
+  section=$(project_tests_section "$PROJECT_TESTS_FILE")
+  for p in "${PROJECT_TESTS[@]}"; do
+    # Removed from the collapsed section, so a phrase wrapped across lines goes too.
+    printf '%s\n%s\n' "$PROJECT_TESTS_HEADING" "${section//"$p"/}" > "$copy"
+    run project_tests_present "$copy"
+    [ "$status" -ne 0 ] || { echo "removing '$p' passed"; false; }
+    [[ "$output" == *"'$p' is missing"* ]] || { echo "removing '$p' did not name it: $output"; false; }
+  done
+}
+
+# The resolver's configuration refusals, each of which the reviewer is told how
+# to repair. The other `fail` reasons in as-role.sh are argument errors,
+# operator-tier errors, or `bad-config`, a variable in the operator's own
+# environment, none of them states a reviewer repairs, so they are not listed.
+REVIEWER_REFUSALS=(not-configured credential shared-identity no-login)
+
+# Each refusal must be a list entry of its own in "Post as the bot", where its
+# remedy is, and a reason as-role.sh can still fail with.
+reviewer_refusals_handled() {  # <reviewer SKILL.md> <as-role.sh>
+  local section r missing=0
+  section=$(awk '/^## Post as the bot$/{inside=1; next} inside && /^## /{exit} inside' "$1")
+  [ -n "$section" ] || { echo "no '## Post as the bot' section in $1"; return 1; }
+  for r in "${REVIEWER_REFUSALS[@]}"; do
+    grep -qF -- "- **\`$r\`**" <<<"$section" \
+      || { echo "'Post as the bot' has no entry for refusal '$r'"; missing=1; }
+    grep -qE "\bfail $r\b" "$2" \
+      || { echo "as-role.sh no longer fails with '$r'"; missing=1; }
+  done
+  return "$missing"
+}
+
+@test "reviewer's Post as the bot handles each configuration refusal as-role.sh emits" {
+  run reviewer_refusals_handled "$ROOT/dnbg-workflow/skills/reviewer/SKILL.md" \
+    "$ROOT/dnbg-workflow/scripts/as-role.sh"
+  echo "$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "a refusal missing from Post as the bot, or from as-role.sh, is caught" {
+  local r skill="$ROOT/dnbg-workflow/skills/reviewer/SKILL.md"
+  local script="$ROOT/dnbg-workflow/scripts/as-role.sh"
+  for r in "${REVIEWER_REFUSALS[@]}"; do
+    grep -vF -- "- **\`$r\`**" "$skill" > "$BATS_TEST_TMPDIR/SKILL.md"
+    run reviewer_refusals_handled "$BATS_TEST_TMPDIR/SKILL.md" "$script"
+    [ "$status" -ne 0 ] && [[ "$output" == *"no entry for refusal '$r'"* ]] \
+      || { echo "dropping the '$r' entry was not caught: $output"; false; }
+    perl -pe "s/\\bfail \Q$r\E\\b/fail renamed-$r/g" "$script" > "$BATS_TEST_TMPDIR/as-role.sh"
+    run reviewer_refusals_handled "$skill" "$BATS_TEST_TMPDIR/as-role.sh"
+    [ "$status" -ne 0 ] && [[ "$output" == *"no longer fails with '$r'"* ]] \
+      || { echo "dropping 'fail $r' was not caught: $output"; false; }
+  done
+}
+
+# A reviewer in its own session hands over an APPROVE on report.md's closing
+# line. The merge command is the author's to compose from the merge state, which
+# the reviewer never reads, so a merge example in the closing-line contract, or
+# a reviewer handoff that stops ending on Done, has the reviewer tell the
+# operator to merge.
+CLOSING_FILE="$ROOT/dnbg-workflow/skills/findings-review/references/report.md"
+CLOSING_HEADING='## The closing line'
+HANDOFF_FILE="$ROOT/dnbg-workflow/skills/reviewer/references/watch.md"
+HANDOFF_HEADING='## Report the review'
+HANDOFF_DONE='the handoff turn ends on `**Done:**`'
+MERGE_PHRASES=('ready to merge' 'merge it')
+
+section_collapsed() {  # <file> <heading> -> the section, collapsed to one line
+  awk -v h="$2" '$0 == h { s = 1; next } s && /^## / { exit } s' "$1" | tr -s '\n ' ' '
+}
+
+reviewer_handoff_leaves_merge() {  # <report.md> <watch.md>
+  local closing handoff p bad=0
+  closing=$(section_collapsed "$1" "$CLOSING_HEADING")
+  handoff=$(section_collapsed "$2" "$HANDOFF_HEADING")
+  [ -n "$closing" ] || { echo "no '$CLOSING_HEADING' section in $1"; return 1; }
+  [ -n "$handoff" ] || { echo "no '$HANDOFF_HEADING' section in $2"; return 1; }
+  for p in "${MERGE_PHRASES[@]}"; do
+    grep -qiwF -- "$p" <<<"$closing" \
+      && { echo "'$CLOSING_HEADING' in $1 carries the merge phrase '$p'"; bad=1; }
+  done
+  [[ "$handoff" == *"$HANDOFF_DONE"* ]] \
+    || { echo "'$HANDOFF_HEADING' in $2 no longer says $HANDOFF_DONE"; bad=1; }
+  return "$bad"
+}
+
+@test "the closing-line contract carries no merge phrase, and the reviewer's handoff ends on Done" {
+  run reviewer_handoff_leaves_merge "$CLOSING_FILE" "$HANDOFF_FILE"
+  echo "$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "a merge phrase in the closing-line section, or the handoff's Done sentence removed, is caught" {
+  local p report="$BATS_TEST_TMPDIR/report.md" watch="$BATS_TEST_TMPDIR/watch.md"
+  for p in "${MERGE_PHRASES[@]}"; do
+    awk -v h="$CLOSING_HEADING" -v p="$p" '{ print } $0 == h { print "Notify `PR 570 approved — " p "`." }' \
+      "$CLOSING_FILE" > "$report"
+    run reviewer_handoff_leaves_merge "$report" "$HANDOFF_FILE"
+    [ "$status" -ne 0 ] && [[ "$output" == *"merge phrase '$p'"* ]] \
+      || { echo "'$p' in the closing-line section was not caught: $output"; false; }
+  done
+  # Removed from the collapsed section, so the sentence wrapped across lines goes too.
+  printf '%s\n%s\n' "$HANDOFF_HEADING" "$(section_collapsed "$HANDOFF_FILE" "$HANDOFF_HEADING" \
+    | sed 's/the handoff turn ends on `\*\*Done:\*\*`//')" > "$watch"
+  run reviewer_handoff_leaves_merge "$CLOSING_FILE" "$watch"
+  [ "$status" -ne 0 ] && [[ "$output" == *"no longer says"* ]] \
+    || { echo "removing the Done sentence was not caught: $output"; false; }
+}

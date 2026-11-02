@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+#
+# Set-review eval: does `issue-reviewer`, handed a tracking issue, find what a
+# deliberately incomplete decomposition is missing?
+#
+#   tests/evals/set-review/create.sh [owner/repo]   # default dbaggott/dnbg-watch-testbed
+#
+# Files fixtures/ as a scratch tracking issue with its sub-issues and one
+# blocked-by edge, under the project slug `notes-export`, then prints the
+# parent's URL. Review that URL with `issue-reviewer`. The review passes when its
+# round comments report each planted defect on the issue SKILL.md's attach rules
+# name:
+#
+#   - Coverage gap, on the parent: R4 is in no child's `Covers` line and carries
+#     no end-to-end or deferred marking.
+#   - Unrealized dependency, on the checker child: its first acceptance criterion
+#     runs against the output of the export child's script, and the checker has
+#     neither a blocked-by edge nor a `Depends on` entry for it.
+#   - Missing project label, on the import child: its title carries the
+#     `[notes-export]` tag, and it is filed without `project:notes-export`.
+#   - Unmeetable cover, on the parent: the candidate decomposition puts R5 on
+#     the import child, and R5 needs the checker child's script, which the
+#     import child's row does not depend on. Its design-mode round reports it
+#     under the check that each child can meet what it covers. The import
+#     child's round cites that finding rather than raising its own unrealized
+#     dependency for the same missing edge; a finding on the import child alone
+#     does not pass this plant.
+#
+# The import child's edge to the export child is real and declared, so a review
+# that flags it has misread the check; the export and checker children carry
+# both the tag and the label.
+#
+# Nothing here grades: the round comments are the result, read by hand. Close the
+# scratch issues once they have been read.
+#
+# Prints the parent URL, then one result line, and exits 0:
+#   result=OK parent=<url> children=<url,url,url>
+#   result=ERROR reason=bad-args|create-failed|link-failed [created=<url,…>]
+#
+# `created` names any issues already filed when a later step failed, so they can
+# be closed rather than left open in the testbed.
+set -euo pipefail
+
+HERE=$(cd "$(dirname "$0")" && pwd)
+FIX="$HERE/fixtures"
+REPO="${1:-dbaggott/dnbg-watch-testbed}"
+
+CREATED=""
+fail() { echo "result=ERROR reason=$1${CREATED:+ created=$CREATED}"; exit 0; }
+# <url> -> records it as filed, for `fail`
+filed() { [ -n "$1" ] || return 1; CREATED="${CREATED:+$CREATED,}$1"; }
+
+[ "$#" -le 1 ] || fail bad-args
+case "$REPO" in */*/*|/*|*/) fail bad-args ;; */*) ;; *) fail bad-args ;; esac
+
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+DATE=$(date -u +%Y-%m-%d)
+
+# shellcheck source=../render.sh
+. "$HERE/../render.sh"
+
+SLUG=notes-export
+LABEL="project:$SLUG"
+
+# <title> <body-file> [label] -> the new issue's URL
+create() {
+  local label="${3:-}"
+  # shellcheck disable=SC2086  # empty, or `--label` and one quoted word
+  gh issue create --repo "$REPO" --title "$1" --body-file "$2" ${label:+--label "$label"} \
+    2>/dev/null | tail -1
+}
+
+# The parent is filed first so the children can cite it, and its design is
+# written once their URLs exist.
+echo "This is a **tracking issue**; its design is written once its children are filed." \
+  > "$TMP/parent.md"
+PARENT=$(create "[$SLUG] Tracking issue: Notes export" "$TMP/parent.md") || fail create-failed
+filed "$PARENT" || fail create-failed
+
+gh label create "$LABEL" --repo "$REPO" --force --color 5319E7 \
+  --description "Tracked by $PARENT" >/dev/null 2>&1 || fail create-failed
+gh issue edit "$PARENT" --repo "$REPO" --add-label "$LABEL" >/dev/null 2>&1 || fail create-failed
+
+# <fixture-name> <title> [label] -> the child's URL. The export child goes
+# first, since the import child cites it.
+child() {
+  render "$FIX/child-$1.md" PARENT="$PARENT" CHILD_EXPORT="${EXPORT:-}" > "$TMP/$1.md"
+  create "[$SLUG] $2" "$TMP/$1.md" "${3:-}"
+}
+EXPORT=$(child export "Export script" "$LABEL") || fail create-failed
+filed "$EXPORT" || fail create-failed
+CHECK=$(child check "Export checker" "$LABEL") || fail create-failed
+filed "$CHECK" || fail create-failed
+# The planted label gap: tagged, unlabelled.
+IMPORT=$(child import "Import script") || fail create-failed
+filed "$IMPORT" || fail create-failed
+
+render "$FIX/parent.md" DATE="$DATE" CHILD_EXPORT="$EXPORT" CHILD_CHECK="$CHECK" \
+  CHILD_IMPORT="$IMPORT" > "$TMP/parent.md"
+gh issue edit "$PARENT" --repo "$REPO" --body-file "$TMP/parent.md" >/dev/null 2>&1 \
+  || fail link-failed
+gh issue edit "$PARENT" --repo "$REPO" --add-sub-issue "$EXPORT,$CHECK,$IMPORT" \
+  >/dev/null 2>&1 || fail link-failed
+gh issue edit "$IMPORT" --repo "$REPO" --add-blocked-by "$EXPORT" >/dev/null 2>&1 \
+  || fail link-failed
+
+echo "$PARENT"
+echo "result=OK parent=$PARENT children=$EXPORT,$CHECK,$IMPORT"

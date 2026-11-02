@@ -1,0 +1,94 @@
+# Forge support
+
+Worth reading before you install. The workflow skills drive the `gh` CLI
+throughout — `gh pr`, `gh issue`, `gh api`, `gh search` — deeply enough that
+another forge needs its own backend behind a shared contract, not a shim over
+the calls below:
+
+- `reviewer` and `reviewer-setup` are built on **GitHub Apps**. The point is an
+  identity distinct from your own that can post a verdict on a PR you authored,
+  which GitHub forbids from your own account. `reviewer-setup` automates the
+  GitHub App **Manifest flow** that `bootstrap.py` drives; another forge would
+  reach the same identity through its own token mechanism, so the setup is
+  per-forge rather than portable.
+- `git-workflow`'s review, merge-state, and auto-merge handling reads
+  GitHub-shaped fields (`mergeStateStatus`, `statusCheckRollup`, review threads).
+- `check-issue-create.sh` matches `gh issue create`, and `owners` resolves
+  against `github.com` remotes.
+
+**GitHub is the one supported forge.** Everything else, self-hosted and GitHub
+Enterprise included, is unsupported, and there is no plan to add another forge
+unless someone asks for one: an issue naming the forge you use is the request.
+That is a statement about the forge-coupled skills; the forge-neutral ones
+already work everywhere.
+
+Which skills are which is the **Forge** column of [What's in
+it](../README.md#whats-in-it) — and read the **Plugin** column beside it, because
+*forge-neutral is a property of the skill, not of the plugin shipping it*. The
+two neutral skills are obtained differently: `coding-practices` ships in
+`dnbg-practices`, which mentions no forge anywhere and installs on its own
+(`/plugin install dnbg-practices@dnbg`), while `velocity-tradeoff` ships inside
+`dnbg-workflow` because it governs how to size a change and whether to split a
+PR — a workflow question. A non-GitHub user therefore gets `velocity-tradeoff`
+only by installing the GitHub-coupled plugin, where it then works normally: the
+neutral promise is per skill, and a `dnbg-workflow` install on another forge
+keeps it.
+
+## Stacked PRs
+
+`orchestrate`'s stacked mode bases a child issue's PR on its blocker's approved
+but unmerged PR while the operator is away. The mode itself uses no forge
+feature beyond a PR opened against another branch, and the skills state it in
+forge-neutral terms. On GitHub it goes further, and only there: `stack-prs.sh`
+puts each such PR into a GitHub stack, GitHub rebases the PRs above a merged
+one itself, and one merge lands a PR with every approved PR below it. A PR in a
+stack refuses `gh pr merge`, so its handoff carries GitHub's asynchronous merge
+call instead. On every other forge, and on GitHub where the stack could not be
+formed, the path is the manual one: `gh pr merge` on the bottom PR, and the next
+PR's author rebases with `git rebase --onto` once it lands.
+
+## What happens on an unsupported forge
+
+**It declines; it does not adapt.** A forge-coupled skill says plainly that the
+flow is GitHub-only, names the host it actually found, and hands back to
+whatever flow your project already uses. It will not run a `gh` command that
+cannot succeed, and it will not translate itself to `glab` or the Bitbucket API
+— a half-translated flow is worse than either extreme, and translating properly
+is a per-forge backend's job rather than something to do by halves here.
+
+*What* it checks differs by skill, because the coupled skills don't all act on the
+repo you're standing in:
+
+| Skill | Acts on | Declines when |
+| --- | --- | --- |
+| `git-workflow` | the repo whose tracked file you're changing | that repo's `origin` host isn't `github.com` |
+| `issue-workflow` | the repo the issue lives in | the host **in the issue URL** isn't `github.com` — or, for a bare issue number, that repo's `origin` |
+| `issue-reviewer` | the repo the issues under review live in | the host **in the issue URL** isn't `github.com` — or, for a bare issue number, that repo's `origin` |
+| `orchestrate` | the repo the issue lives in | the host **in the issue URL** isn't `github.com` |
+| `project-status` | the repo the issue lives in | the host **in the issue URL** isn't `github.com`; a bare issue number is asked back as a URL |
+| `process-review` | retrospective files on your machine | never — no repo is read |
+| `findings-review` | findings files on your machine, and the repo each one names | an entry's `source` URL isn't on `github.com`, which skips that entry's re-check and proposes keeping it; the other entries are swept either way |
+| `reviewer` | a pull request you name explicitly | the *named* repo isn't on GitHub |
+| `reviewer-setup` | a GitHub App on your machine | never — no repo is involved |
+| `work-summary` | your GitHub account, via `gh search` | never — no repo is involved |
+
+`reviewer`, `reviewer-setup` and `work-summary` deliberately ignore your working
+directory, and so do `issue-workflow` and `issue-reviewer` whenever the issue is
+named by full URL — which the always-on
+rule requires, so it is the normal case. Asking for a recap of your GitHub week,
+or picking up a GitHub issue, while sitting in a GitLab checkout is a coherent
+request, and gating it on `git remote get-url origin` would refuse a flow that
+works fine. Only `git-workflow` reads that remote unconditionally, because the
+file you are editing really is in the repo you are standing in.
+
+Two cases that are *not* a decline, wherever `origin` **is** the input: a repo
+with **no `origin`** carries no forge claim either way, so the flow proceeds and
+lets you direct rather than assuming either host; and where **several remotes**
+exist, `origin` decides — matching what the enforcement hooks do.
+
+The forge-neutral skills are never gated, on any host. That includes
+`velocity-tradeoff` despite its plugin: declining is decided per skill, never
+per plugin, so a plugin-level gate would be a bug rather than a shortcut.
+
+Only `github.com` remotes are ever covered by the enforcement hooks, so listing
+an owner cannot gate a same-named org on another host.

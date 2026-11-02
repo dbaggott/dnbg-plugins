@@ -1,0 +1,471 @@
+#!/usr/bin/env bats
+#
+# Tests for the tracking issue's ready set. `gh` is stubbed: it prints whatever
+# JSON the test wrote, and exits 1 when the test asks it to, as real `gh` does on a
+# GraphQL error. Under `--stacked` the script runs from a copy beside stubs of
+# `pr-sources.sh` and `pr-verdict.sh`, which answer from files the test writes.
+
+READY="${BATS_TEST_DIRNAME}/../dnbg-workflow/scripts/ready-set.sh"
+U=https://github.com/o/r/issues
+BOT=rev-bot
+
+setup() {
+  STUB="$BATS_TEST_TMPDIR/bin"; mkdir -p "$STUB"
+  export ANSWER="$BATS_TEST_TMPDIR/answer.json"; : > "$ANSWER"
+  export ARGV="$BATS_TEST_TMPDIR/argv"; : > "$ARGV"
+  export GQL_EXIT="$BATS_TEST_TMPDIR/gql_exit"
+  export FORK="$BATS_TEST_TMPDIR/fork"
+  cat > "$STUB/gh" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >> "$ARGV"
+if [ "$1 $2" = "pr view" ]; then
+  echo "{\"headRefName\":\"branch-$3\",\"isCrossRepository\":$([ -f "$FORK" ] && echo true || echo false)}"
+  exit 0
+fi
+cat "$ANSWER"
+[ -f "$GQL_EXIT" ] && exit 1
+exit 0
+EOF
+  chmod +x "$STUB/gh"
+  export PATH="$STUB:$PATH"
+}
+
+# <n> [state] -> an open, unclaimed, unblocked child with no comments. Tests
+# shape the rest with jq, through the helpers below.
+child() {
+  jq -cn --argjson n "$1" --arg s "${2:-OPEN}" --arg u "$U" '
+    {url: "\($u)/\($n)", number: $n, title: "t\($n)", state: $s,
+     assignees: {totalCount: 0, nodes: []}, labels: {totalCount: 0, nodes: []},
+     blockedBy: {totalCount: 0, nodes: []}, comments: {nodes: []}}'
+}
+blocked_by() {  # <node> <n> <state> [stateReason] -> the node with one more blocker
+  jq -c --argjson n "$2" --arg s "$3" --arg r "${4:-}" --arg u "$U" '
+    .blockedBy.nodes += [{url: "\($u)/\($n)", state: $s,
+                          stateReason: (if $r == "" then null else $r end)}]
+    | .blockedBy.totalCount += 1' <<<"$1"
+}
+comment() {  # <node> <login> <body> -> the node with one more comment, newest last
+  jq -c --arg l "$2" --arg b "$3" '.comments.nodes += [{author: {login: $l}, body: $b}]' <<<"$1"
+}
+# [child-node...] -> the answer for parent 1. Its comments come from
+# $PARENT_COMMENTS, all of them on both pages unless $PARENT_NEWEST and
+# $PARENT_TOTAL say otherwise.
+answer() {
+  printf '%s\n' "$@" | jq -cs --arg u "$U" --argjson pc "${PARENT_COMMENTS:-[]}" \
+      --argjson pn "${PARENT_NEWEST:-null}" --argjson pt "${PARENT_TOTAL:-null}" '
+    {data: {repository: {issue: {
+      url: "\($u)/1", number: 1, oldest: {nodes: $pc},
+      newest: {totalCount: ($pt // ($pn // $pc | length)), nodes: ($pn // $pc)},
+      subIssues: {totalCount: length, nodes: .}}}}}' > "$ANSWER"
+}
+spec_reviewed() {  # the parent carries a design review verdict from the bot
+  PARENT_COMMENTS=$(jq -cn --arg l "${BOT}[bot]" \
+    '[{author: {login: $l}, body: "**Spec review (design mode), round 1: READY**\n\nbody"}]')
+}
+object() { head -1 <<<"$1"; }
+line() { tail -1 <<<"$1"; }
+numbers() { object "$1" | jq -c "[.$2[].number]"; }
+
+@test "an open, unclaimed, unblocked child is ready; a closed one is in neither list" {
+  answer "$(child 2)" "$(child 3 CLOSED)"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$status" -eq 0 ]
+  [[ "$(line "$output")" =~ ^result=OK\ now=[0-9T:Z-]+\ children=2\ open=1\ ready=1\ stacked=0$ ]]
+  [ "$(object "$output" | jq -c '.ready')" = "[{\"url\":\"$U/2\",\"number\":2,\"title\":\"t2\"}]" ]
+  [ "$(numbers "$output" waiting)" = '[]' ]
+  [ "$(object "$output" | jq -c .parent)" = "{\"url\":\"$U/1\",\"number\":1,\"spec_review\":false,\"verdict\":null,\"verdict_mode\":null,\"verdict_current\":null,\"verdict_url\":null}" ]
+}
+
+@test "a closed blocker does not hold a child; an open one does, and is named" {
+  answer "$(blocked_by "$(child 2)" 9 CLOSED)" \
+         "$(blocked_by "$(blocked_by "$(child 3)" 9 CLOSED)" 2 OPEN)"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$(numbers "$output" ready)" = '[2]' ]
+  [ "$(object "$output" | jq -c '.waiting[0] | {number, reasons, blocked_by}')" \
+    = "{\"number\":3,\"reasons\":[\"blocked\"],\"blocked_by\":[\"$U/2\"]}" ]
+}
+
+@test "a blocker closed as not planned or as a duplicate still holds; one closed before reasons existed does not" {
+  answer "$(blocked_by "$(child 2)" 7 CLOSED NOT_PLANNED)" \
+         "$(blocked_by "$(child 3)" 8 CLOSED DUPLICATE)" \
+         "$(blocked_by "$(blocked_by "$(child 4)" 9 CLOSED COMPLETED)" 10 CLOSED)"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$(numbers "$output" ready)" = '[4]' ]
+  [ "$(object "$output" | jq -c '[.waiting[] | [.number, .reasons, .blocked_by]]')" \
+    = "[[2,[\"blocked\"],[\"$U/7\"]],[3,[\"blocked\"],[\"$U/8\"]]]" ]
+}
+
+@test "an assignee or any assigned:* label is a claim" {
+  answer "$(child 2 | jq -c '.assignees = {totalCount: 1, nodes: [{login: "someone"}]}')" \
+         "$(child 3 | jq -c '.labels = {totalCount: 2, nodes: [{name: "bug"}, {name: "assigned:other-bot"}]}')" \
+         "$(child 4 | jq -c '.labels = {totalCount: 1, nodes: [{name: "bug"}]}')"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$(numbers "$output" ready)" = '[4]' ]
+  [ "$(object "$output" | jq -c '[.waiting[] | {number, reasons, assignees, claim_labels}]')" \
+    = '[{"number":2,"reasons":["claimed"],"assignees":["someone"],"claim_labels":[]},{"number":3,"reasons":["claimed"],"assignees":[],"claim_labels":["assigned:other-bot"]}]' ]
+}
+
+@test "without a verdict on the parent, children need none" {
+  answer "$(comment "$(child 2)" "${BOT}[bot]" "**Set review, round 1: CHANGES REQUESTED**")"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$(object "$output" | jq .parent.spec_review)" = false ]
+  [ "$(numbers "$output" ready)" = '[2]' ]
+}
+
+@test "under spec review, only a child whose latest verdict is READY is ready" {
+  spec_reviewed
+  answer "$(comment "$(comment "$(child 2)" "${BOT}[bot]" "**Set review, round 1: CHANGES REQUESTED**")" \
+                    "${BOT}[bot]" "**Set review, round 2: READY**")" \
+         "$(comment "$(comment "$(child 3)" "${BOT}[bot]" "**Set review, round 1: READY**")" \
+                    "${BOT}[bot]" "**Spec review, round 2: CHANGES REQUESTED**")" \
+         "$(child 4)"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$(object "$output" | jq .parent.spec_review)" = true ]
+  [ "$(numbers "$output" ready)" = '[2]' ]
+  [ "$(object "$output" | jq -c '[.waiting[] | [.number, .reasons]]')" \
+    = '[[3,["no-ready-verdict"]],[4,["no-ready-verdict"]]]' ]
+}
+
+@test "under spec review, a parent whose latest verdict is not READY holds every child" {
+  PARENT_COMMENTS=$(jq -cn --arg l "${BOT}[bot]" '[
+    {author: {login: $l}, body: "**Spec review (design mode), round 1: READY**"},
+    {author: {login: $l}, body: "**Set review, round 1: CHANGES REQUESTED**"}]')
+  answer "$(comment "$(child 2)" "${BOT}[bot]" "**Set review, round 1: READY**")"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$(object "$output" | jq -c .parent.verdict)" = '"CHANGES REQUESTED"' ]
+  [ "$(numbers "$output" ready)" = '[]' ]
+  [ "$(object "$output" | jq -c '.waiting[0].reasons')" = '["design-not-ready"]' ]
+}
+
+@test "the parent's latest verdict comes from its newest comments when they hold one" {
+  PARENT_COMMENTS=$(jq -cn --arg l "${BOT}[bot]" \
+    '[{author: {login: $l}, body: "**Spec review (design mode), round 1: CHANGES REQUESTED**"}]')
+  PARENT_NEWEST=$(jq -cn --arg l "${BOT}[bot]" \
+    '[{author: {login: $l}, body: "**Spec review (design mode), round 2: READY**"}]')
+  PARENT_TOTAL=500
+  answer "$(comment "$(child 2)" "${BOT}[bot]" "**Set review, round 1: READY**")"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$(object "$output" | jq -c .parent.verdict)" = '"READY"' ]
+  [ "$(numbers "$output" ready)" = '[2]' ]
+}
+
+# <body lastEditedAt as JSON> <verdict body> -> the parent's verdict_mode and
+# verdict_current for that round
+round_of() {
+  PARENT_COMMENTS=$(jq -cn --arg l "${BOT}[bot]" --arg b "$2" '[{author: {login: $l}, body: $b, url: "c1"}]')
+  answer "$(child 2)"
+  jq -c --argjson e "$1" '.data.repository.issue.lastEditedAt = $e' "$ANSWER" > "$ANSWER.new" && mv "$ANSWER.new" "$ANSWER"
+  run "$READY" o/r 1 --slug=$BOT
+  object "$output" | jq -r '"\(.parent.verdict_mode) \(.parent.verdict_current) \(.parent.verdict_url)"'
+}
+
+@test "the parent's latest verdict names its mode, its comment, and whether it covers the body" {
+  local d='**Spec review (design mode), round 2: READY**'
+  [ "$(round_of '"2026-10-28T00:14:15Z"' "$d"$'\n\nReviewed against `lastEditedAt` `2026-10-28T00:14:15Z`, read as the delta from `2026-10-28T00:04:35Z`.')" \
+    = "design true c1" ]
+  [ "$(round_of '"2026-10-28T00:14:15Z"' "$d"$'\n\nReviewed against `lastEditedAt`: 2026-10-23T16:55:30Z.')" \
+    = "design false c1" ]
+  [ "$(round_of null "$d"$'\r\n\r\nReviewed against `lastEditedAt`: null (never edited).')" = "design true c1" ]
+  [ "$(round_of '"2026-10-28T00:14:15Z"' "$d"$'\n\nReviewed against `lastEditedAt`: null.')" = "design false c1" ]
+  [ "$(round_of '"2026-10-26T16:50:26Z"' $'**Set review (design mode), round 3: READY**\n\nReviewed against `lastEditedAt` 2026-10-26T16:50:26Z, together with the set.')" \
+    = "design true c1" ]
+  [ "$(round_of null '**Spec review, round 1: READY**')" = "spec false c1" ]
+  [ "$(round_of null '**Set review, round 3: CHANGES REQUESTED**')" = "set false c1" ]
+}
+
+@test "only the value right after the first lastEditedAt counts as the round's watermark" {
+  local d='**Spec review (design mode), round 2: READY**'
+  [ "$(round_of '"2026-10-01T00:00:00Z"' "$d"$'\n\n`lastEditedAt` (re-read at the gate) 2026-10-02T00:00:00Z; the delta since `lastEditedAt` 2026-10-01T00:00:00Z.')" \
+    = "design false c1" ]
+  [ "$(round_of null "$d"$'\n\n`lastEditedAt`: nullable in the schema.')" = "design false c1" ]
+}
+
+@test "verdicts only among the parent's oldest comments, with a gap after them, is set-overflow" {
+  spec_reviewed
+  PARENT_NEWEST='[]'; PARENT_TOTAL=201
+  answer "$(child 2)"
+  run "$READY" o/r 1 --slug=$BOT
+  [[ "$output" == "result=ERROR reason=set-overflow now="* ]]
+  PARENT_TOTAL=200
+  answer "$(child 2)"
+  run "$READY" o/r 1 --slug=$BOT
+  [[ "$(line "$output")" == result=OK* ]]
+}
+
+@test "a verdict counts only from the slug, under either spelling, and only in the first line" {
+  spec_reviewed
+  answer "$(comment "$(child 2)" "$BOT" "**Set review, round 1: READY**")" \
+         "$(comment "$(child 3)" "someone" "**Set review, round 1: READY**")" \
+         "$(comment "$(child 4)" "${BOT}[bot]" $'Quoting the last round:\n**Set review, round 1: READY**')" \
+         "$(comment "$(child 5)" "${BOT}[bot]" $'**Set review, round 1: READY**\r\n\ndetail')"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$(numbers "$output" ready)" = '[2,5]' ]
+}
+
+@test "a project review or a reply from the bot is not a spec verdict" {
+  spec_reviewed
+  answer "$(comment "$(comment "$(child 2)" "${BOT}[bot]" "**Set review, round 1: READY**")" \
+                    "${BOT}[bot]" "**Project review, round 1: CHANGES REQUESTED**")" \
+         "$(comment "$(comment "$(child 3)" "${BOT}[bot]" "**Set review, round 1: READY**")" \
+                    "${BOT}[bot]" "Thanks — that settles 3-B1.")"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$(numbers "$output" ready)" = '[2,3]' ]
+}
+
+@test "every reason a child is held is listed, in sub-issue order" {
+  spec_reviewed
+  answer "$(child 5)" \
+         "$(blocked_by "$(child 2 | jq -c '.assignees = {totalCount: 1, nodes: [{login: "me"}]}')" 5 OPEN)"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$(object "$output" | jq -c '[.waiting[] | [.number, .reasons]]')" \
+    = '[[5,["no-ready-verdict"]],[2,["blocked","claimed","no-ready-verdict"]]]' ]
+}
+
+@test "the output carries no GitHub field names" {
+  answer "$(blocked_by "$(child 2)" 3 OPEN)" "$(child 4)"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$(object "$output" | jq -c '[paths | map(strings) | .[]] | unique')" \
+    = '["assignees","blocked_by","claim_labels","number","parent","ready","reasons","spec_review","title","url","verdict","verdict_current","verdict_mode","verdict_url","waiting"]' ]
+}
+
+@test "a parent with no sub-issues is an empty set, not an error" {
+  answer
+  run "$READY" o/r 1 --slug=$BOT
+  [[ "$(line "$output")" == *"children=0 open=0 ready=0 stacked=0" ]]
+}
+
+@test "any page short of its total is set-overflow, so a hidden claim or blocker cannot read as ready" {
+  local n
+  for n in subIssues assignees labels blockedBy; do
+    answer "$(child 2)"
+    if [ "$n" = subIssues ]; then
+      jq -c '.data.repository.issue.subIssues.totalCount = 2' "$ANSWER" > "$ANSWER.x"
+    else
+      jq -c ".data.repository.issue.subIssues.nodes[0].$n.totalCount = 101" "$ANSWER" > "$ANSWER.x"
+    fi
+    mv "$ANSWER.x" "$ANSWER"
+    run "$READY" o/r 1 --slug=$BOT
+    [[ "$output" == "result=ERROR reason=set-overflow now="* ]] || { echo "$n: $output"; false; }
+    [ "$(wc -l <<<"$output")" -eq 1 ]
+  done
+}
+
+@test "a null node or a payload that stops parsing is issue-query-shape" {
+  answer null
+  run "$READY" o/r 1 --slug=$BOT
+  [[ "$output" == "result=ERROR reason=issue-query-shape now="* ]]
+  answer "$(child 2 | jq -c '.blockedBy.nodes = [null] | .blockedBy.totalCount = 1')"
+  run "$READY" o/r 1 --slug=$BOT
+  [[ "$output" == "result=ERROR reason=issue-query-shape now="* ]]
+  echo 'not json' > "$ANSWER"
+  run "$READY" o/r 1 --slug=$BOT
+  [[ "$output" == "result=ERROR reason=issue-query-shape now="* ]]
+}
+
+@test "a deleted author's comment is skipped, not a shape error" {
+  spec_reviewed
+  answer "$(child 2 | jq -c '.comments.nodes = [{author: null, body: "**Set review, round 1: READY**"}]')"
+  run "$READY" o/r 1 --slug=$BOT
+  [[ "$(line "$output")" == result=OK* ]]
+  [ "$(numbers "$output" ready)" = '[]' ]
+}
+
+@test "an unresolvable issue is not-found, even though gh exits 1" {
+  echo '{"data":{"repository":{"issue":null}},"errors":[{"type":"NOT_FOUND"}]}' > "$ANSWER"
+  touch "$GQL_EXIT"
+  run "$READY" o/r 1 --slug=$BOT
+  [ "$status" -eq 0 ]
+  [[ "$output" == "result=ERROR reason=not-found now="* ]]
+}
+
+@test "no answer, or a null issue with another error, is issue-query" {
+  touch "$GQL_EXIT"
+  run "$READY" o/r 1 --slug=$BOT
+  [[ "$output" == "result=ERROR reason=issue-query now="* ]]
+  rm "$GQL_EXIT"
+  echo '{"data":{"repository":{"issue":null}},"errors":[{"type":"FORBIDDEN"}]}' > "$ANSWER"
+  run "$READY" o/r 1 --slug=$BOT
+  [[ "$output" == "result=ERROR reason=issue-query now="* ]]
+}
+
+@test "bad arguments are refused before any query, and the slug is required" {
+  local args
+  for args in "o/r 1" "o/r --slug=$BOT" "o 1 --slug=$BOT" "o/r/x 1 --slug=$BOT" \
+              "o/r 1x --slug=$BOT" "o/r 1 2 --slug=$BOT" "o/r 1 --slug=$BOT --other" "o/r 1 --slug="; do
+    # shellcheck disable=SC2086  # each case is a deliberately split argument list
+    run "$READY" $args
+    [[ "$output" == "result=ERROR reason=bad-args now="* ]] || { echo "$args: $output"; false; }
+  done
+  [ ! -s "$ARGV" ]
+}
+
+@test "another forge is refused before any query" {
+  FORGE=gitlab run "$READY" o/r 1 --slug=$BOT
+  [[ "$output" == "result=ERROR reason=unsupported-forge now="* ]]
+  [ ! -s "$ARGV" ]
+}
+
+@test "the repo and number reach GraphQL as a String and an Int" {
+  answer
+  run "$READY" 0wner/123 7 --slug=$BOT
+  grep -qx 'owner=0wner' "$ARGV"
+  grep -qx 'repo=123' "$ARGV"
+  grep -qx 'n=7' "$ARGV"
+  # -f binds a String, -F an Int: the flag preceding each binding is what decides it.
+  [ "$(grep -B1 -x 'repo=123' "$ARGV" | head -1)" = -f ]
+  [ "$(grep -B1 -x 'n=7' "$ARGV" | head -1)" = -F ]
+}
+
+# The stacked copy: ready-set.sh beside stub siblings. `sources <n> <lines…>`
+# writes what pr-sources.sh prints for issue <n>, its result line last;
+# `verdict <pr> <line>` what pr-verdict.sh prints for that PR. An issue or PR
+# with no file is a read that fails.
+stacked_setup() {
+  local d="$BATS_TEST_TMPDIR/scripts"; mkdir -p "$d"
+  cp "$READY" "$d/ready-set.sh"
+  export SOURCES="$BATS_TEST_TMPDIR/sources" VERDICTS="$BATS_TEST_TMPDIR/verdicts"
+  mkdir -p "$SOURCES" "$VERDICTS"
+  export SOURCE_CALLS="$BATS_TEST_TMPDIR/source_calls"; : > "$SOURCE_CALLS"
+  printf '#!/usr/bin/env bash\necho "$2" >> "$SOURCE_CALLS"\ncat "$SOURCES/$2" 2>/dev/null || echo "result=ERROR reason=all-sources"\n' > "$d/pr-sources.sh"
+  printf '#!/usr/bin/env bash\ncat "$VERDICTS/$2" 2>/dev/null || echo "result=ERROR reason=pr-view"\n' > "$d/pr-verdict.sh"
+  chmod +x "$d"/*.sh
+  STACKED_READY="$d/ready-set.sh"
+}
+P=https://github.com/o/r/pull
+ALL_OK="closing=ok search=ok timeline=ok"
+sources() { local n=$1; shift; printf '%s\n' "$@" > "$SOURCES/$n"; }
+verdict() { echo "$2" > "$VERDICTS/$1"; }
+APPROVED="result=OK head=h verdict=APPROVED verdict_sha=h at_head=1 reviewed_after_head=1 review_decision= verdict_at=t"
+# Child 3 blocked by sibling 2 alone, whose PR 20 is its one open closing PR.
+stacked_case() {
+  answer "$(child 2)" "$(blocked_by "$(child 3)" 2 OPEN)"
+  sources 2 "$P/20 relevance=closes state=OPEN" "$P/7 relevance=mention state=OPEN" "result=OK count=2 $ALL_OK"
+  verdict 20 "$APPROVED"
+}
+stacked_numbers() {  # -> "<ready numbers> <waiting numbers> <stacked>"
+  echo "$(numbers "$output" ready) $(numbers "$output" waiting) $(line "$output" | grep -oE 'stacked=[0-9]+')"
+}
+
+@test "stacked: a child blocked only by a sibling with one approved closing PR is ready on its branch" {
+  stacked_setup; stacked_case
+  run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+  [ "$status" -eq 0 ]
+  [ "$(stacked_numbers)" = "[2,3] [] stacked=1" ]
+  [ "$(object "$output" | jq -c '.ready[1]')" \
+    = "{\"url\":\"$U/3\",\"number\":3,\"title\":\"t3\",\"base\":\"branch-20\",\"base_pr\":\"$P/20\"}" ]
+  [ "$(object "$output" | jq -c '.ready[0] | keys')" = '["number","title","url"]' ]
+}
+
+@test "stacked: without the flag the same child waits, and nothing beyond the one query runs" {
+  stacked_setup; stacked_case
+  run "$STACKED_READY" o/r 1 --slug=$BOT
+  [ "$(stacked_numbers)" = "[2] [3] stacked=0" ]
+  ! grep -qx view "$ARGV"
+}
+
+@test "stacked: a blocker PR not approved at head keeps the child waiting" {
+  stacked_setup
+  local v
+  for v in "result=OK head=h verdict=CHANGES_REQUESTED verdict_sha=h at_head=1 reviewed_after_head=1 review_decision= verdict_at=t" \
+           "result=OK head=h2 verdict=APPROVED verdict_sha=h at_head=0 reviewed_after_head=0 review_decision= verdict_at=t" \
+           "result=OK head=h verdict=APPROVED verdict_sha=h at_head=1 reviewed_after_head=unknown review_decision= verdict_at=t" \
+           "result=OK head=h verdict=APPROVED verdict_sha=h at_head=1 reviewed_after_head=1 review_decision=REVIEW_REQUIRED verdict_at=t" \
+           "result=ERROR reason=pr-view"; do
+    stacked_case; verdict 20 "$v"
+    run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+    [ "$(stacked_numbers)" = "[2] [3] stacked=0" ] || { echo "$v: $output"; false; }
+  done
+  stacked_case
+  verdict 20 "${APPROVED/review_decision=/review_decision=APPROVED}"
+  run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+  [ "$(stacked_numbers)" = "[2,3] [] stacked=1" ]
+}
+
+@test "stacked: a blocker with two open closing PRs, none, or one whose state is unknown keeps the child waiting" {
+  stacked_setup
+  local case
+  for case in two none unknown closed other-repo; do
+    stacked_case
+    case $case in
+      two)     sources 2 "$P/20 relevance=closes state=OPEN" "$P/21 relevance=closes state=OPEN" "result=OK count=2 $ALL_OK" ;;
+      none)    sources 2 "$P/7 relevance=mention state=OPEN" "result=OK count=1 $ALL_OK" ;;
+      unknown) sources 2 "$P/20 relevance=closes state=OPEN" "$P/21 relevance=closes state=unknown" "result=OK count=2 $ALL_OK" ;;
+      closed)  sources 2 "$P/20 relevance=closes state=unknown" "result=OK count=1 $ALL_OK"; verdict 20 "$APPROVED" ;;
+      other-repo) sources 2 "https://github.com/o/other/pull/20 relevance=closes state=OPEN" "result=OK count=1 $ALL_OK" ;;
+    esac
+    run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+    [ "$(stacked_numbers)" = "[2] [3] stacked=0" ] || { echo "$case: $output"; false; }
+  done
+  # A merged or closed PR beside the open one does not count against it.
+  stacked_case
+  sources 2 "$P/19 relevance=closes state=CLOSED" "$P/20 relevance=closes state=OPEN" "result=OK count=2 $ALL_OK"
+  run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+  [ "$(stacked_numbers)" = "[2,3] [] stacked=1" ]
+}
+
+@test "stacked: a discovery source that is not ok, or no discovery at all, keeps the child waiting" {
+  stacked_setup
+  local s
+  for s in "closing=fail search=ok timeline=ok" "closing=ok search=shape timeline=ok" "closing=ok search=ok timeline=fail"; do
+    stacked_case
+    sources 2 "$P/20 relevance=closes state=OPEN" "result=OK count=1 $s"
+    run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+    [ "$(stacked_numbers)" = "[2] [3] stacked=0" ] || { echo "$s: $output"; false; }
+  done
+  stacked_case; rm "$SOURCES/2"
+  run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+  [ "$(stacked_numbers)" = "[2] [3] stacked=0" ]
+}
+
+@test "stacked: two uncleared blockers keep the child waiting however their PRs stand" {
+  stacked_setup; stacked_case
+  answer "$(child 2)" "$(child 4)" "$(blocked_by "$(blocked_by "$(child 3)" 2 OPEN)" 4 OPEN)"
+  sources 4 "$P/40 relevance=closes state=OPEN" "result=OK count=1 $ALL_OK"
+  verdict 40 "$APPROVED"
+  run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+  [ "$(stacked_numbers)" = "[2,4] [3] stacked=0" ]
+  # One of the two cleared leaves one, which stacks.
+  answer "$(child 2)" "$(blocked_by "$(blocked_by "$(child 3)" 2 OPEN)" 4 CLOSED)"
+  run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+  [ "$(stacked_numbers)" = "[2,3] [] stacked=1" ]
+}
+
+@test "stacked: a blocker outside the parent, or a child held for another reason too, is not stacked" {
+  stacked_setup; stacked_case
+  sources 9 "$P/90 relevance=closes state=OPEN" "result=OK count=1 $ALL_OK"
+  verdict 90 "$APPROVED"
+  answer "$(child 2)" "$(blocked_by "$(child 3)" 9 OPEN)" \
+         "$(blocked_by "$(child 4 | jq -c '.labels = {totalCount: 1, nodes: [{name: "assigned:x"}]}')" 2 OPEN)"
+  run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+  [ "$(stacked_numbers)" = "[2] [3,4] stacked=0" ]
+  [ "$(object "$output" | jq -c '.waiting[1].reasons')" = '["blocked","claimed"]' ]
+}
+
+@test "stacked: the flag is accepted alongside the others in any order" {
+  stacked_setup; stacked_case
+  run "$STACKED_READY" --stacked o/r 1 --slug=$BOT
+  [ "$(stacked_numbers)" = "[2,3] [] stacked=1" ]
+}
+
+@test "stacked: a blocker closed as not planned, or a PR from a fork, keeps the child waiting" {
+  stacked_setup; stacked_case
+  answer "$(child 2 CLOSED)" "$(blocked_by "$(child 3)" 2 CLOSED NOT_PLANNED)"
+  run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+  [ "$(stacked_numbers)" = "[] [3] stacked=0" ]
+  stacked_case; touch "$FORK"
+  run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+  [ "$(stacked_numbers)" = "[2] [3] stacked=0" ]
+}
+
+@test "stacked: a blocker shared by several children is read once, and bases each" {
+  stacked_setup; stacked_case
+  answer "$(child 2)" "$(blocked_by "$(child 3)" 2 OPEN)" "$(blocked_by "$(child 4)" 2 OPEN)"
+  run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+  [ "$(stacked_numbers)" = "[2,3,4] [] stacked=2" ]
+  [ "$(cat "$SOURCE_CALLS")" = 2 ]
+  # A shared blocker that bases nothing is read once too.
+  : > "$SOURCE_CALLS"; rm "$VERDICTS/20"
+  run "$STACKED_READY" o/r 1 --slug=$BOT --stacked
+  [ "$(stacked_numbers)" = "[2] [3,4] stacked=0" ]
+  [ "$(cat "$SOURCE_CALLS")" = 2 ]
+}
