@@ -165,7 +165,10 @@ orchestrator, or a run recorded to meet an acceptance criterion. A testbed is:
 - a private repo you own and can delete freely;
 - protected on its default branch: a pull request with **one approving
   review**, stale reviews dismissed, conversations resolved, and one required
-  status check from a minimal CI workflow of its own;
+  status check from a minimal CI workflow of its own: a check a run can fail or
+  hold on purpose, required with `strict` so a PR can fall behind its base;
+- open to admin pushes on the default branch, so a capture can move the base
+  under an open PR;
 - squash-only, with auto-merge allowed and branches deleted on merge;
 - installed with the role Apps from `reviewer-setup` (author and reviewer);
 - exported as `DNBG_TESTBED_REPO=<owner>/<repo>` in your environment.
