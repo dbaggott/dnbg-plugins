@@ -221,7 +221,7 @@ line() { tail -1 <<<"$1"; }
   [[ "$output" == *"reason=bad-args"* ]]
 }
 
-# The seam https://github.com/dbaggott/dnbg-plugins/issues/149 widens. It must
+# The seam https://github.com/dbaggott/dnbg-plugins-history/issues/149 widens. It must
 # refuse rather than silently answer as GitHub.
 @test "a forge with no backend is refused rather than assumed" {
   pr CLEAN '[]'

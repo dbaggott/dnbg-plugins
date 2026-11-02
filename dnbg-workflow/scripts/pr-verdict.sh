@@ -18,7 +18,7 @@
 #
 # ⚠️ `at_head` ALONE DOES NOT MEAN HEAD HAS BEEN REVIEWED. A force-push moves an
 # existing review's `commit_id` onto the rewritten commit — observed on
-# https://github.com/dbaggott/dnbg-plugins/pull/168, a review submitted 18:44:21Z
+# https://github.com/dbaggott/dnbg-plugins-history/pull/168, a review submitted 18:44:21Z
 # reporting a commit created 18:46:23Z. SHA and tree comparisons are both defeated
 # by that rewrite (the re-anchored review's tree IS head's tree), so this compares
 # the two things it cannot touch: `reviewed_after_head=1` means the standing

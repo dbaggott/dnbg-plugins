@@ -16,7 +16,7 @@
       },
       "homepage": "https://github.com/dbaggott/dnbg-plugins",
       "repository": "https://github.com/dbaggott/dnbg-plugins",
-      "license": "Apache-2.0",
+      "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
       "category": "development",
       "keywords": [
         "coding-standards",
@@ -35,7 +35,7 @@
       },
       "homepage": "https://github.com/dbaggott/dnbg-plugins",
       "repository": "https://github.com/dbaggott/dnbg-plugins",
-      "license": "Apache-2.0",
+      "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
       "category": "workflow",
       "keywords": [
         "git",
@@ -56,7 +56,7 @@
       },
       "homepage": "https://github.com/dbaggott/dnbg-plugins",
       "repository": "https://github.com/dbaggott/dnbg-plugins",
-      "license": "Apache-2.0",
+      "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
       "category": "productivity",
       "keywords": [
         "github",
@@ -75,7 +75,7 @@
       },
       "homepage": "https://github.com/dbaggott/dnbg-plugins",
       "repository": "https://github.com/dbaggott/dnbg-plugins",
-      "license": "Apache-2.0",
+      "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
       "category": "productivity",
       "keywords": [
         "notes",
@@ -93,7 +93,7 @@
       },
       "homepage": "https://github.com/dbaggott/dnbg-plugins",
       "repository": "https://github.com/dbaggott/dnbg-plugins",
-      "license": "Apache-2.0",
+      "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
       "category": "workflow",
       "keywords": [
         "github",

@@ -66,16 +66,14 @@ The maintainer applies an `area:*` label. If you know which subsystem it is,
 mention it — `gh label list --repo dbaggott/dnbg-plugins --search area` lists
 the current set.
 
-## Opening a PR
+## Pull requests
 
-The ordinary fork flow: fork, branch from `main`, one logical change, push, and
-open a PR against `dbaggott/dnbg-plugins:main`. Draft it if it is not
-finished. Do not merge your own PR.
+Pull requests from outside contributors aren't merged for now. The license can
+be loosened later only while the maintainer is its sole copyright holder, and
+there is no contributor agreement yet. To report a bug or propose a change, open
+an issue.
 
-**Sync your fork's `main` before branching** (`gh repo sync <you>/dnbg-plugins`).
-Nothing advances a fork's `main` for you, and the PR diffs against the merge-base
-either way — so a stale base looks clean while the change is written against code
-that has moved. With the fork covered, `git-workflow` branches from it too.
+The rest of this file describes how a change here is made.
 
 For the description, the only thing asked is that it be accurate: say what you
 verified and how, and mention what you could not check. Under-claiming costs
@@ -184,5 +182,6 @@ new content goes, and what a fork inherits from CI, and
 `dnbg-workflow/skills/` are the philosophy in full — they are the product, so
 this file points at them rather than summarizing them.
 
-By contributing you agree your contributions are licensed under
-[Apache-2.0](LICENSE), the same as the rest of the repo.
+The plugins are licensed as [LICENSE](LICENSE) says. Outside contributions
+aren't merged until a contributor agreement lets the maintainer relicense them,
+so that the license can be loosened later.

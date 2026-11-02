@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Restart eval (R26 of https://github.com/dbaggott/dnbg-plugins/issues/223):
+# Restart eval (R26 of https://github.com/dbaggott/dnbg-plugins-history/issues/223):
 # kill the orchestrator after a design decision reaches `decided` and before its
 # sweep, start a fresh one, and check that the fresh one finishes the sweep.
 #

@@ -58,7 +58,7 @@
 # comments to tell which is latest. `issue-query-shape` is a payload that did
 # not parse, or a null node such as an issue the token cannot see.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins/issues/149
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins-history/issues/149
 # replaces the constant below with host detection; the output above is not
 # GitHub-shaped.
 set -euo pipefail

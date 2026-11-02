@@ -47,7 +47,7 @@
 # was read or written. Without `--as` the script runs as the operator, as it
 # always has, and its output is unchanged.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins/issues/149
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins-history/issues/149
 # replaces the constant below with host detection; the output above is not
 # GitHub-shaped.
 set -euo pipefail

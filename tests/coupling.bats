@@ -1557,7 +1557,7 @@ MD
 }
 
 # A script that calls `gh` either carries the forge seam — the header marker naming
-# https://github.com/dbaggott/dnbg-plugins/issues/149 and the `FORGE` guard that
+# https://github.com/dbaggott/dnbg-plugins-history/issues/149 and the `FORGE` guard that
 # refuses with `unsupported-forge` — or is listed here as GitHub-shaped throughout, so a
 # new forge call is one or the other by decision rather than by omission.
 GITHUB_ONLY_SCRIPTS="fetch-tree.sh pr-round.sh pr-sources.sh pr-threads.sh pr-verdict.sh watch-pr.sh"
@@ -1573,7 +1573,7 @@ calls_forge() {  # <script>
 # shellcheck disable=SC2016  # the guard is matched as literal text
 has_forge_seam() {  # <script>
   grep -A1 'THE FORGE IS ASSUMED TO BE GITHUB' "$1" \
-      | grep -qF 'https://github.com/dbaggott/dnbg-plugins/issues/149' \
+      | grep -qF 'https://github.com/dbaggott/dnbg-plugins-history/issues/149' \
     && grep -qF 'FORGE="${FORGE:-github}"' "$1" \
     && grep -qE '\bfail unsupported-forge\b' "$1"
 }

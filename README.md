@@ -127,9 +127,7 @@ Across the whole flow, you are needed at these points:
 - approving the text of every follow-up issue the closeout files.
 
 You don't read or approve the children; the set review's verdict on each one is
-that gate. The project that built this flow ran under it, so its tracking issue,
-https://github.com/dbaggott/dnbg-plugins/issues/223, is a worked example of a
-design, its children, and its decision log.
+that gate. The project that built this flow ran under it.
 
 **Two sessions on one task -- one for interactive development, one reviewing
 the work.** Here the operator works something out conversationally and it goes
@@ -305,10 +303,10 @@ your machine.
 /plugin marketplace add dbaggott/dnbg-plugins
 ```
 
-An install added before the repo took this name still works, since GitHub
-redirects the old one, but re-add it under the new name:
-`/plugin marketplace remove dnbg`, then the add above, then install your
-plugins again, since removing a marketplace can uninstall what came from it.
+An install added before the plugins moved to this repo stops receiving
+updates. Re-add it: `/plugin marketplace remove dnbg`, then the add above, then
+install your plugins again, since removing a marketplace can uninstall what came
+from it.
 
 Then, as a separate command — the install can't run until the marketplace add
 completes, and pasting both at once only registers the first as a slash command:
@@ -424,4 +422,11 @@ has the detail, and an issue first is always cheaper than a declined PR.
 
 ## License
 
-[Apache-2.0](LICENSE).
+Available under either of two licenses, at your option ([LICENSE](LICENSE)):
+
+- **PolyForm Internal Use 1.0.0** covers a company's internal use of the
+  plugins, including while building products it sells, and allows changes for
+  that use.
+- **PolyForm Strict 1.0.0** covers personal and hobby use, without changes.
+
+Neither allows distributing the plugins, so neither allows selling them.

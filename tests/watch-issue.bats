@@ -6,7 +6,7 @@
 # Most of these came from watch-pr.bats, where the same behaviours were pinned
 # against a `--issue` mode that polled only for linked PRs. Watching an issue's
 # conversation is the capability that mode lacked
-# (https://github.com/dbaggott/dnbg-plugins/issues/163); the linked-PR cases
+# (https://github.com/dbaggott/dnbg-plugins-history/issues/163); the linked-PR cases
 # survive unchanged because that question did not move, only the script it lives
 # in did.
 
