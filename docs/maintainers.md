@@ -71,6 +71,10 @@ files rather than restating them, so a change to the conventions goes there.
 
 ## If you forked this
 
+The license allows changes only for your company's internal use and allows no
+distribution (see [`LICENSE`](../LICENSE)), so a fork stays private to that
+use.
+
 Nothing in the plugin itself assumes this repo's setup — which repos it enforces
 on is the `owners` config, and the skills read a repo's merge settings rather
 than assuming them. The **CI** is a different matter, since a fork inherits

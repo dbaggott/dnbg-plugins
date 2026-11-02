@@ -22,11 +22,13 @@ and the fork is covered like any other repo of yours.
 ## Scope
 
 This is an opinionated single-maintainer project. Knowing where the line sits
-should save you writing a PR that gets declined after the work is done.
+should save you proposing something that gets declined. Proposals come as
+issues, since outside pull requests aren't merged for now (see "Pull requests"
+below).
 
-**Welcome:** bug reports and fixes, tests for untested branches, portability
-findings (Windows/Git Bash is expected to work and has never been tested), and
-documentation corrections.
+**Welcome:** bug reports, proposed fixes, untested branches worth a test,
+portability findings (Windows/Git Bash is expected to work and has never been
+tested), and documentation corrections.
 
 **Likely declined:** softening a gate rather than reporting where it misfires,
 new always-on rules (that file is charged to every session of every user; a

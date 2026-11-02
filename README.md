@@ -127,7 +127,7 @@ Across the whole flow, you are needed at these points:
 - approving the text of every follow-up issue the closeout files.
 
 You don't read or approve the children; the set review's verdict on each one is
-that gate. The project that built this flow ran under it.
+that gate.
 
 **Two sessions on one task -- one for interactive development, one reviewing
 the work.** Here the operator works something out conversationally and it goes
@@ -401,12 +401,13 @@ the gates are workflow guardrails rather than a security boundary.
 
 This repo is maintained by [Dan Baggott](https://www.linkedin.com/in/dan-baggott/).
 
-Bug reports, portability findings, tests for untested branches, and
-documentation corrections are all welcome. So are new **knobs** that leave the
+Bug reports, portability findings, untested branches worth a test, and
+documentation corrections are all welcome, as issues: outside pull requests
+aren't merged for now. So are proposals for new **knobs** that leave the
 current behavior as the default. Swapping one default for another is not:
 worktree-then-draft-PR, never merging your own work, and fragments-drive-releases
 are the product rather than incidental choices. [`CONTRIBUTING.md`](CONTRIBUTING.md)
-has the detail, and an issue first is always cheaper than a declined PR.
+has the detail.
 
 ## Documentation
 
