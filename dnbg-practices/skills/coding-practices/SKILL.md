@@ -74,10 +74,11 @@ A correct feature with a security hole is a broken feature.
   # don't — "route" in a pipeline that also lays PCB copper reads as the routing stage
   # do    — "dispatch" (hand work to its owner)
   ```
-- **N4 Say allowlist and blocklist (allowed, blocked), not whitelist and
-  blacklist.** Existing deny wording (`denylist`) is fine as it is. Keep the
-  old word only where you match a name you don't own, such as an external
-  API's field or a tool's flag.
+- **N4 Say allowlist and blocklist or denylist, not whitelist and
+  blacklist.** Take the pair the surrounding system already uses; with none,
+  deny for access policy (a request refused) and block for filtering (content
+  or senders stopped). Keep the old word only where you match a name you don't
+  own, such as an external API's field or a tool's flag.
 
 ## Comments (C)
 
