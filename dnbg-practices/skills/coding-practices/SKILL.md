@@ -74,6 +74,10 @@ A correct feature with a security hole is a broken feature.
   # don't — "route" in a pipeline that also lays PCB copper reads as the routing stage
   # do    — "dispatch" (hand work to its owner)
   ```
+- **N4 Allow and block, not white and black**: `allowlist`, `blocklist`,
+  `allowed`, `blocked`. They name what the list does. Keep the old word only
+  where you are matching an identifier you don't own, such as an external
+  API's field or a tool's flag.
 
 ## Comments (C)
 
