@@ -10,6 +10,14 @@ tagged, and their versions used a two-component scheme that predates the current
 
 <!-- releases below -->
 
+## dnbg-practices 2026.11.2 — 2026-11-06
+
+`coding-practices` gains naming rule N4: say allowlist and blocklist or
+denylist rather than whitelist and blacklist, following the pair the
+surrounding system already uses. The old words stay only where they match a
+name you don't own, such as an external API's field or a tool's flag.
+
+
 ## dnbg-practices 2026.11.1 — 2026-11-02
 
 The plugins have moved to `dbaggott/dnbg-plugins`, under a new license: PolyForm
