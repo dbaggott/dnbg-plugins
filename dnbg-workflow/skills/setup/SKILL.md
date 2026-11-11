@@ -95,7 +95,9 @@ below the list:
   reviews and issue claims carry a hidden comment naming the plugin version.
   Set in the same place.
 - **Bots for the roles in `fallback=`** on the `check=roles` line, when it
-  names any: `reviewer-setup` creates their Apps.
+  names any, recommended: "`<role>` and `<role>` post as you. Say *create the
+  `<role>` and `<role>` bots* to give them their own identities." Asked for
+  them, read `references/roles.md` and ask its questions for those roles.
 - **Auto-update**: `/plugin`, then **Marketplaces**, **dnbg**, **Enable
   auto-update**.
 - **`summary_dir`**, when `installed=` on the `check=plugins` line names

@@ -86,8 +86,7 @@ Confirm with the operator which roles to create before running it, unless the
 skill that sent you here already has their go-ahead. Describe a role's App in
 one line, as a GitHub App under their account that gives the role's activity
 its own identity, separate from theirs. When you ask with a picker, label the
-go-ahead option "Create", or "Create (Recommended)" for a role that refuses to
-fall back, and nothing more. The Apps are publicly listed
+go-ahead option "Create (Recommended)" and nothing more. The Apps are publicly listed
 ("Ownership model" above); say so when asked.
 
 For each role it opens your browser to a local page that immediately forwards to
