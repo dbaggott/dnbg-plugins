@@ -108,6 +108,8 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
          box-sizing: border-box; background: Canvas; color: CanvasText; }}
   main {{ max-width: 34rem; }}
   h1 {{ font-size: 1.5rem; margin: 0 0 .5rem; }}
+  ul {{ padding-left: 1.25rem; }}
+  li {{ margin: .25rem 0; }}
   code {{ font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }}
   .go {{ display: inline-block; font: inherit; font-weight: 600; cursor: pointer;
         padding: .6rem 1.1rem; border: 0; border-radius: 6px; text-decoration: none;
@@ -282,7 +284,12 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
                 install_url = f"https://github.com/apps/{app.get('slug', '')}/installations/new"
                 self._html(200, f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
 <p><code>{html.escape(app.get('slug', ''))}</code></p>
-<p>One step left: install it on the accounts and repos it should work in.</p>
+<p>One step left: install it. GitHub will ask which repos:</p>
+<ul>
+<li><b>All repositories</b> (recommended): least upkeep; new repos are covered automatically.</li>
+<li><b>Only select repositories</b>: limits what the bot can touch; you add new repos later.</li>
+</ul>
+<p class="note">You can change this at any time on GitHub, under Settings, then Applications.</p>
 <p><a class="go" href="{html.escape(install_url, quote=True)}">Install on GitHub</a></p>
 <p class="note">When it is installed, close the tab and return to Claude Code.</p>""")
                 done.set()

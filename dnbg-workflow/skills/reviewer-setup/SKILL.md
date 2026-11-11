@@ -128,8 +128,8 @@ why an App needs installing:
 
 > The `<role>` bot is created: `<slug>`.
 >
-> One step left: click **Install on GitHub** in the browser tab and pick the
-> repos you want to use it with. It can write to every repo you give it.
+> One step left: click **Install on GitHub** in the browser tab. The page says
+> how to choose the repos.
 >
 > Tell me when it's installed.
 
