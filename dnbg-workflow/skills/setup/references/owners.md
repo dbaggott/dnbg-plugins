@@ -36,9 +36,11 @@ label is its bare name and its description the empty string, which the picker
 accepts and shows as the name alone. With more than one question, each ends "(1 of 3)", "(2 of 3)" and so on. The picker's
 own "Other" takes an account that is not listed.
 
-The answer is every account ticked on any page. None ticked, or nothing ticked
-anywhere, is none. If the call fails or comes back without an answer for a
-page, ask again in the typed form.
+The answer is every account ticked on any page; a page that comes back with
+no answer had nothing ticked. When the whole call comes back unanswered, which
+is how the picker reports both a submit with nothing ticked and a dismissal,
+ask in one line, "Nothing was ticked. No accounts, then?", and take a yes as
+none.
 
 ### More than 8 accounts: ask how to choose
 
