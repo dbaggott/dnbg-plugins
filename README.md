@@ -124,8 +124,8 @@ Hooks, all in `dnbg-workflow`:
 | `inject-rules.sh` | puts the always-on rules in context at session start |
 | `inject-rules-subagent.sh` | does the same for every subagent |
 | `role-fallback-notice.sh` | names any role that will post as you |
-| `check-worktree.sh` | blocks edits to tracked files in a covered repo’s main checkout |
-| `check-issue-create.sh` | blocks `gh issue create` in a covered repo until `issue-workflow` is loaded |
+| `check-worktree.sh` | blocks edits to tracked files in a configured repo’s main checkout |
+| `check-issue-create.sh` | blocks `gh issue create` in a configured repo until `issue-workflow` is loaded |
 
 The hooks make no network calls, write no files and hold no credentials. They fail open: if a tool they need is missing, they stop protecting rather than stop you.
 
