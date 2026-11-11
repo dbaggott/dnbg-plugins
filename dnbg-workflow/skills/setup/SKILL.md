@@ -31,7 +31,9 @@ to step 3.
 Otherwise, at `setup=complete`, ask nothing and go to step 3.
 
 Otherwise take the checks `open` names, in the order it lists them, one at a
-time: say nothing about a later check until the one before it is done. Each has
+time. Go from one check's question straight to the next: no message in between
+confirming what was just done or introducing what comes next, since step 3's
+summary carries all of it. Each has
 one reference. Read a reference only when its check is in `open`:
 
 | In `open` | Read |
@@ -55,11 +57,11 @@ does not apply:
 
 > **dnbg-workflow setup**
 >
-> - **Repos:** every repo under `<account>` and `<account>`. *(or: none.)*
+> - **Accounts:** `<account>` and `<account>`. *(or: none.)*
 > - **Reviewer bot:** set up. *(or: not set up, so no review can run.)*
 > - **Other roles:** `<role>` and `<role>` post as your own account. *(the roles
 >   in `fallback=`; or: each has its own bot.)*
-> - **Restart Claude Code** for the repos to take effect. *(only when `owners`
+> - **Restart Claude Code** for the accounts to take effect. *(only when `owners`
 >   was saved during this run and something is still open; otherwise the
 >   welcome says it)*
 > - **Still open:** `<what is left, in plain words>`. *(or: nothing. Setup is
@@ -68,7 +70,7 @@ does not apply:
 > Run `/dnbg-workflow:setup` at any time to pick up what is left or change an
 > answer.
 
-**Repos** is the list saved during this run, else `value=` on the `check=owners`
+**Accounts** is the list saved during this run, else `value=` on the `check=owners`
 line. **Still open** names each check left in `open`, with a missing tool by
 name.
 

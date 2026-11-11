@@ -77,37 +77,23 @@ edits to tracked files in the main checkout, and `gh issue create` before
 
 ## 3. Save
 
-**An answer of none**, with `owners` empty: save nothing, and say:
+Say nothing after a save: the closing summary in `SKILL.md` step 3 names what
+was recorded and how to change it.
 
-> Nothing saved. dnbg-workflow won't apply to any repo, so nothing enforces its
-> flow.
->
-> To pick accounts later, run `/dnbg-workflow:setup owners`.
-
-Step 3 of `SKILL.md` then covers the session-start message. An answer of none
+**An answer of none**, with `owners` empty, saves nothing. An answer of none
 that replaces a list is saved as below, with an empty value.
 
 **Any other answer**: the value is the accounts as one comma-separated line.
 When `self=` on the `check=plugins` line names an id, save it without asking
-again, since the message after it says what was saved and how to change it:
+again:
 
 ```bash
 jq -n --arg owners '<value>' '{owners: $owners}' \
   | claude plugin configure <id> --values-stdin
 ```
 
-Then say:
-
-> Saved. dnbg-workflow applies to every repo under `<account>` and `<account>`,
-> starting the next time you start Claude Code.
->
-> To add or remove an account later, run `/dnbg-workflow:setup owners`, or edit
-> the list yourself with `/plugin configure dnbg-workflow`.
-
 At `self=none`, or when that command fails, as it does on a client too old to
 have it, the user sets it. Say:
 
 > Set it yourself with `/plugin configure dnbg-workflow`: paste `<value>` into
 > **owners**. Tell me when it's done.
->
-> To add or remove an account later, change that same field.

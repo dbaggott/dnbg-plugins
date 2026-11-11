@@ -82,11 +82,12 @@ python3 "<skill-dir>/bootstrap.py" --roles reviewer
 python3 "<skill-dir>/bootstrap.py" --roles reviewer --owner-type org --org <org-login>
 ```
 
-Confirm with the operator which roles to create before running it. Since the
-default creates **public** Apps, say in one line beforehand that they are
-publicly listed and that this exposes nothing of the operator's. When you ask
-with a picker, label the go-ahead option "Create" and nothing more: ownership
-and visibility go in that line or the option's description, never in its label.
+Confirm with the operator which roles to create before running it, unless the
+skill that sent you here already has their go-ahead. Describe a role's App in
+one line, as a GitHub App under their account that gives the role's activity
+its own identity, separate from theirs. When you ask with a picker, label the
+go-ahead option "Create" and nothing more. The Apps are publicly listed
+("Ownership model" above); say so when asked.
 
 For each role it opens your browser to a local page that immediately forwards to
 GitHub. The **one step it can't automate** is the click GitHub requires to create
