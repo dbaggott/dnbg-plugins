@@ -25,16 +25,17 @@ takes a header, it is "Accounts". How it is
 asked depends on how many accounts step 1 found. Without `AskUserQuestion`, ask
 it as the typed form whatever the count.
 
-**The None option**, wherever it appears, is labelled "None" and described "No
-accounts."
-
 ### Up to 8 accounts: checkboxes
 
-One `AskUserQuestion` call, every question `multiSelect: true`, four options to
-a question, with "None" as the last option of the last question. Each account's
-label is its bare name and its description the empty string, which the picker
-accepts and shows as the name alone. With more than one question, each ends "(1 of 3)", "(2 of 3)" and so on. The picker's
-own "Other" takes an account that is not listed.
+One `AskUserQuestion` call, every question `multiSelect: true`, four accounts
+to a question. Each option's label is the account's bare name and its
+description the empty string, which the picker accepts and shows as the name
+alone. There is no None option: ticking nothing is none. A question needs two
+options, so move an account over from the page before rather than leave one
+alone on the last page, and with a single account in all, add a second option
+labelled "None" and described "No accounts." With more than one question, each
+ends "(1 of 3)", "(2 of 3)" and so on. The picker's own "Other" takes an
+account that is not listed.
 
 The answer is every account ticked on any page; a page that comes back with
 no answer had nothing ticked. When the whole call comes back unanswered, which
@@ -51,7 +52,7 @@ want to pick the ones dnbg-workflow applies to?":
 2. **"Name the ones to leave out"**: "Everything on the list except the ones you
    type."
 3. **"Checkboxes"**: "Tick them off, four to a page."
-4. **"None"**, described as above.
+4. **"None"**: "No accounts."
 
 On the first: "Your accounts: `<account>`, `<account>`, … Which ones do you want
 to include?" On the second, the same list and "Which ones do you want to leave
