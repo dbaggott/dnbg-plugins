@@ -32,9 +32,8 @@ accounts."
 
 One `AskUserQuestion` call, every question `multiSelect: true`, four options to
 a question, with "None" as the last option of the last question. Each account's
-label is its bare name and its description empty; if the call refuses an empty
-description, use "GitHub account". With
-more than one question, each ends "(1 of 3)", "(2 of 3)" and so on. The picker's
+label is its bare name and its description the empty string, which the picker
+accepts and shows as the name alone. With more than one question, each ends "(1 of 3)", "(2 of 3)" and so on. The picker's
 own "Other" takes an account that is not listed.
 
 The answer is every account ticked on any page. None ticked, or nothing ticked
