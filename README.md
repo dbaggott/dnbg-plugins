@@ -16,7 +16,11 @@ Honed over its first 7 months of real use across 35 repos, ~2k PRs, ~1k issues, 
 /plugin install dnbg-all@dnbg
 ```
 
-Then see [Setup](#setup).
+```
+/dnbg-workflow:setup
+```
+
+The last one guides you through the rest. Nothing is enforced until you choose which repos it applies to.
 
 ## Opinions
 
@@ -75,27 +79,20 @@ Nothing reviews a PR until a reviewer is started: in a second session as above, 
 
 Runs on macOS or Linux, with GitHub as the forge ([details](docs/forge-support.md)).
 
-**Install.** Run these one at a time in Claude Code:
+`/dnbg-workflow:setup` checks what’s still needed and walks you through only that:
 
-```
-/plugin marketplace add dbaggott/dnbg-plugins
-```
+- **Your repos.** Which GitHub orgs or logins should use the workflow. None do, until you say.
+- **The reviewer bot.** A GitHub App you create in the browser and install on the repos you choose. Its key stays on your machine.
 
-```
-/plugin install dnbg-all@dnbg
-```
+It finishes by naming the optional extras, such as retrospectives and auto-update. Stop whenever you like, and run it again at any time to see what’s left or to change an answer.
 
-`dnbg-all` installs all four plugins. To take less, install any of `dnbg-workflow@dnbg`, `dnbg-practices@dnbg`, `dnbg-work-summary@dnbg` or `dnbg-agent-summaries@dnbg`; none requires another. The install asks for a scope: choose `user` for one person across many repos, or `project` for one repo shared with a team ([details](docs/configuration.md#install-scope)).
+**Taking only part of it.** `dnbg-all` installs all four plugins. To take less, install any of `dnbg-workflow@dnbg`, `dnbg-practices@dnbg`, `dnbg-work-summary@dnbg` or `dnbg-agent-summaries@dnbg`; none requires another. Only `dnbg-workflow` has a setup step.
 
-Installed before the plugins moved to this repo? Run `/plugin marketplace remove dnbg`, then both commands above.
+**Install scope.** The install asks for one: `user` for one person across many repos, or `project` for one repo shared with a team ([details](docs/configuration.md#install-scope)).
 
-**Configure your repos.** Set `owners` to the GitHub orgs or logins whose repos should use the workflow: run `/plugin configure dnbg-workflow`. In those repos, editing a tracked file in the main checkout is blocked, and so is `gh issue create` until the issue skill is loaded. Until you set `owners`, nothing is enforced and the workflow is only advice.
+**Installed before the plugins moved to this repo?** Run `/plugin marketplace remove dnbg`, then the three commands again.
 
-**Give the agents their identities.** Ask Claude Code to *set up the reviewer bot*. It creates a GitHub App per role on your account: you click **Create GitHub App** in the browser for each, then install it on the accounts and repos it should work in. The keys stay on your machine. The reviewer App is required for reviews. The author and orchestrator Apps are optional and fall back to your account.
-
-**Keep it current.** Enable auto-update (`/plugin`, then **Marketplaces**, **dnbg**, **Enable auto-update**), or run `/plugin marketplace update dnbg`. See [releases](docs/releases.md).
-
-**Everything else is optional.** Only `owners` turns on enforcement. Turn on `retrospectives` the same way to have every role record its friction. [`docs/configuration.md`](docs/configuration.md) covers every setting and why its default is what it is.
+[`docs/configuration.md`](docs/configuration.md) covers every setting and why its default is what it is.
 
 ## What's in it
 
@@ -106,6 +103,7 @@ Installed before the plugins moved to this repo? Run `/plugin marketplace remove
 | `issue-reviewer` | `dnbg-workflow` | GitHub only | Reviewing an issue body as a spec, in rounds, before anyone picks it up |
 | `reviewer` | `dnbg-workflow` | GitHub only | Reviewing a pushed PR under an independent GitHub App identity |
 | `reviewer-setup` | `dnbg-workflow` | GitHub only | One-time creation of each role’s App |
+| `setup` | `dnbg-workflow` | GitHub only | Checking what an install still needs and walking you through only that |
 | `orchestrate` | `dnbg-workflow` | GitHub only | Driving an issue, a tracking issue’s children, or several issues to merged PRs with author and reviewer subagents |
 | `project-status` | `dnbg-workflow` | GitHub only | Which stage of the flow an issue is at, and the prompt to paste next |
 | `findings-review` | `dnbg-workflow` | GitHub only | Sweeping what agents found about the code, and filing, dropping or keeping each with you |
@@ -124,6 +122,7 @@ Hooks, all in `dnbg-workflow`:
 | `inject-rules.sh` | puts the always-on rules in context at session start |
 | `inject-rules-subagent.sh` | does the same for every subagent |
 | `role-fallback-notice.sh` | names any role that will post as you |
+| `setup-nudge.sh` | tells you, until you answer it, that setup is not finished |
 | `check-worktree.sh` | blocks edits to tracked files in a configured repo’s main checkout |
 | `check-issue-create.sh` | blocks `gh issue create` in a configured repo until `issue-workflow` is loaded |
 
