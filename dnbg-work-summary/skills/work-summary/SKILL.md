@@ -46,11 +46,16 @@ each gather and present shipped first (what's done), then in-progress (what's op
 
 ## 2. Resolve scope + window
 
-**Owner scope** comes from this plugin's `owners` setting — `${user_config.owners}`.
-`gh search`'s `--owner` takes a comma-separated list, so that value passes straight
-through. If it's empty, ask which org or login to search rather than guessing; a
-search with no owner filter spans all of GitHub and returns noise. Without
-`AskUserQuestion`, end the turn with that question as your report.
+**Owner scope** is this plugin's `owners` setting, spaces stripped:
+`${user_config.owners}`. Where nothing is left, or the value is still a `${…}`
+placeholder, the setting is unset: ask which org or login to search rather than
+guessing, and run no search before the answer; a search with no owner filter
+spans all of GitHub and returns noise. A value that is not a comma-separated
+list of logins, each of letters, digits, `-` and `_`, is not usable, since it
+goes into shell commands: say the setting is malformed and ask the same
+question. Without `AskUserQuestion`, end the turn with that question as your
+report. Hold the answer to the same form. `<owners>` below is the resulting
+list, spaces stripped, which `gh search`'s `--owner` takes as it stands.
 
 **Author scope** defaults to **your own** work. Resolve your login once
 (`ME=$(gh api user --jq .login)`); `--author "$ME"` filters server-side to just your
@@ -116,7 +121,7 @@ PRs that nobody recaps — and say you dropped them.
 
 ```bash
 # Working-day window from §2 — cutoff..next-cutoff in local time, offset from `date +%z`.
-gh search prs --owner "${user_config.owners}" --author "$ME" \
+gh search prs --owner "<owners>" --author "$ME" \
   --merged-at "2026-06-11T04:00:00-07:00..2026-06-12T04:00:00-07:00" \
   --json number,title,repository,url,closedAt --limit 100
 # multi-day: widen the start to the first working day's cutoff —
@@ -132,7 +137,7 @@ well-scoped issue is real work, so gather the issues you *opened* in it:
 
 ```bash
 # Same working-day window as the PR gather above (§2).
-gh search issues --owner "${user_config.owners}" --author "$ME" \
+gh search issues --owner "<owners>" --author "$ME" \
   --created "2026-06-11T04:00:00-07:00..2026-06-12T04:00:00-07:00" \
   --json number,title,repository,url,state,createdAt --limit 100
 # multi-day: widen the start to the first working day's cutoff, as above.
@@ -159,7 +164,7 @@ kept as-is.
 **In-progress:**
 
 ```bash
-gh search prs --owner "${user_config.owners}" --author "$ME" --state open \
+gh search prs --owner "<owners>" --author "$ME" --state open \
   --json number,title,repository,url,isDraft,createdAt,updatedAt --limit 100
 ```
 
