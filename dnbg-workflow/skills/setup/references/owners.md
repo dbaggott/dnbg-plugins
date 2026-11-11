@@ -19,8 +19,9 @@ stands, from its `value=`: "dnbg-workflow currently applies to: `<account>`,
 
 ## 2. Ask
 
-The question is **"Which GitHub accounts do you want to use dnbg-workflow
-on?"**, and where a picker takes a header, it is "Accounts". How it is
+The question is **"Which GitHub accounts do you want to use dnbg-workflow on?
+(Repos are chosen later.)"**, with nothing said before it, and where a picker
+takes a header, it is "Accounts". How it is
 asked depends on how many accounts step 1 found. Without `AskUserQuestion`, ask
 it as the typed form whatever the count.
 
@@ -34,9 +35,6 @@ a question, with "None" as the last option of the last question. Each account's
 label is its bare name and its description "Every repo under `<name>`". With
 more than one question, each ends "(1 of 3)", "(2 of 3)" and so on. The picker's
 own "Other" takes an account that is not listed.
-
-Before the call, say in one line: "You'll pick which repos the reviewer bot can
-access in a later step."
 
 The answer is every account ticked on any page. None ticked, or nothing ticked
 anywhere, is none. If the call fails or comes back without an answer for a
@@ -61,9 +59,9 @@ in as many calls as the accounts need at four questions a call.
 
 ### The typed form
 
-> Which GitHub accounts do you want to use dnbg-workflow on? Yours are
-> `<account>`, `<account>`, `<account>`. Name any of them, another account, or
-> none. You'll pick which repos the reviewer bot can access in a later step.
+> Which GitHub accounts do you want to use dnbg-workflow on? (Repos are chosen
+> later.) Yours are `<account>`, `<account>`, `<account>`. Name any of them,
+> another account, or none.
 
 ### Reading the answer
 
