@@ -57,20 +57,21 @@ does not apply:
 
 > **dnbg-workflow setup**
 >
-> - **Accounts:** `<account>` and `<account>`. *(or: none.)*
-> - **Reviewer bot:** set up. *(or: not set up, so no review can run.)*
-> - **Author bot:** set up. *(or: not set up; its work posts as you.)*
-> - **Orchestrator bot:** set up. *(or: not set up; its work posts as you.)*
+> - ✅ **Accounts:** `<account>` and `<account>`. *(or: ❌ none.)*
+> - ✅ **Reviewer bot:** set up. *(or: ❌ not set up, so no review can run.)*
+> - ✅ **Author bot:** set up. *(or: ❌ not set up; its work posts as you.)*
+> - ✅ **Orchestrator bot:** set up. *(or: ❌ not set up; its work posts as you.)*
 > - **Restart Claude Code** for the accounts to take effect. *(only when `owners`
 >   was saved during this run and something is still open; otherwise the
 >   welcome says it)*
-> - **Still open:** `<what is left, in plain words>`. *(or: nothing. Setup is
->   complete.)*
+> - ❌ **Still open:** `<what is left, in plain words>`. *(or: ✅ **Setup is
+>   complete.**)*
 >
 > Run `/dnbg-workflow:setup` at any time to pick up what is left or change an
 > answer.
 
-There is a bot line for every role on the `check=roles` line: set up when it
+Each line opens with ✅ when it is done and ❌ when it is not, the mark taking
+the bracketed wording with it. There is a bot line for every role on the `check=roles` line: set up when it
 is in `configured=`, and otherwise as its bracket says. **Accounts** is the list
 saved during this run, else `value=` on the `check=owners`
 line. **Still open** names each check left in `open`, with a missing tool by
