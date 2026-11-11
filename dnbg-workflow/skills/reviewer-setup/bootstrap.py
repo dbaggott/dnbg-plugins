@@ -113,6 +113,9 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
         padding: .6rem 1.1rem; border: 0; border-radius: 6px; text-decoration: none;
         background: #1f883d; color: #fff; }}
   .note {{ font-size: .875rem; opacity: .7; }}
+  /* The fallback for a redirect that did not happen: hidden while it should. */
+  .late {{ visibility: hidden; animation: late 0s 3s forwards; }}
+  @keyframes late {{ to {{ visibility: visible; }} }}
 </style></head><body><main>
 {body}
 </main></body></html>"""
@@ -231,10 +234,11 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
                 self._html(200, f"""<form id="f" action="{html.escape(create_url, quote=True)}" method="post">
   <input type="hidden" name="manifest" value="{manifest_attr}">
 </form>
-<h1>Taking you to GitHub&hellip;</h1>
-<p>to create the {html.escape(role)} bot, <code>{html.escape(name)}</code>.</p>
-<p><button class="go" form="f" type="submit">Create GitHub App</button></p>
-<p class="note">If nothing happens, click the button.</p>
+<p>Taking you to GitHub to create the {html.escape(role)} bot&hellip;</p>
+<div class="late">
+<p class="note">Still here? Continue by hand:</p>
+<p><button class="go" form="f" type="submit">Continue to GitHub</button></p>
+</div>
 <script>document.getElementById('f').submit();</script>""")
             elif parsed.path == "/callback":
                 qs = parse_qs(parsed.query)
