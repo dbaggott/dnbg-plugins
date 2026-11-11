@@ -109,8 +109,7 @@ this run:
 
 > **Welcome to dnbg-workflow.** You're ready to go.
 >
-> Try it: open a session in one of your repos and ask for a change, such as
-> *add a `--json` flag to the export script*. You'll get a worktree, a draft PR
-> and an offer to send it to review.
+> Try it: open a session in one of your repos and ask for a change. You'll get
+> a worktree, a draft PR and an offer to send it to review.
 >
 > For something bigger: *I want to `<the work>`. File an issue for it.*
