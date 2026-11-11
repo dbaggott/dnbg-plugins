@@ -24,7 +24,7 @@ Then see [Setup](#setup).
 
 **Human attention is the scarce resource.** Agents don’t tire. Humans do. Agents surface decisions faster than a person can make them well, and tired decisions are bad ones. Humans decide approach, what counts as done, and which deviations are acceptable. Findings and decisions are parked durably, so you can close an agent and triage later with fresh eyes. Nothing forces a decision before you’re ready.
 
-**Quality is built in, not inspected in.** Review starts upstream, with the design and the issue specs, where human attention matters most. Agents review every PR. Humans make every merge, and they review the review when something warrants it. The reviewer posts under its own GitHub identity, never yours, and the author and orchestrator can too. Hooks enforce the flow rather than suggest it.
+**Quality is built in, not inspected in.** Review starts upstream, with the design and the issue specs, where human attention matters most. Agents review every PR. Humans make every merge, and they review the review when something warrants it. Roles are separate, so no agent reviews its own work. Every role can post to GitHub under its own identity. Hooks enforce the flow rather than suggest it.
 
 **Tokens are a first-class concern.** Context grows fast and is expensive. Work is scoped tightly, and agents load only what the task needs. Nothing polls from inside an agent. The system calls for restarts before context gets costly. Usage is measured, so optimization is empirical.
 
@@ -36,33 +36,25 @@ Then see [Setup](#setup).
 
 ## The flow
 
+Each stage runs in a fresh session, started from a prompt and a URL. Nothing carries over in a session’s memory: the next one reads what it needs from GitHub, so context stays small and any session can be closed or replaced.
+
 | Stage | What happens | Prompt |
 | --- | --- | --- |
-| Design | A tracking issue records goals, constraints, decisions with their rationale and reversal conditions, and open questions with defaults. The session that files it hands it to the reviewer bot and answers each round. | `file this as a tracking issue` |
+| Design | You describe the work. If it’s more than one issue’s worth, the session offers to file it as a tracking issue: goals, constraints, decisions with their rationale and reversal conditions, and open questions with defaults. The reviewer bot reviews it in rounds. | `I want to <the work>. File an issue for it.` |
 | Accept | Once the review reads `READY`, the same session asks whether you accept the design. | answer its question |
 | Decompose | The design is split into sub-issues with dependencies tracked in GitHub. The set is reviewed against the design for gaps and drift. | `decompose <URL>` |
 | Execute | An orchestrator works the issues in dependency order, a few at a time, dispatching an author for each and a reviewer once its PR is sent to review. The reviewer re-reviews every push until the PR merges. | `orchestrate <URL>` |
 | Close out | The orchestrator opens a closeout PR that writes the as-built design into the repo. You settle each finding the project left behind, the reviewer grades the whole project against the design’s acceptance criteria, and merging it closes the tracking issue. | merge the closeout PR |
 
-Each prompt goes in a fresh session, which reads everything it needs from GitHub. Every stage ends by naming the next prompt. `where is <URL>` tells you where you are.
+Every stage ends by naming the next prompt. `where is <URL>` tells you where you are. A long-running orchestrator asks you to start a fresh one when its context has grown.
 
-Each review asks whether to spawn the reviewer or run it in a session of your own, which you start with `review <URL> as a spec`. If the session that wrote an issue is gone, `answer the spec review on <URL>` starts another to answer the reviewer.
+You’re called in where a human is worth the most: approving the design, answering what the design doesn’t settle, deciding what becomes of each finding, and merging. Everything else waits for you or runs without you.
 
-You’re needed to:
-
-- decide whether an idea is a project, when the filing session asks;
-- sign off the design;
-- answer the orchestrator’s escalations;
-- look at the work before review, on an issue that asks for it;
-- merge each PR;
-- start a fresh orchestrator when it says its context has grown too large;
-- approve what becomes of each finding at the close-out.
-
-Everything else waits for you or runs without you.
+The design and issue reviews run without you too: the session that wrote the issue starts a reviewer in the background and answers its rounds. To talk to the reviewer yourself, choose to run it in a session of your own, with `review <URL> as a spec`.
 
 ## Use cases
 
-In a repo you’ve [turned the gates on](#setup) for:
+In the repos you’ve [configured](#setup):
 
 | Say | What happens |
 | --- | --- |
@@ -81,7 +73,7 @@ Nothing reviews a PR until a reviewer is started: in a second session as above, 
 
 ## Setup
 
-Runs on macOS or Linux, with GitHub as the forge ([details](docs/forge-support.md)). Needs a recent Claude Code and a few command-line tools ([requirements](docs/requirements.md)).
+Runs on macOS or Linux, with GitHub as the forge ([details](docs/forge-support.md)).
 
 **Install.** Run these one at a time in Claude Code:
 
@@ -97,7 +89,7 @@ Runs on macOS or Linux, with GitHub as the forge ([details](docs/forge-support.m
 
 Installed before the plugins moved to this repo? Run `/plugin marketplace remove dnbg`, then both commands above.
 
-**Turn the gates on.** Set `owners` to the GitHub orgs or logins you want enforced: run `/plugin configure dnbg-workflow`. A repo whose `origin` belongs to one of them is covered. There, editing a tracked file in the main checkout is blocked, and so is `gh issue create` until the issue skill is loaded. Until you set `owners`, nothing is enforced and the workflow is only advice.
+**Configure your repos.** Set `owners` to the GitHub orgs or logins whose repos should use the workflow: run `/plugin configure dnbg-workflow`. In those repos, editing a tracked file in the main checkout is blocked, and so is `gh issue create` until the issue skill is loaded. Until you set `owners`, nothing is enforced and the workflow is only advice.
 
 **Give the agents their identities.** Ask Claude Code to *set up the reviewer bot*. It creates a GitHub App per role on your account: you click **Create GitHub App** in the browser for each, then install it on the accounts and repos it should work in. The keys stay on your machine. The reviewer App is required for reviews. The author and orchestrator Apps are optional and fall back to your account.
 
