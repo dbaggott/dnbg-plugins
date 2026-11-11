@@ -24,7 +24,7 @@ asked depends on how many accounts step 1 found. Without `AskUserQuestion`, ask
 it as the typed form whatever the count.
 
 **The None option**, wherever it appears, is labelled "None" and described "No
-repos. I only want the skills when I ask for them."
+repos."
 
 ### Up to 8 accounts: checkboxes
 
@@ -74,8 +74,8 @@ edits to tracked files in the main checkout, and `gh issue create` before
 
 **An answer of none**, with `owners` empty: save nothing, and say:
 
-> Nothing saved. dnbg-workflow won't apply to any repo automatically; the skills
-> still work when you ask for them.
+> Nothing saved. dnbg-workflow won't apply to any repo, so nothing enforces its
+> flow.
 >
 > To pick repos later, run `/dnbg-workflow:setup owners`.
 
