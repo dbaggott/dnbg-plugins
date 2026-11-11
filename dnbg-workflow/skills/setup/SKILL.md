@@ -59,8 +59,8 @@ does not apply:
 >
 > - **Accounts:** `<account>` and `<account>`. *(or: none.)*
 > - **Reviewer bot:** set up. *(or: not set up, so no review can run.)*
-> - **Other roles:** `<role>` and `<role>` post as your own account. *(the roles
->   in `fallback=`; or: each has its own bot.)*
+> - **Author bot:** set up. *(or: not set up; its work posts as you.)*
+> - **Orchestrator bot:** set up. *(or: not set up; its work posts as you.)*
 > - **Restart Claude Code** for the accounts to take effect. *(only when `owners`
 >   was saved during this run and something is still open; otherwise the
 >   welcome says it)*
@@ -70,7 +70,9 @@ does not apply:
 > Run `/dnbg-workflow:setup` at any time to pick up what is left or change an
 > answer.
 
-**Accounts** is the list saved during this run, else `value=` on the `check=owners`
+There is a bot line for every role on the `check=roles` line: set up when it
+is in `configured=`, and otherwise as its bracket says. **Accounts** is the list
+saved during this run, else `value=` on the `check=owners`
 line. **Still open** names each check left in `open`, with a missing tool by
 name.
 
