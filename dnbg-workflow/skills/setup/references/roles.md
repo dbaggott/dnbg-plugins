@@ -13,22 +13,40 @@ none either and posts as the user until it does.
 ### The questions
 
 Say nothing before the question. Ask about every role in `unconfigured=` and
-then every role in `fallback=`, in one `AskUserQuestion` call with a question
-for each, or one line each without it. Every question has the same two options,
-with the role's own words:
+then every role in `fallback=`, with `AskUserQuestion`, or in one line without
+it. Each role's words:
 
+| Role | What its bot gives | Without it |
+| --- | --- | --- |
+| `reviewer` | "reviews their own identity" | "No review can run without it." |
+| `author` | "your PRs and issues their own identity" | "Without it they post as you." |
+| `orchestrator` | "an orchestrator's issue comments their own identity" | "Without it they post as you." |
+
+**Two or more roles: one question with a checkbox each**, `multiSelect: true`:
+
+- Question: "Create the bots? Each is a GitHub App under your account,
+  separate from yours. A few quick clicks in the browser: create and install
+  each."
+- An option per role, labelled "`<Role>` bot (Recommended)" and described
+  "Gives `<what its bot gives>`. `<Without it>`", as in "Reviewer bot
+  (Recommended)", "Gives reviews their own identity. No review can run without
+  it."
+
+The roles ticked are the ones to create. When the call comes back unanswered,
+which is how the picker reports both a submit with nothing ticked and a
+dismissal, ask in one line, "Nothing was ticked. No bots, then?"
+
+**One role: a single-select question**:
+
+- Question: "Create the `<role>` bot? It's a GitHub App under your account
+  that gives `<what its bot gives>`, separate from yours. `<Without it>`"
 - **"Create (Recommended)"**, first: "A few quick clicks in the browser: create
   and install it."
-- **"Not now"**: the role's line below.
+- **"Not now"**: "Reviews stay off until it exists." for the reviewer, and for
+  another role "Its work keeps posting as you."
 
-| Role | Question | "Not now" |
-| --- | --- | --- |
-| `reviewer` | "Create the reviewer bot? It's a GitHub App under your account that gives reviews their own identity, separate from yours. No review can run without it." | "Reviews stay off until it exists." |
-| `author` | "Create the author bot? It's a GitHub App under your account that gives your PRs and issues their own identity, separate from yours. Without it they post as you." | "PRs and issues keep posting as you." |
-| `orchestrator` | "Create the orchestrator bot? It's a GitHub App under your account that gives an orchestrator's issue comments their own identity, separate from yours. Without it they post as you." | "Its comments keep posting as you." |
-
-Load the `reviewer-setup` skill and follow it for the roles answered Create,
-all in one run, without its own confirmation, which these questions were. It
+Load the `reviewer-setup` skill and follow it for the roles chosen, all in one
+run, without its own confirmation, which the question was. It
 creates and installs the Apps; nothing here repeats its steps. Where it has you
 name the accounts to install on, they are the ones `owners` holds: those saved
 during this run, else `value=` on the `check=owners` line.
