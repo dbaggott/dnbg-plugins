@@ -67,8 +67,9 @@ on `result=OK`, make the offer above, and on anything else take "Not now". On
 it needs `reviewer-setup` first. Without `AskUserQuestion`, take "Not now" and
 say in the report that no reviewer is set up.
 
-On any other `result=ERROR`, make no offer: end with its `reason=`, the line
-printed under it, and the prompt, which works once that is fixed.
+On any other `result=ERROR`, make no offer: go on as "Not now" does, with its
+`reason=` and the line printed under it in place of the sentence about
+`reviewer-setup`.
 
 ### Offer the spec review for a batch
 
