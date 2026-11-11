@@ -26,8 +26,10 @@ same turn.
 
 ## Offer the spec review
 
-Once an issue filed on its own is created, ask with `AskUserQuestion`:
-"Spec-review <URL> now?", `<URL>` being the issue's.
+Once an issue filed on its own is created, read whether a reviewer is set up,
+per `references/spec-review-rounds.md`, "Is a reviewer set up?". On
+`result=OK`, ask with `AskUserQuestion`: "Spec-review <URL> now?", `<URL>` being
+the issue's.
 
 1. **"Spec-review it now (Recommended)"**: "A reviewer subagent reviews the
    issue from GitHub, and this session answers its rounds as the author."
@@ -49,14 +51,34 @@ Without `AskUserQuestion`, take "Not now": end with the prompt and say in the
 report that the review was not run. This is the default, not a question to post
 per `references/delegated.md`.
 
+### With no reviewer set up
+
+On `result=ERROR reason=not-configured`, ask in place of the offer: "No reviewer
+bot is set up, so <URL> cannot be spec-reviewed yet. Set it up now?"
+
+1. **"Set up the reviewer bot"**: "Create the reviewer's GitHub App with
+   `reviewer-setup`, then decide on the spec review."
+2. **"Not now"**: "Nothing more happens here. Once `reviewer-setup` has run,
+   paste `review <URL> as a spec` into a new session when you want the review."
+
+On "Set up the reviewer bot", load `reviewer-setup`, then make the offer again
+from its read. On "Not now", end as the offer's "Not now" does, saying that the
+prompt needs `reviewer-setup` first. Without `AskUserQuestion`, take "Not now"
+and say in the report that no reviewer is set up.
+
+On any other `result=ERROR`, make no offer: give the operator its `reason=` and
+the line printed under it, then end as "Not now" does, the prompt working once
+that is fixed.
+
 ### Offer the spec review for a batch
 
 A flow that files issues in one pass, one or more, asks once for all it decided
 to offer, in place of the question above. The prompt is
 `Review <URL>, <URL> as a set.`, one per repo the issues were filed in, naming
-that repo's issues. Ask "Spec-review these issues now?" with the same two
-options, the "Not now" description naming these prompts in place of
-`review <URL> as a spec`.
+that repo's issues. After the same read, ask "Spec-review these issues now?"
+with the same two options, the "Not now" description naming these prompts in
+place of `review <URL> as a spec`. "With no reviewer set up" applies with the
+same substitution, its "Not now" going on with the flow as the one below does.
 
 On "Spec-review it now", go straight to `references/spec-review-rounds.md`,
 "Spawn the reviewer", without its "Who runs the spec review?" picker, and
