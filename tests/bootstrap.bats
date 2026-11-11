@@ -111,7 +111,7 @@ spec = importlib.util.spec_from_file_location("bootstrap", sys.argv[1])
 b = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)
 url = "https://github.com/apps/agent-%s-t/installations/new"
 mid = b.created_page([("reviewer", url % "reviewer")], ["author", "orchestrator"])
-assert "installations/new" not in mid and "the author bot" in mid, mid
+assert "installations/new" not in mid and "author bot is next" in mid, mid
 last = b.created_page([(r, url % r) for r in ("reviewer", "author", "orchestrator")], [])
 assert all(url % r in last for r in ("reviewer", "author", "orchestrator")), last
 assert "All 3 bots are created" in last, last
