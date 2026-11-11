@@ -12,7 +12,7 @@ gh api user --jq .login; gh api user/orgs --jq '.[].login'
 question, `multiSelect: true`, "Which repos do you want to use dnbg-workflow
 on?", an option per account labelled with its bare name, and a last option
 **"None"**. Each account's description is "Every repo under `<name>`", and
-None's is "Nothing is enforced; the workflow stays advice." The picker's own
+None's is "No repos. I only want the skills when I ask for them." The picker's own
 "Other" takes an account that is not listed. Before the call, say in one line
 that in the repos chosen every change goes through a worktree and a draft PR.
 
