@@ -13,8 +13,8 @@ it:
 - Question: "Create the reviewer bot? It's a GitHub App under your account that
   gives reviews their own identity, separate from yours. No review can run
   without it."
-- **"Create (Recommended)"**, first: "Two clicks in the browser: one to create
-  it, one to install it."
+- **"Create (Recommended)"**, first: "In the browser: create it, then install
+  it on the repos you choose."
 - **"Not now"**: "Reviews stay off until it exists."
 
 On Create, load the `reviewer-setup` skill and follow it for the roles in
