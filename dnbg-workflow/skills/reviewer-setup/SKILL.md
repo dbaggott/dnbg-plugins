@@ -98,8 +98,13 @@ next role. At the end it prints a JSON list with each role's App slug, config
 dir, and **install URL**. A failure stops the run and names the roles it did not
 reach.
 
-If the browser doesn't open (headless/SSH), pass `--no-browser` and open the
-printed `http://localhost:<port>/` yourself, or forward the port.
+The run waits on the browser, so say this in the same message as the call that
+starts it, with the port you passed, 8765 by default:
+
+> Opening your browser. If nothing opens, go to `http://localhost:<port>/`.
+
+On a machine with no browser of its own (headless, SSH), pass `--no-browser`
+and have the operator forward the port and open that URL.
 
 ## Install the App
 

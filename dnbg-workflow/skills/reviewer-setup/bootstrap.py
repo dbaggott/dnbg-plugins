@@ -306,8 +306,9 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
 
     open_url = f"http://localhost:{args.port}/"
     print(f"Opening {open_url} — complete the {role} App's creation in your browser.", file=sys.stderr)
-    if not args.no_browser:
-        webbrowser.open(open_url)
+    if not args.no_browser and not webbrowser.open(open_url):
+        print(f"No browser could be opened here. Open {open_url} yourself, on this machine.",
+              file=sys.stderr)
 
     if not done.wait(timeout=args.timeout):
         print(f"Timed out after {args.timeout}s waiting for the GitHub callback.", file=sys.stderr)
