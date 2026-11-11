@@ -93,7 +93,8 @@ jq -n --arg owners '<value>' '{owners: $owners}' \
 ```
 
 At `self=none`, or when that command fails, as it does on a client too old to
-have it, the user sets it. Say:
+have it, the user sets it. Do not stop for it: go on, leave `owners` open, and
+have the closing summary's **Still open** line read:
 
-> Set it yourself with `/plugin configure dnbg-workflow`: paste `<value>` into
-> **owners**. Tell me when it's done.
+> set your accounts: run `/plugin configure dnbg-workflow` and paste `<value>`
+> into **owners**.
