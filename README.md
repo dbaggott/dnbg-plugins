@@ -1,433 +1,133 @@
 # dnbg-plugins
 
-A Claude Code plugin marketplace, published as `dnbg`. It makes an agent session
-work using sensible best practices: every change goes through a worktree and
-a draft PR, issues are written to survive a cold handoff, and an independent bot
-identity reviews the result before a human merges it.
+An opinionated software factory, packaged as a set of Claude Code plugins. AI-driven and human-directed: think of it as an engineering team you lead, at whatever scale you run it.
 
-The workflow and prompts were developed and continuously improved over the
-course of **more than 1,200 pull requests (and counting) in 25 repositories**
-and were used exclusively by a small team of developers for several months. In
-our experience, an agent on its own is incapable of producing well-designed
-production-quality code. This plugin was built to close that gap.
+I’ve spent over 25 years in software, including leading projects and teams and rebuilding entire tech organizations around a virtuous cycle, where past work informs current work and each step makes the next one easier and better. I built these plugins to work the same way: built-in retrospectives log friction as you go, and periodic sweeps turn the patterns into fixes.
 
-**[Install it](#install)** — two commands, and nothing is enforced until you say
-where.
+Honed over its first 7 months of real use across 35 repos, ~2k PRs, ~1k issues, 1.2M+ lines of code, and 10 languages. Still sharpening.
 
-## How you use it
-
-**Two sessions on one issue — one resolving it, one reviewing it.** The reviewer
-is assigned before any PR exists, so it waits; it sees the draft appear and
-holds back, because a draft is the author's signal that the work isn't ready for
-anyone's attention yet; it starts the moment the PR is marked ready.
-
-![Two terminal panes side by side. The left session claims the issue, creates a worktree, opens a draft PR, flags a departure from the issue, and asks whether to send it to review. The right session mints a bot token, waits for a PR to appear, holds back while it is a draft, then reviews it and requests changes before approving.](docs/media/demo-resolve-review.gif)
-
-**It can work autonomously.** The session above stops twice to ask you something
-— once before the PR goes to review, once on how to handle the reviewer's
-findings. Those two questions exist so *you* decide, not so you have to be at the
-keyboard: answer them in advance and the same loop runs unattended.
-
-> I'll be afk — resolve `<issue URL>`, send it to review when you're done, and
-> auto-handle any reviewer feedback, then summarize everything that happened.
-
-That pre-answers the send-to-review picker and opts into auto-handling every
-round, so the session claims the issue, opens the PR, marks it ready, works each
-review round to a clean verdict, and reports back when you return. The one thing
-it will not do is merge: only a human merges.
-
-**One session orchestrating one issue — it runs the other two.** Instead of
-starting an author and a reviewer yourself, ask one session to orchestrate:
-
-> orchestrate the resolution of `<issue URL>`
-
-It claims the issue, dispatches the author and then the reviewer as subagents,
-and sits between them. When the author asks something the issue's body already
-settles — a stated default, a recorded decision, an implementation detail that
-changes no contract — the orchestrator answers it. Anything else, such as a
-change to user-visible behavior or to scope, comes to you as a question with a
-recommendation. Every answer, from either source, is logged on the issue as a
-`Decision log:` comment, so a restarted orchestrator picks up from the issue
-alone. It tells you when the PR is approved and ready to merge, and it stops
-when you merge it.
-
-![One session claims an issue, dispatches an author subagent, answers the author's first question from the issue's own default and logs it, escalates the second as a picker because it changes user-visible behavior, dispatches a reviewer when the PR is marked ready, reports the approved PR as ready to merge, and after the merge reports under Summary, Observations, and Actionable.](docs/media/demo-orchestrate.gif)
-
-**A whole project, end to end.** The same orchestrator runs a project of many
-issues, given a **tracking issue**: an issue whose body is the design, written
-so the issues implementing it can cite its requirements and decisions by ID.
-Getting there takes a few stages, each one a prompt you give a session, and each
-stage that hands over ends by printing the prompt for the next one.
-
-1. **Design.** In the session where you worked the idea out, ask it to file the
-   result. If it looks like a project — more than one dependent PR, decisions
-   another issue would cite, a criterion no single PR can run — `issue-workflow`
-   asks whether to file it as a tracking issue; you can also say so up front:
-
-   > file this as a tracking issue
-
-   It leaves a tracking issue whose requirements and decisions carry stable IDs.
-
-2. **Design review.** The filing session asks who runs the spec review: a
-   reviewer subagent it spawns, or a session of your own, started with
-
-   > review `<URL>` as a spec
-
-   `issue-reviewer` reviews the design in rounds, and the filing session answers
-   each round as the body's author, until the verdict is `READY`.
-
-3. **Acceptance.** The author session then asks whether you accept the design.
-   Saying yes is your sign-off; `issue-workflow` records it as the acceptance row
-   in the design's decision log, and from then on the design changes only through
-   further rows.
-
-4. **Decomposition.** In a fresh session:
-
-   > decompose `<URL>`
-
-   `issue-workflow` files the child issues. Each one says which requirements it
-   covers and which siblings it depends on; the dependencies become GitHub's own
-   blocked-by links, and every child carries the project's `project:<slug>`
-   label.
-
-5. **Set review.** The decomposing session hands the parent and its children to
-   a set review, asking the same question as stage 2; in your own session the
-   prompt is the parent's:
-
-   > review `<parent URL>` as a spec
-
-   The parent brings its sub-issues with it. `issue-reviewer` checks the
-   children against the design: every requirement covered, every dependency
-   recorded as a link, and no child contradicting the section it cites. It ends
-   when every child reads `READY`.
-
-6. **Orchestration.** In a fresh session:
-
-   > orchestrate `<URL>`
-
-   `orchestrate` runs the children in dependency order, a few at a time, each
-   through the single-issue loop above. A decision that changes the design is
-   written back into it, and the children that cite what changed are updated.
-   When the last child closes, it opens the closeout PR, which resolves the
-   tracking issue the way any PR resolves its issue: it writes the as-built
-   design into the repo and settles the project's findings log with you: each
-   finding becomes a follow-up issue, a drop, or a deferral. Its review is the
-   whole-project review, grading the result against the design's own end-to-end
-   acceptance criteria. You merge it, and the tracking issue closes.
-
-Across the whole flow, you are needed at these points:
-
-- deciding that a discussion is a project, when the filing session asks;
-- signing off the design, at acceptance;
-- answering the orchestrator's escalations;
-- looking at the work before it is reviewed, on any issue that declares an
-  operator check before review (an issue whose change you see, such as a page or
-  a terminal screen, is offered one when it is filed);
-- merging each PR;
-- approving the text of every follow-up issue the closeout files.
-
-You don't read or approve the children; the set review's verdict on each one is
-that gate.
-
-**Two sessions on one task -- one for interactive development, one reviewing
-the work.** Here the operator works something out conversationally and it goes
-straight to a draft PR. Once you're satisfied, you send it to another session
-for review. It ends the way the flow always ends: the coding agent hands over the
-merge command with the cycle reported beneath it under Summary, Observations, and
-Actionable, so what you may want to act on is in its own section and in front of
-you before you merge rather than after. You merge it yourself (here with `!` in
-the session), the worktree and branch are cleaned up without being asked, and the
-closing report carries only what changed since the handoff.
-
-![Two terminal panes. The left session iterates on a change conversationally across three pushes to a draft PR; the right session asks whether to review the draft now or wait for it to be marked ready, recommends waiting, and waits. The operator sends it to review, the reviewer requests a test and then approves, and the left session hands over the merge command with the cycle reported under Summary, Observations, and Actionable headings. After the operator merges with a bang command it removes the worktree, deletes the branch, and reports that nothing is new since the handoff.](docs/media/demo-vibe-review.gif)
-
-**Every role closes out the same way**, whoever started it: you, or an
-orchestrator. Before the merge, the author's merge handoff and the reviewer's
-handoff at approval each carry a Summary / Observations / Actionable report, so
-anything that could still change the PR reaches you while you can act on it.
-After the merge, each role's close-out reports only what changed since its
-handoff, and, when retrospectives are on, leaves one behind.
-
-**Filing an issue**, which the gate makes non-optional — an issue written
-without the skill is a body the next session can't work from.
-
-![A session's gh issue create being blocked by the check-issue-create hook, then loading the issue-workflow skill, verifying anchors against the tree, and filing an issue whose body carries the defect, a reproduction, a proposed fix, and acceptance criteria.](docs/media/demo-file-issue.gif)
-
-Filing a plain issue ends on one question: spec-review it now, with a reviewer
-subagent and the filing session answering its rounds, or not now. On "not now"
-the session prints the prompt to start the review later, in any session:
-
-> review `<URL>` as a spec
-
-**Summarizing work accomplished in a specified time period**, with the
-level of detail included shaped by the intended audience. As velocity
-increased, it became challenging to summarize completed work -- there
-was simply too much of it! This makes it easy:
-
-![A session gathering merged PRs and filed issues, reading their descriptions rather than their diffs, asking who the recap is for, and writing the same week up twice: once for teammates and once for leadership.](docs/media/demo-work-summary.gif)
-
-## GitHub is the state
-
-Every stage reads its inputs from GitHub and writes its outputs there: the
-issue's body, its comments and labels, its sub-issue and blocked-by links, and
-the PRs linked to it. Nothing a stage needs lives in the session that ran the
-previous one, so each stage can run in a fresh session, and the plugin
-recommends one at every stage change: the session that wrote a design is the
-most expensive one to keep alive. A session that dies mid-stage is replaced by
-a new one given that stage's prompt, which picks up from GitHub. To ask where an
-issue or project stands, and get the prompt for its next stage, ask
-`project-status`:
-
-> where is `<URL>`
-
-Two things are kept on your machine instead, by design, since neither is part
-of any one issue's work: retrospectives, where agents record what slowed the
-process, read across runs by `process-review`; and findings entries, where they
-record what they noticed about the code, which `findings-review` sweeps with you
-before any becomes an issue. Retrospectives are written only when the
-`retrospectives` setting is on, and it is off by default; with it off, a
-close-out tells you directly where a skill was wrong, missing, or had to be
-worked around.
-[`docs/configuration.md`](docs/configuration.md#retrospectives--where-process-friction-goes)
-covers the setting.
-
-## Why it compounds
-
-Each of these practices is worth something alone. What makes them worth more
-together is that the output of one step is the reliable *input* of the next — so
-the workflow gets cheaper and safer the longer it runs, instead of accruing
-process debt.
-
-**A well-written issue is the cheapest thing you can do for your future self.**
-Anchors are verified against the tree when the issue is written, not recalled —
-so at pickup the freshness probe is existence-checking rather than re-research.
-Cross-references are split into *required reading* and *do not read unless
-blocked*, with a hard depth-1 crawl cap, so resolving an issue costs a read
-instead of a link crawl. References are phrased to hold in every future state
-("while X exists", not "until X lands"), so no maintenance sweep is ever owed.
-And acceptance criteria go in whichever issue can actually *run* them — which is
-what later lets the reviewer grade the work against the issue, not just the diff.
-
-**You find out early when it's going the wrong way.** The issue gets a critical
-review before any code is written — misdiagnosis, symptom-versus-cause, false
-premise — and a resolver who has to design the approach itself gets your sign-off
-before implementing. Anything that departs from the agreed design mid-flight is
-surfaced in chat *before* the PR leaves draft. The expensive failure was never a
-wrong PR; it's a wrong PR discovered after the review and the rework are already
-paid for.
-
-**The PR description is the as-built record, so everything downstream reads it
-instead of the code.** It's written for what the change *is*, not how it was
-developed, with the gaps and unverified branches stated rather than omitted. That
-makes a work recap a matter of reading descriptions rather than diffs — and
-re-asking for a different audience re-shapes what was already gathered instead of
-re-fetching it.
-
-**Parallel sessions don't collide.** Claiming an issue leaves marks another
-worker can see — including agents, bots, and teammates' tooling this project has
-never heard of — and a reviewer deliberately withholds the same marks so they
-keep meaning *someone is implementing this*. You can run several sessions at once
-without them stepping on each other.
-
-**The system learns instead of relearning.** A reviewer's finding is answered
-with the most durable artifact available — a test beats the code, which beats
-prose — so each round leaves a guard behind rather than a thread nobody re-reads.
-Bugs recurring round after round are themselves treated as a finding, a signal to
-name the structural problem instead of patching symptoms. And when the shipped
-tooling doesn't fit your case, the agent is told to finish your task and then
-*tell you*, offering to file it upstream, rather than silently working around it.
-
-**A project's plan is an input to every step that follows it, not a document
-beside them.** The design lives in a tracking issue, where its requirements and
-decisions carry stable IDs, so each child cites the ones it implements. Because
-the citations are machine-readable, the set review *computes* coverage by
-diffing them against the design rather than judging it by eye. The orchestrator
-answers an author's question from the design's recorded rationale, and when the
-answer changes the design it writes the change back, so the next child reads the
-current design rather than the original one. And when retrospectives are on,
-every agent in a run leaves one, which `process-review` reads across runs to find
-the friction that recurs and draft the upstream issue that removes it.
-
-**Token cost falls out of the same design** rather than being optimised in
-afterwards. Skills load only when their description matches the task, and the
-always-on file — the one thing charged to every session of every user — is kept
-short on purpose. Waiting is done by blocking shell watchers running as
-background tasks, so idle polling never enters the conversation and a PR that
-takes an hour to review costs one wake-up, not sixty; the poll curve backs off
-and counts laptop-open time, so a closed lid doesn't burn the window. A
-re-review diffs against the last-reviewed SHA rather than re-reading the whole
-change. And the reviewer reads CI's results instead of re-running the suite —
-primarily because a local run reproduces the *author's* environment rather than
-CI's, so every green run argues "flaky, ignore it"; being cheaper is the second
-effect, not the reason.
-
-## What's in it
-
-This plugin consists of **skills** (loaded on demand when they match the task), a
-short **always-on rules** file, and two **enforcement hooks** that make the worktree
-and issue flows non-optional in the repos you choose. Two of those are things a
-`CLAUDE.md` structurally cannot do: hooks that *enforce* the flow rather than
-advising it, and an identity separate from yours that can post a verdict on a PR
-you wrote.
-
-| Skill | Plugin | Forge | For |
-| --- | --- | --- | --- |
-| `git-workflow` | `dnbg-workflow` | GitHub only | Worktree → draft PR → review → merge → cleanup, end to end |
-| `issue-workflow` | `dnbg-workflow` | GitHub only | Writing issues that survive a cold handoff; claiming and resolving one |
-| `issue-reviewer` | `dnbg-workflow` | GitHub only | Reviewing an issue body as a spec, in rounds, before anyone picks it up |
-| `orchestrate` | `dnbg-workflow` | GitHub only | Driving one issue, every child of a tracking issue, or several issues with no parent, to merged PRs with author and reviewer subagents |
-| `project-status` | `dnbg-workflow` | GitHub only | Which stage of the project flow an issue is at, and the prompt to paste next |
-| `process-review` | `dnbg-workflow` | GitHub only | Finding patterns across agents' retrospectives and drafting upstream issues |
-| `findings-review` | `dnbg-workflow` | GitHub only | Sweeping the findings entries agents keep for what they found about the code, and filing, dropping or keeping each with you |
-| `summary-review` | `dnbg-agent-summaries` | **Any** | Writing agent summary files with a status, and sweeping the stale ones into an archive with you |
-| `reviewer` | `dnbg-workflow` | GitHub only | Reviewing a pushed PR under an independent GitHub App identity |
-| `reviewer-setup` | `dnbg-workflow` | GitHub only | One-time creation of that App (no cloud service, no shared secret) |
-| `velocity-tradeoff` | `dnbg-workflow` | **Any** | Opt-in: how to size work where the risk/benefit trade favors speed |
-| `coding-practices` | `dnbg-practices` | **Any** | Design, security, naming, comments, logging, and verification, as rules with IDs a review can cite |
-| `work-summary` | `dnbg-work-summary` | GitHub only | Turning your merged/open PRs into an audience-shaped recap |
-
-The planning flow has no skill of its own; it lives in the skills that do each
-step. `issue-workflow` carries how a tracking issue is written and how it is
-decomposed into children, `issue-reviewer` carries the design review and the set
-review against it, and `orchestrate` runs the children and closes the project
-out.
-
-The `reviewer` pair is the piece with the least in common with the rest — it
-exists because GitHub won't let you approve your own PR, and a separate App
-identity can. `reviewer-setup` creates that App and keeps its private key on
-your machine.
-
-## Install
+**Quick start.** Run these one at a time in Claude Code:
 
 ```
 /plugin marketplace add dbaggott/dnbg-plugins
 ```
 
-An install added before the plugins moved to this repo stops receiving
-updates. Re-add it: `/plugin marketplace remove dnbg`, then the add above, then
-install your plugins again, since removing a marketplace can uninstall what came
-from it.
+```
+/plugin install dnbg-all@dnbg
+```
 
-Then, as a separate command — the install can't run until the marketplace add
-completes, and pasting both at once only registers the first as a slash command:
+Then see [Setup](#setup).
+
+## Opinions
+
+**Crash-only agents.** State lives in source control: code, decisions, plans, claims and reviews. Any session can be cleared and restarted from a URL. Handoffs and issues carry everything the next agent needs, and nothing more.
+
+**Human attention is the scarce resource.** Agents don’t tire. Humans do. Agents surface decisions faster than a person can make them well, and tired decisions are bad ones. Humans decide approach, what counts as done, and which deviations are acceptable. Findings and decisions are parked durably, so you can close an agent and triage later with fresh eyes. Nothing forces a decision before you’re ready.
+
+**Quality is built in, not inspected in.** Review starts upstream, with the design and the issue specs, where human attention matters most. Agents review every PR. Humans make every merge, and they review the review when something warrants it. Each role has its own identity, and hooks enforce the flow rather than suggest it.
+
+**Tokens are a first-class concern.** Context grows fast and is expensive. Work is scoped tightly, and agents load only what the task needs. Nothing polls from inside an agent. The system calls for restarts before context gets costly. Usage is measured, so optimization is empirical.
+
+**Concurrency is a given.** Many sessions and agents run at once. Each works in isolation and claims what it touches. Collisions are designed away.
+
+**Friction is feedback unless it’s silent.** Agents quietly burn tokens and time on friction nobody sees. Opt in, and every role ends with a retrospective that makes it visible. Built-in tools find the patterns and turn them into issues. It’s how these plugins have been honed, and how you can help sharpen them.
+
+**Join the flow anywhere.** The full flow takes an idea from design to merged code, but you can join at any point: a quick one-off change, a single issue, or a multi-week project. Enforcement applies only where you turn it on. See [The flow](#the-flow).
+
+## The flow
+
+| Stage | What happens | Prompt |
+| --- | --- | --- |
+| Design | A tracking issue records goals, constraints, decisions with their rationale and reversal conditions, and open questions with defaults. The reviewer bot reviews it in rounds. | file the tracking issue, then `review <URL> as a spec` |
+| Accept | You sign off the design. | `answer the spec review on <URL>` |
+| Decompose | The design is split into sub-issues with dependencies tracked in GitHub. The set is reviewed against the design for gaps and drift. | `decompose <URL>` |
+| Execute | An orchestrator works the issues in dependency order, dispatching an author and a reviewer for each. Every PR is reviewed on every push. | `orchestrate <URL>` |
+| Close out | The finished work is checked against the design, and the as-built design is written into the repo. | merge the closeout PR |
+
+Every stage ends by naming the next prompt. `where is <URL>` tells you where you are.
+
+You’re needed to sign off the design, answer escalations, and merge. Everything else waits for you or runs without you.
+
+## Use cases
+
+In a repo covered by the gates:
+
+| Say | What happens |
+| --- | --- |
+| *add a `--json` flag to the export script* | A worktree, the change, a self-review, a draft PR, and an offer to send it to review |
+| *file an issue for the race in the retry path* | A self-contained issue with verified anchors and a proposed approach, then an offer to spec-review it |
+| *review `<issue URL>` as a spec* | The reviewer bot reviews the issue in rounds until it reads `READY` |
+| *resolve `<issue URL>`* | The issue is claimed, checked for freshness, reviewed critically, then resolved through a PR |
+| *orchestrate `<issue URL>`* | An author and a reviewer are dispatched; questions the issue answers are answered, the rest come to you |
+| *where is `<issue URL>`* | The current stage and the exact prompt to paste next |
+| *summarize this week* | A recap of your merged PRs and filed issues, for the audience you name |
+
+## Setup
+
+Runs on macOS or Linux, with GitHub as the forge ([details](docs/forge-support.md)).
+
+**Install.** Run these one at a time in Claude Code:
+
+```
+/plugin marketplace add dbaggott/dnbg-plugins
+```
 
 ```
 /plugin install dnbg-all@dnbg
 ```
 
-Finally, **recommended:** turn on auto-update, so you automatically get
-improvements and bug fixes. Claude Code leaves it off by default for a
-third-party marketplace, so it is a step you have to take:
+`dnbg-all` installs all four plugins. To take less, install any of `dnbg-workflow@dnbg`, `dnbg-practices@dnbg`, `dnbg-work-summary@dnbg` or `dnbg-agent-summaries@dnbg`; none requires another. Choose `user` scope for one person across many repos, or `project` for one repo shared with a team ([details](docs/configuration.md#install-scope)).
 
-`/plugin` → **Marketplaces** → **dnbg** → **Enable auto-update**
+Installed before the plugins moved to this repo? Run `/plugin marketplace remove dnbg`, then the install again.
 
-To see which version you are on, and to update on demand:
+**Turn the gates on.** Set `owners` to the GitHub orgs or logins you want enforced, in `/plugin`’s configuration for `dnbg-workflow`. In a covered repo, edits outside a worktree and `gh issue create` without the issue skill are blocked.
 
-```
-claude plugin list
-```
+**Give the agents their identities.** Ask Claude Code to *set up the reviewer bot*. It creates a GitHub App per role on your account, and the keys stay on your machine. The reviewer App is required for reviews. The author and orchestrator Apps are optional and fall back to your account.
 
-```
-/plugin marketplace update dnbg
-```
+**Keep it current.** Enable auto-update (`/plugin`, then **Marketplaces**, **dnbg**, **Enable auto-update**), or run `/plugin marketplace update dnbg`. See [releases](docs/releases.md).
 
-More on updating and versions: [Releases](docs/releases.md).
+**Everything else is optional.** Only `owners` turns on enforcement. [`docs/configuration.md`](docs/configuration.md) covers every setting and why its default is what it is.
 
-`dnbg-all` installs all four. To take only part of it, install what you want
-instead — they are independent, and none requires another:
+## What’s in it
 
-| Plugin | What you get |
+| Plugin | Skills |
 | --- | --- |
-| `dnbg-workflow@dnbg` | The GitHub workflow, its two enforcement hooks, and a GitHub App per agent role. GitHub, except `velocity-tradeoff` |
-| `dnbg-practices@dnbg` | Coding practices. No hooks, no forge, works anywhere |
-| `dnbg-work-summary@dnbg` | PR recaps. No hooks. GitHub |
-| `dnbg-agent-summaries@dnbg` | Summary files with a status, and a sweep that archives the stale ones. No hooks, no forge |
+| `dnbg-workflow` | `git-workflow`, `issue-workflow`, `issue-reviewer`, `reviewer`, `reviewer-setup`, `orchestrate`, `project-status`, `findings-review`, `process-review`, `velocity-tradeoff` |
+| `dnbg-practices` | `coding-practices` |
+| `dnbg-work-summary` | `work-summary` |
+| `dnbg-agent-summaries` | `summary-review` |
+| `dnbg-all` | installs the four above |
 
-**The plugin is the unit you can enable or disable** — there is no per-skill
-switch. So what you can adopt on its own is decided by how this project packages
-itself, and the table above is that split: each row installs independently, and
-anything sharing a row arrives together.
+Hooks, all in `dnbg-workflow`:
 
-> Three names, one family. The **repo** is `dnbg-plugins`, a **plugin** is
-> e.g. `dnbg-workflow`, and the **marketplace** is `dnbg` — hence
-> `dnbg-workflow@dnbg`. Claude Code rejects marketplace names containing
-> "claude" as impersonating an Anthropic-official marketplace, which is why the
-> marketplace is `dnbg` rather than the repo's name.
+| Hook | Does |
+| --- | --- |
+| `inject-rules.sh` | puts the always-on rules in context at session start |
+| `inject-rules-subagent.sh` | does the same for every subagent |
+| `role-fallback-notice.sh` | names any role that will post as you |
+| `check-worktree.sh` | blocks edits to tracked files in a covered repo’s main checkout |
+| `check-issue-create.sh` | blocks `gh issue create` in a covered repo until `issue-workflow` is loaded |
 
-Nothing is enforced until you say where: the hooks block only in repos whose
-owner you list in `owners`, and with it empty they never fire. That setting, the
-install scopes, the configurable names and paths, and an opt-in version stamp
-are in [configuration](docs/configuration.md). Requirements — a Claude Code
-floor and six command-line tools — are in [requirements](docs/requirements.md).
-
-## Which forges
-
-**GitHub is supported.** Nothing else is, and there is no plan to add another
-forge unless someone asks for one: an issue naming the forge you use is the
-request. The forge-neutral skills — `coding-practices` and `velocity-tradeoff`
-— work anywhere regardless.
-
-On an unsupported forge a coupled skill **declines and says so**, naming the host
-it found, rather than half-translating itself to another CLI. What each skill
-checks, and why another forge needs its own backend, are in
-[forge support](docs/forge-support.md).
-
-## What it runs on your machine
-
-Installing `dnbg-workflow` means **it runs shell scripts on your machine** —
-that is what a Claude Code hook is. Five of them fire automatically once the
-marketplace is trusted: two inject the always-on rules (at session start, and
-again per subagent, because session-start output does not reach subagents), one
-at session start names any agent role that would post as your own account and
-warns when two roles share one App, and two are the gates that block edits
-outside a worktree and unguarded `gh issue create` calls.
-
-![A session being blocked from editing a tracked file in the main checkout, running the git worktree add the block message prints, retrying the edit successfully, then reading the reviewer bot's verdicts on a real pull request](docs/media/demo-gate.gif)
-
-That one is real output from `check-worktree.sh`, from `git`, and from the
-GitHub API.
-
-They make **no network calls**, write no files, and hold no credentials, and
-**nothing here updates itself** — what you install is what runs until you update
-it deliberately, so reading
-[`dnbg-workflow/hooks/`](dnbg-workflow/hooks/), with the two `scripts/` files
-the role notice runs, once is a review that stays valid.
-
-[`SECURITY.md`](SECURITY.md) is the full account: what each hook sees, the one
-place a transcript is read and why, what each role App's key can do, and why
-the gates are workflow guardrails rather than a security boundary.
-
-## Who maintains it
-
-This repo is maintained by [Dan Baggott](https://www.linkedin.com/in/dan-baggott/).
-
-Bug reports, portability findings, untested branches worth a test, and
-documentation corrections are all welcome, as issues: outside pull requests
-aren't merged for now. So are proposals for new **knobs** that leave the
-current behavior as the default. Swapping one default for another is not:
-worktree-then-draft-PR, never merging your own work, and fragments-drive-releases
-are the product rather than incidental choices. [`CONTRIBUTING.md`](CONTRIBUTING.md)
-has the detail.
+The hooks make no network calls, write no files and hold no credentials. They fail open: if a tool they need is missing, they stop protecting rather than stop you.
 
 ## Documentation
 
-| | |
-| --- | --- |
-| [Requirements](docs/requirements.md) | Claude Code floor, the six CLI tools, platforms |
-| [Configuration](docs/configuration.md) | Install scopes, `owners`, the configurable names and paths, the version stamp, the reviewer key |
-| [Forge support](docs/forge-support.md) | What is supported, and what declining looks like |
-| [Releases](docs/releases.md) | Updating, auto-update, CalVer, installing a specific version |
-| [Security](SECURITY.md) | Threat model, what the hooks see, reporting a vulnerability |
-| [Contributing](CONTRIBUTING.md) | Scope, the fragment rule, running CI locally |
-| [For maintainers](docs/maintainers.md) | Repo layout, where new content goes, forks, regenerating the demo |
+- [`docs/configuration.md`](docs/configuration.md): settings, install scope, agent roles and key handling
+- [`docs/forge-support.md`](docs/forge-support.md): what each skill does outside GitHub
+- [`docs/requirements.md`](docs/requirements.md): the Claude Code floor and command-line tools
+- [`docs/releases.md`](docs/releases.md): updating and versioning
+- [`docs/design/`](docs/design/): this repo’s own as-built designs, which double as worked examples
+- [`SECURITY.md`](SECURITY.md): what installing grants, role App keys, reporting a vulnerability
+- The skills under `dnbg-*/skills/`: they are the product, and the philosophy in full
+
+## History
+
+These plugins started at a startup I co-founded. We were building an AI product and took an AI-first stance: if AI couldn’t build our product, we weren’t confident a product built on AI could succeed. As a matter of discipline, we didn’t write or review any code ourselves. It quickly became clear that wasn’t viable without tooling around the agents. That tooling was the seed of this project.
+
+## Contributing
+
+Maintained by Dan Baggott. When something goes wrong, the agents will offer to file a bug for you. Please say yes. Issues are welcome; outside pull requests aren’t merged yet, since there’s no contributor agreement. Think an opinion is wrong? Make the case in an issue. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 
-Available under either of two licenses, at your option ([LICENSE](LICENSE)):
-
-- **PolyForm Internal Use 1.0.0** covers a company's internal use of the
-  plugins, including while building products it sells, and allows changes for
-  that use.
-- **PolyForm Strict 1.0.0** covers personal and hobby use, without changes.
-
-Neither allows distributing the plugins, so neither allows selling them.
+Available under either of two licenses, at your option ([`LICENSE`](LICENSE)). PolyForm Internal Use 1.0.0 covers a company’s internal use, including while building products it sells, and allows changes for that use. PolyForm Strict 1.0.0 covers personal and hobby use, without changes. Neither allows distributing the plugins, so neither allows selling them.
