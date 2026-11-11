@@ -31,6 +31,30 @@ HEAD=$(gh pr view <num> --repo <repo> --json headRefOid --jq .headRefOid)
   --round-dir=<draft directory>
 ```
 
+4. **Say where the review comes from**, unless you are a dispatched agent,
+   whose dispatcher starts the reviewer. Nothing above starts one, and one
+   already waiting on the PR's issue cannot be seen until it posts, so the
+   prompt is given either way. Read whether the reviewer role is set up:
+
+   ```bash
+   "<skill-dir>/../../scripts/as-role.sh" --login reviewer <owner>/<repo>
+   ```
+
+   Then end the turn on the closing line in
+   `<skill-dir>/../findings-review/references/report.md`, by what it answered:
+
+   - **`result=OK`**: "**Your move:** if no reviewer is already on this PR,
+     start one in a **new** session: `review <PR URL>`. Leave this session
+     open: it is watching for the first review."
+   - **`result=ERROR reason=not-configured`**: "**Your move:** no reviewer bot
+     is set up, so set one up first with `reviewer-setup`. Then start a
+     reviewer in a **new** session: `review <PR URL>`. Leave this session open:
+     it is watching for the first review."
+   - **Any other `result=ERROR`**: "**Your move:** the reviewer bot cannot
+     run until this is fixed: <its `reason=` and the line printed under it>.
+     Then start a reviewer in a **new** session: `review <PR URL>`. Leave this
+     session open: it is watching for the first review."
+
 **Re-arm from the line the watch prints, not from the clock.** Every result you
 re-arm from is preceded by a `── re-arm ──` line carrying the next invocation
 with `since` set to that run's own `now`. Reading the clock instead skips

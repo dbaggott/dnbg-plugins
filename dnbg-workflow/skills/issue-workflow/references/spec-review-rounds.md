@@ -13,8 +13,10 @@ reviews and are answered through `git-workflow`'s `references/review-rounds.md`.
 The session that wrote the body for review — filed the issue or the tracking
 issue, or decomposed a tracking issue into a set — is its author for the review
 and answers every round. `<URL>` below is the issue's, or for a set the parent's, since the
-reviewer takes in its children. Ask with `AskUserQuestion`: "Who runs the spec
-review?"
+reviewer takes in its children.
+
+Read whether a reviewer is set up first, per "Is a reviewer set up?" below. On
+`result=OK`, ask with `AskUserQuestion`: "Who runs the spec review?"
 
 1. **"Spawn the reviewer (Recommended)"**: "A reviewer subagent reviews the
    issue from GitHub, and this session answers its rounds as they come back.
@@ -24,6 +26,50 @@ review?"
    answers them."
 
 Without `AskUserQuestion`, ask per `references/delegated.md`.
+
+### Is a reviewer set up?
+
+The reviewer role never acts as the operator, so with no reviewer bot set up a
+reviewer cannot start, spawned or in a session of the operator's own. Read
+which it is before asking above, and before either offer in
+`references/filing.md`, with the issue's repo, or any one of a batch's:
+
+```bash
+"<skill-dir>/../../scripts/as-role.sh" --login reviewer <owner>/<repo>
+```
+
+`result=OK` means a reviewer is set up, and `result=ERROR
+reason=not-configured` that none is. Any other `result=ERROR` says what is
+wrong on the line printed under it. `filing.md` says what its offers do with
+each; the hand-over's are below.
+
+### With no reviewer set up
+
+On `result=ERROR reason=not-configured` at the hand-over, ask with
+`AskUserQuestion`: "No reviewer bot is set up, so nothing can review <URL> yet.
+Set it up now?"
+
+1. **"Set up the reviewer bot"**: "Create the reviewer's GitHub App with
+   `reviewer-setup`, then choose who runs the spec review."
+2. **"Stop here"**: "Nothing is reviewed, and the next stage waits for the
+   review."
+
+On "Set up the reviewer bot", load `reviewer-setup`, then run the read again:
+on `result=OK`, ask "Who runs the spec review?", and on anything else go on as
+"Stop here" does. On "Stop here", stop short of the next stage: ask no
+acceptance question, give no next-stage prompt, and after decomposing keep the
+parent's claim, since no review has ended and the set's is still owed. End on
+the closing line in `<skill-dir>/../findings-review/references/report.md`:
+"**Your move:** set up the reviewer bot with `reviewer-setup`, then, in a
+**new** session: `review <URL> as a spec`. This session is not watching for the
+review: tell it when the first round is posted, and it answers."
+
+Without `AskUserQuestion`, post that question per `references/delegated.md` and
+stop. Never go on without the review.
+
+On any other `result=ERROR`, give the operator its `reason=` and the line
+printed under it, and stop as "Stop here" does, the closing line naming that
+fix in place of `reviewer-setup`.
 
 ### Spawn the reviewer
 

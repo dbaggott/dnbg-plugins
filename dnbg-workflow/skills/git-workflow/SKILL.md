@@ -186,7 +186,7 @@ A PR resolving an issue whose title starts with a `[<slug>]` tag — a tracking 
 
 Announce the draft PR with its full URL and the self-review's outcome — what it fixed, in a line, and each finding you declined with its reason, since those are what the operator is deciding to send on. Process friction that did not stop the task is not part of this announcement and is not offered for filing here: it waits for your close-out, per `<skill-dir>/../findings-review/references/report.md`'s "At a close-out". Then call `AskUserQuestion` with two options (the tool auto-appends "Other" for anything else). Without it, ask the same question per `<skill-dir>/../issue-workflow/references/delegated.md`:
 
-1. **"Send to review (Recommended)"** — "Mark the PR ready and watch for the first review."
+1. **"Send to review (Recommended)"** — "Mark the PR ready, watch for the first review, and give you the prompt that starts a reviewer in a new session."
 2. **"Not yet"** — "Leave it in draft; say 'ready' whenever you want it reviewed."
 
 On "Send to review", run the flow in `references/review-rounds.md`. On "Not yet", leave the PR in draft and carry on — the operator saying "ready" later re-enters the same flow.
