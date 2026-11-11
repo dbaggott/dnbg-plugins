@@ -19,12 +19,13 @@ stands, from its `value=`: "dnbg-workflow currently applies to: `<account>`,
 
 ## 2. Ask
 
-The question is **"Which repos do you want to use dnbg-workflow on?"** How it is
+The question is **"Which GitHub accounts do you want to use dnbg-workflow
+on?"**, and where a picker takes a header, it is "Accounts". How it is
 asked depends on how many accounts step 1 found. Without `AskUserQuestion`, ask
 it as the typed form whatever the count.
 
 **The None option**, wherever it appears, is labelled "None" and described "No
-repos."
+accounts."
 
 ### Up to 8 accounts: checkboxes
 
@@ -34,8 +35,8 @@ label is its bare name and its description "Every repo under `<name>`". With
 more than one question, each ends "(1 of 3)", "(2 of 3)" and so on. The picker's
 own "Other" takes an account that is not listed.
 
-Before the call, say in one line: "This picks the accounts. You choose which
-of their repos the reviewer bot can work in at a later step."
+Before the call, say in one line: "You'll pick which repos the reviewer bot can
+access in a later step."
 
 The answer is every account ticked on any page. None ticked, or nothing ticked
 anywhere, is none. If the call fails or comes back without an answer for a
@@ -60,10 +61,9 @@ in as many calls as the accounts need at four questions a call.
 
 ### The typed form
 
-> Which repos do you want to use dnbg-workflow on? It is set per GitHub
-> account: `<account>`, `<account>`, `<account>`. Name any of them, another
-> account, or none. You choose which of their repos the reviewer bot can work
-> in at a later step.
+> Which GitHub accounts do you want to use dnbg-workflow on? Yours are
+> `<account>`, `<account>`, `<account>`. Name any of them, another account, or
+> none. You'll pick which repos the reviewer bot can access in a later step.
 
 ### Reading the answer
 
@@ -81,7 +81,7 @@ edits to tracked files in the main checkout, and `gh issue create` before
 > Nothing saved. dnbg-workflow won't apply to any repo, so nothing enforces its
 > flow.
 >
-> To pick repos later, run `/dnbg-workflow:setup owners`.
+> To pick accounts later, run `/dnbg-workflow:setup owners`.
 
 Step 3 of `SKILL.md` then covers the session-start message. An answer of none
 that replaces a list is saved as below, with an empty value.
