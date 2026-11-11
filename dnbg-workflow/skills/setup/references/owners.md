@@ -8,7 +8,16 @@ Read the user's accounts:
 gh api user --jq .login; gh api user/orgs --jq '.[].login'
 ```
 
-Then ask, in this shape and no longer:
+**With up to three accounts and `AskUserQuestion`**, ask with checkboxes: one
+question, `multiSelect: true`, "Which repos do you want to use dnbg-workflow
+on?", an option per account labelled with its bare name, and a last option
+**"None"**. Each account's description is "Every repo under `<name>`", and
+None's is "Nothing is enforced; the workflow stays advice." The picker's own
+"Other" takes an account that is not listed. Before the call, say in one line
+that in the repos chosen every change goes through a worktree and a draft PR.
+
+**Otherwise**, a picker holds four options, so ask in text, in this shape and
+no longer:
 
 > Which repos do you want to use dnbg-workflow on? It is set per GitHub
 > account: `<login>`, `<org>`, `<org>`. Name any of them, another account, or
