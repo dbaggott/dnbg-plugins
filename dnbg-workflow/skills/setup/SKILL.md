@@ -112,4 +112,4 @@ this run:
 > Try it: open a session in one of your repos and ask for a change. You'll get
 > a worktree, a draft PR and an offer to send it to review.
 >
-> For something bigger: *I want to `<the work>`. File an issue for it.*
+> For something bigger: *I want to plan out `<the work>`. File an issue for it.*
