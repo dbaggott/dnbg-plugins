@@ -48,11 +48,27 @@ If you walked any check, run step 1's command again and read `open` from the
 new result, with one correction: the command carries the `owners` this skill
 loaded with, so where it was set during this run, count `owners` as closed.
 
-Say which of these holds:
+Then give the whole of it in one summary, so nothing said along the way is
+lost among the questions. Use this shape, a line each, leaving out a line that
+does not apply:
 
-- **Nothing is open**: setup is complete.
-- **Something is open**: name each open check in a line, and say that
-  `/dnbg-workflow:setup` picks up from there at any time.
+> **dnbg-workflow setup**
+>
+> - **Repos:** every repo under `<account>` and `<account>`. *(or: none.)*
+> - **Reviewer bot:** set up. *(or: not set up, so no review can run.)*
+> - **Other roles:** `<role>` and `<role>` post as your own account. *(the roles
+>   in `fallback=`; or: each has its own bot.)*
+> - **Restart Claude Code** for the repos to take effect. *(only when `owners`
+>   was saved during this run)*
+> - **Still open:** `<what is left, in plain words>`. *(or: nothing. Setup is
+>   complete.)*
+>
+> Run `/dnbg-workflow:setup` at any time to pick up what is left or change an
+> answer.
+
+**Repos** is the list saved during this run, else `value=` on the `check=owners`
+line. **Still open** names each check left in `open`, with a missing tool by
+name.
 
 A session-start message repeats while `owners` or `roles` is open, until the
 marker file on the `check=marker` line exists. When the user has said they are
@@ -63,7 +79,8 @@ message is now off and that deleting that file brings it back:
 mkdir -p "$(dirname "<path>")" && touch "<path>"
 ```
 
-Then name the optional extras, once, a line each, and ask about none of them:
+After the summary, name the optional extras, once, a line each, under their own
+heading, and ask about none of them:
 
 - **`retrospectives`**, with its state from the check: on, every agent role
   writes a file on where the process slowed it when its work ends, for
@@ -72,8 +89,8 @@ Then name the optional extras, once, a line each, and ask about none of them:
 - **`version_stamp`**, with its state from the check: on, PR descriptions,
   reviews and issue claims carry a hidden comment naming the plugin version.
   Set in the same place.
-- **Roles in `fallback=`** on the `check=roles` line, when it names any: they
-  post as the user's own account until `reviewer-setup` creates their Apps.
+- **Bots for the roles in `fallback=`** on the `check=roles` line, when it
+  names any: `reviewer-setup` creates their Apps.
 - **Auto-update**: `/plugin`, then **Marketplaces**, **dnbg**, **Enable
   auto-update**.
 - **`summary_dir`**, when `installed=` on the `check=plugins` line names

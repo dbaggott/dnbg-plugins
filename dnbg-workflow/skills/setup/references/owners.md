@@ -83,9 +83,8 @@ Step 3 of `SKILL.md` then covers the session-start message. An answer of none
 that replaces a list is saved as below, with an empty value.
 
 **Any other answer**: the value is the accounts as one comma-separated line.
-Ask "I'll set dnbg-workflow to apply to: `<account>`, `<account>`. Save it?"
-When `self=` on the `check=plugins` line names an id, save it on their
-go-ahead:
+When `self=` on the `check=plugins` line names an id, save it without asking
+again, since the message after it says what was saved and how to change it:
 
 ```bash
 jq -n --arg owners '<value>' '{owners: $owners}' \
