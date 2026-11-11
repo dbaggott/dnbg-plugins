@@ -9,8 +9,9 @@ description: Check what a dnbg-workflow install still needs and walk the user th
 
 ## 1. Read the state
 
-Run this exactly as written, single quotes included. A `${user_config.…}` still
-standing in it is an option nobody has set, which the script reads as unset:
+Run this exactly as written, single quotes included. A `user_config`
+placeholder still standing in it is an option nobody has set, which the script
+reads as unset:
 
 ```bash
 "<skill-dir>/../../scripts/setup-check.sh" --owners='${user_config.owners}' \
