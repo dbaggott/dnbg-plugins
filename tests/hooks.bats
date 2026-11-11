@@ -322,7 +322,6 @@ create --title x')"
 }
 
 @test "a quoted mention in a review body is not an issue creation" {
-  # A review about this hook must be postable.
   run_issue_hook "$(bash_payload 'gh api repos/o/r/pulls/58/reviews -f body="I blocked your gh issue create call"')"
   [ "$status" -eq 0 ]
 }

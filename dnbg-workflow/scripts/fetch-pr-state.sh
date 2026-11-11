@@ -21,7 +21,7 @@
 # grades a degraded source on its own counter, since one source failing forever
 # while the rest answer is a blind watch wearing a healthy one's costume.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB HERE, AND ONLY HERE: the `FORGE` guard
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: the `FORGE` guard
 # below refuses any other forge, and the GitHub backend after it maps GitHub's
 # answer onto the names above. Nothing above this line is GitHub-shaped — that
 # is the contract.

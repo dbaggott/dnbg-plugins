@@ -462,8 +462,8 @@ EOF
 }
 
 @test "a site polling only the closing-keyword source is caught" {
-  # Induced: a site polling only the closing-keyword source, which every other
-  # test reads the same as a quiet issue.
+  # Induced: a site polling only the closing-keyword source, whose miss looks
+  # the same as a quiet issue.
   run covers_discovery \
     "$(fixture_site 'gh issue view <n> --json closedByPullRequestsReferences')" \
     "$DISCOVERY"
