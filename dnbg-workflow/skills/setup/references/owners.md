@@ -85,16 +85,25 @@ that replaces a list is saved as below, with an empty value.
 
 **Any other answer**: the value is the accounts as one comma-separated line.
 When `self=` on the `check=plugins` line names an id, save it without asking
-again:
+again, and on success go on:
 
 ```bash
 jq -n --arg owners '<value>' '{owners: $owners}' \
   | claude plugin configure <id> --values-stdin
 ```
 
-At `self=none`, or when that command fails, as it does on a client too old to
-have it, the user sets it. Do not stop for it: go on, leave `owners` open, and
-have the closing summary's **Still open** line read:
+**When that command fails**, stop the walk. Show the user what it printed,
+then say:
+
+> Saving your accounts failed. Set them yourself with
+> `/plugin configure dnbg-workflow`: paste `<value>` into **owners**. Tell me
+> when it's done, or what happened if that fails too.
+
+Go on only once they answer.
+
+**At `self=none`** nothing is attempted, since this plugin was not loaded from
+a recorded install. Do not stop for it: go on, leave `owners` open, and have
+the closing summary's **Still open** line read:
 
 > set your accounts: run `/plugin configure dnbg-workflow` and paste `<value>`
 > into **owners**.

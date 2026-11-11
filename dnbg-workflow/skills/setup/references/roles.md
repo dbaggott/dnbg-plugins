@@ -13,11 +13,11 @@ it:
 - Question: "Create the reviewer bot? It's a GitHub App under your account that
   gives reviews their own identity, separate from yours. No review can run
   without it."
-- **"Create"**: "Two clicks in the browser: one to create it, one to install
-  it."
+- **"Create (Recommended)"**, first: "Two clicks in the browser: one to create
+  it, one to install it."
 - **"Not now"**: "Reviews stay off until it exists."
 
-On "Create", load the `reviewer-setup` skill and follow it for the roles in
+On Create, load the `reviewer-setup` skill and follow it for the roles in
 `unconfigured=` alone, without its own confirmation, which this question was.
 It creates and installs the Apps; nothing here repeats its steps. Where it has
 you name the accounts to install on, they are the ones `owners` holds: those
