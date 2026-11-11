@@ -39,9 +39,9 @@ which it is before asking above, and before either offer in
 ```
 
 `result=OK` means a reviewer is set up, and `result=ERROR
-reason=not-configured` that none is. Any other `result=ERROR` is a reviewer set
-up wrongly, with what to fix on the line printed under it. `filing.md` says
-what its offers do with each; the hand-over's are below.
+reason=not-configured` that none is. Any other `result=ERROR` says what is
+wrong on the line printed under it. `filing.md` says what its offers do with
+each; the hand-over's are below.
 
 ### With no reviewer set up
 

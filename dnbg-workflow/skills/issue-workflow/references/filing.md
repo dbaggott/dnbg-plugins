@@ -77,8 +77,9 @@ to offer, in place of the question above. The prompt is
 `Review <URL>, <URL> as a set.`, one per repo the issues were filed in, naming
 that repo's issues. After the same read, ask "Spec-review these issues now?"
 with the same two options, the "Not now" description naming these prompts in
-place of `review <URL> as a spec`. "With no reviewer set up" applies with the
-same substitution, its "Not now" going on with the flow as the one below does.
+place of `review <URL> as a spec`. "With no reviewer set up" applies to a batch
+with the same substitution, its "Not now" giving the prompts in the flow's
+report and going on with the flow.
 
 On "Spec-review it now", go straight to `references/spec-review-rounds.md`,
 "Spawn the reviewer", without its "Who runs the spec review?" picker, and
