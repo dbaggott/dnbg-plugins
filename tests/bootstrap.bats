@@ -101,3 +101,22 @@ bootstrap() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"unknown role(s) Odd_Name"* ]]
 }
+
+# The run opens the next role's tab the moment one App exists, so an install
+# button on an earlier page is left in a tab nobody is looking at.
+@test "only the last page of a run carries the install buttons, one per App created" {
+  run python3 - "$BATS_TEST_DIRNAME/../dnbg-workflow/skills/reviewer-setup/bootstrap.py" <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("bootstrap", sys.argv[1])
+b = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)
+url = "https://github.com/apps/agent-%s-t/installations/new"
+mid = b.created_page([("reviewer", url % "reviewer")], ["author", "orchestrator"])
+assert "installations/new" not in mid and "the author bot" in mid, mid
+last = b.created_page([(r, url % r) for r in ("reviewer", "author", "orchestrator")], [])
+assert all(url % r in last for r in ("reviewer", "author", "orchestrator")), last
+assert "All 3 bots are created" in last, last
+one = b.created_page([("reviewer", url % "reviewer")], [])
+assert one.count("installations/new") == 1 and "The reviewer bot is created" in one, one
+PY
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}

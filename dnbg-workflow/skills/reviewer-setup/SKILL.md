@@ -126,16 +126,20 @@ repo each time the role acts, so install on every account you intend the role to
 work on. (An **org-owned** App, if you chose `--owner-type org`, installs on the
 org only.)
 
-When a role's App is created, tell the operator in this shape and no longer.
-The browser tab already shows the install button, so repeat neither the URL nor
-why an App needs installing:
+When the run ends, tell the operator in this shape and no longer. The last
+browser tab already shows an install button for each bot the run created, so
+repeat neither the URLs nor why an App needs installing:
 
-> The `<role>` bot is created: `<slug>`.
+> The `<role>` bot is created: `<slug>`. *(or: The `<role>`, `<role>` and
+> `<role>` bots are created.)*
 >
-> One step left: click **Install on GitHub** in the browser tab. The page says
+> One step left: click **Install** for each in the browser tab. The page says
 > how to choose the repos.
 >
-> Tell me when it's installed.
+> Tell me when it's done.
+
+A run that stopped early showed no install buttons: give the install URL of
+each bot it did create, from the JSON it printed.
 
 Name the accounts to install it on when you know them.
 

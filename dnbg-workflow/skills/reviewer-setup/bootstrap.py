@@ -196,8 +196,46 @@ def save_credentials(config_dir: Path, owner_type: str, org: str, app: dict) -> 
     config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
-def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -> dict | None:
-    """Create one role's App. Returns its summary, or None after printing why not."""
+def created_page(installs: list[tuple[str, str]], left: list[str]) -> str:
+    """The page shown once a role's App exists. `installs` is (role, install URL)
+    for every App this run has created, the newest last; `left` is the roles the
+    run still has to create.
+
+    Installing waits for the last page, which carries every App's button: the
+    run opens the next role's tab as soon as this one is served, so a button on
+    an earlier page would be left behind in a tab nobody is looking at."""
+    role = installs[-1][0]
+    if left:
+        return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
+<p>Next: the {html.escape(left[0])} bot, opening in a new tab. You can close this one.</p>
+<p class="note">You install the bots together, after the last is created.</p>"""
+    if len(installs) == 1:
+        heading = f"The {html.escape(role)} bot is created"
+        step = "One step left: install it."
+        closing = "When it is installed"
+    else:
+        heading = f"All {len(installs)} bots are created"
+        step = "One step left: install each of them."
+        closing = "When all are installed"
+    buttons = "\n".join(
+        f'<p><a class="go" target="_blank" rel="noopener" href="{html.escape(url, quote=True)}">'
+        f'Install the {html.escape(r)} bot</a></p>' for r, url in installs)
+    return f"""<h1>&#10003; {heading}</h1>
+<p>{step} GitHub will ask which repos:</p>
+<ul>
+<li><b>All repositories</b> (recommended): least upkeep; new repos are covered automatically.</li>
+<li><b>Only select repositories</b>: limits what the bot can touch; you add new repos later.</li>
+</ul>
+<p class="note">You can change this at any time on GitHub, under Settings, then Applications.</p>
+{buttons}
+<p class="note">{closing}, close the tab and return to Claude Code.</p>"""
+
+
+def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path,
+             earlier: list[dict], left: list[str]) -> dict | None:
+    """Create one role's App. Returns its summary, or None after printing why not.
+    `earlier` is the summaries of the Apps this run already created, and `left`
+    the roles it creates after this one."""
     # Default to user-owned + public: the only model installable on BOTH the org
     # (for org PRs) and your personal account (for personal repos). Private Apps
     # install only on their owner, so --owner-type org covers org repos only.
@@ -282,16 +320,8 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
                     return
                 result["app"] = app
                 install_url = f"https://github.com/apps/{app.get('slug', '')}/installations/new"
-                self._html(200, f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
-<p><code>{html.escape(app.get('slug', ''))}</code></p>
-<p>One step left: install it. GitHub will ask which repos:</p>
-<ul>
-<li><b>All repositories</b> (recommended): least upkeep; new repos are covered automatically.</li>
-<li><b>Only select repositories</b>: limits what the bot can touch; you add new repos later.</li>
-</ul>
-<p class="note">You can change this at any time on GitHub, under Settings, then Applications.</p>
-<p><a class="go" href="{html.escape(install_url, quote=True)}">Install on GitHub</a></p>
-<p class="note">When it is installed, close the tab and return to Claude Code.</p>""")
+                installs = [(e["role"], e["install_url"]) for e in earlier] + [(role, install_url)]
+                self._html(200, created_page(installs, left))
                 done.set()
             else:
                 self._html(404, "not found")
@@ -368,10 +398,10 @@ def run(args: argparse.Namespace) -> int:
     status = 0
     for role in roles:
         name = args.name or (f"agent-{role}-{login}" if login else f"agent-{role}")
-        summary = run_flow(args, role, name, config_dirs[role])
+        left = roles[roles.index(role) + 1:]
+        summary = run_flow(args, role, name, config_dirs[role], created, left)
         if summary is None:
             status = 1
-            left = roles[roles.index(role) + 1:]
             if left:
                 print(f"Stopped before: {', '.join(left)}.", file=sys.stderr)
             break
