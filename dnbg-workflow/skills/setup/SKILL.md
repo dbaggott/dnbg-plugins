@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Check what a dnbg-workflow install still needs and walk the user through only that — which repos the workflow enforces on, the reviewer bot, a missing tool or `gh` login — then name the optional extras. Load when asked to set up dnbg or the dnbg plugins, check the dnbg setup, say what is left to set up, or finish setup, and when a session-start message says dnbg-workflow setup is not finished. Run it again at any time; it re-reads the state and keeps no progress of its own. Skip for creating or repairing a role's GitHub App when that is all that was asked, which is `reviewer-setup`.
+description: Check what a dnbg-workflow install still needs and walk the user through only that — which repos the workflow applies to, the reviewer bot, a missing tool or `gh` login — then name the optional extras. Load when asked to set up dnbg or the dnbg plugins, check the dnbg setup, say what is left to set up, finish setup or finish configuration, or change which repos dnbg-workflow applies to. Run it again at any time; it re-reads the state and keeps no progress of its own. Skip for creating or repairing a role's GitHub App when that is all that was asked, which is `reviewer-setup`.
 ---
 
 # Setup
@@ -24,10 +24,15 @@ It prints one `check=<name> state=<state> …` line per check, then
 
 ## 2. Walk what is open
 
-At `setup=complete`, ask nothing and go to step 3.
+Asked to change which repos the workflow applies to, or invoked with `owners`,
+read `references/owners.md` and walk it whether or not `owners` is open, then go
+to step 3.
 
-Otherwise take the checks `open` names, in the order it lists them. Each has one
-reference. Read a reference only when its check is in `open`:
+Otherwise, at `setup=complete`, ask nothing and go to step 3.
+
+Otherwise take the checks `open` names, in the order it lists them, one at a
+time: say nothing about a later check until the one before it is done. Each has
+one reference. Read a reference only when its check is in `open`:
 
 | In `open` | Read |
 | --- | --- |

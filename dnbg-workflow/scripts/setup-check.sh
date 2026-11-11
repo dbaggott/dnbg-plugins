@@ -7,7 +7,7 @@
 #   check=tools state=<ok|missing> missing=<tool,…|none>
 #   check=gh-auth state=<ok|none|unknown>
 #   check=claude-code state=<ok|below|unknown> version=<x.y.z|unknown> floor=<x.y.z>
-#   check=owners state=<set|empty>
+#   check=owners state=<set|empty> [value=<owner,…>]
 #   check=roles state=<ok|unconfigured|error|unknown> configured=<role,…|none> fallback=<role,…|none> unconfigured=<role,…|none> [reason=<reason>]
 #   check=retrospectives state=<on|off>
 #   check=version-stamp state=<on|off>
@@ -115,11 +115,12 @@ else
 fi
 
 # Set means it names an owner: the hooks strip whitespace before matching, and
-# commas alone name nobody.
+# commas alone name nobody. `value` is the list as they read it, kept to the
+# characters a GitHub login can hold.
 OWNERS=$(unset_if_placeholder "$OWNERS")
-OWNERS="${OWNERS//[[:space:],]/}"
-if [ -n "$OWNERS" ]; then
-  echo "check=owners state=set"
+OWNERS="${OWNERS//[^[:alnum:],_.-]/}"
+if [ -n "${OWNERS//,/}" ]; then
+  echo "check=owners state=set value=$OWNERS"
 else
   echo "check=owners state=empty"; open owners
 fi

@@ -73,7 +73,7 @@ has_line() { grep -qxF -- "$1" <<<"$output" || { echo "no line: $1"; echo "$outp
 @test "owners set, the reviewer configured and the tools present is complete, whatever the optional settings" {
   export DNBG_REVIEWER_APP_ID=42
   check --owners='acme-corp, yourname'
-  has_line "check=owners state=set"
+  has_line "check=owners state=set value=acme-corp,yourname"
   has_line "check=roles state=ok configured=reviewer fallback=author unconfigured=none"
   has_line "result=OK setup=complete open=none"
   check --owners=acme --retrospectives=true --version-stamp=true
