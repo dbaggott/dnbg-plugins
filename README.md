@@ -44,7 +44,7 @@ Each stage runs in a fresh session, started from a prompt and a URL. Nothing car
 
 | Stage | What happens | Prompt |
 | --- | --- | --- |
-| Design | You describe the work. If it’s more than one issue’s worth, the session offers to file it as a tracking issue: goals, constraints, decisions with their rationale and reversal conditions, and open questions with defaults. The reviewer bot reviews it in rounds. | `I want to <the work>. File an issue for it.` |
+| Design | You describe the work. If it’s more than one issue’s worth, the session offers to file it as a tracking issue: goals, constraints, decisions with their rationale and reversal conditions, and open questions with defaults. The reviewer bot reviews it in rounds. | `I want to plan out <the work>. File an issue for it.` |
 | Accept | Once the review reads `READY`, the same session asks whether you accept the design. | answer its question |
 | Decompose | The design is split into sub-issues with dependencies tracked in GitHub. The set is reviewed against the design for gaps and drift. | `decompose <URL>` |
 | Execute | An orchestrator works the issues in dependency order, a few at a time, dispatching an author for each and a reviewer once its PR is sent to review. The reviewer re-reviews every push until the PR merges. | `orchestrate <URL>` |
