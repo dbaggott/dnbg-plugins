@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-marketplace.json",
   "name": "dnbg",
-  "description": "Opinionated GitHub workflow and coding-practice plugins: worktree + draft PR flow, self-documenting issues, an independent PR reviewer bot, and work summaries.",
+  "description": "An opinionated software factory, packaged as a set of Claude Code plugins. AI-driven, human-directed, with built-in retrospectives that surface friction to fix. Honed over its first 7 months of real use across 35 repos, ~2k PRs, 1.2M+ lines of code, and 10 languages. Still sharpening.",
   "owner": {
     "name": "dbaggott"
   },
