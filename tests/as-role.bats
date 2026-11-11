@@ -234,6 +234,29 @@ setup() {
   [[ "$output" == *"login (the fallback tier): orchestrator."* ]]
 }
 
+@test "--roles sorts every role into its state, with no network call" {
+  run "$AS" --roles
+  [ "$output" = "result=OK configured=none fallback=author,orchestrator unconfigured=reviewer" ]
+  configure_role reviewer 42 agent-reviewer-t
+  export DNBG_AUTHOR_APP_ID=7
+  run "$AS" --roles
+  [ "$output" = "result=OK configured=author,reviewer fallback=orchestrator unconfigured=none" ]
+  [ ! -s "$NET_LOG" ]
+}
+
+@test "--roles refuses what --fallbacks refuses, and takes no repo" {
+  run "$AS" --roles acme/r
+  [ "$output" = "result=ERROR reason=bad-args" ]
+  configure_role author 7 agent-author-t
+  export DNBG_ORCHESTRATOR_CONFIG_DIR="$XDG_CONFIG_HOME/dnbg/author"
+  run --separate-stderr "$AS" --roles
+  [ "$output" = "result=ERROR reason=shared-identity" ]
+  unset DNBG_ORCHESTRATOR_CONFIG_DIR
+  export DNBG_REVIEWER_CONFIG_DIR='~alice/dnbg'
+  run --separate-stderr "$AS" --roles
+  [ "$output" = "result=ERROR reason=bad-config" ]
+}
+
 @test "the notice names each falling-back role, with no network call" {
   run "$TREE/hooks/role-fallback-notice.sh"
   [ "$status" -eq 0 ]
