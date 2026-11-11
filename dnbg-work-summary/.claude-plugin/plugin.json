@@ -9,5 +9,13 @@
   },
   "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
   "homepage": "https://github.com/dbaggott/dnbg-plugins",
-  "repository": "https://github.com/dbaggott/dnbg-plugins"
+  "repository": "https://github.com/dbaggott/dnbg-plugins",
+  "userConfig": {
+    "owners": {
+      "type": "string",
+      "title": "GitHub owners to search for your work",
+      "description": "Comma-separated list of GitHub orgs and/or personal logins, e.g. 'acme-corp,yourname'. The work-summary skill searches their repos for your PRs and issues. Leave empty and the skill asks which to search each time.",
+      "default": ""
+    }
+  }
 }
