@@ -280,8 +280,7 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
 <p><code>{html.escape(app.get('slug', ''))}</code></p>
 <p>One step left: install it on the accounts and repos it should work in.</p>
 <p><a class="go" href="{html.escape(install_url, quote=True)}">Install on GitHub</a></p>
-<p class="note">When it is installed, close the tab and return to Claude Code.
-Its key is saved on this machine, in <code>{html.escape(str(config_dir))}</code>.</p>""")
+<p class="note">When it is installed, close the tab and return to Claude Code.</p>""")
                 done.set()
             else:
                 self._html(404, "not found")
