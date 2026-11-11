@@ -2,13 +2,6 @@
 #
 # Tests for the issue-side watcher. `gh` and the clock are stubbed, so nothing
 # here sleeps for real and every WINDOW/SETTLE below is in synthetic seconds.
-#
-# Most of these came from watch-pr.bats, where the same behaviours were pinned
-# against a `--issue` mode that polled only for linked PRs. Watching an issue's
-# conversation is the capability that mode lacked
-# (https://github.com/dbaggott/dnbg-plugins-history/issues/163); the linked-PR cases
-# survive unchanged because that question did not move, only the script it lives
-# in did.
 
 WATCH="${BATS_TEST_DIRNAME}/../dnbg-workflow/scripts/watch-issue.sh"
 

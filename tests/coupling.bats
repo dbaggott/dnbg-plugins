@@ -120,8 +120,8 @@ EOF
 
 @test "a rules file naming NotebookEdit but not Edit is caught" {
   # The substring accident, induced rather than asserted against the pattern:
-  # `Edit` occurs inside `NotebookEdit`, so the old per-tool containment check
-  # passed on exactly this file.
+  # `Edit` occurs inside `NotebookEdit`, so a per-tool containment check passes
+  # on exactly this file.
   run gate_agrees "$(fixture_rules 'Write/NotebookEdit')" \
     "$ROOT/dnbg-workflow/hooks/check-worktree.sh" \
     "$ROOT/dnbg-workflow/hooks/hooks.json"
@@ -141,26 +141,19 @@ EOF
 }
 
 # The "is HEAD approved?" question has exactly one correct source: an APPROVED
-# review's commit oid compared to headRefOid. It was answered from
-# `dismiss_stale_reviews` instead, in two skills independently, and that field is
-# meaningless on a repo with `required_approving_review_count: 0` — which both
-# repos these skills run against are. The wrong answer merged two PRs over
-# unreviewed diffs. Prose alone did not hold the line, so this pins it.
-#
-# This test once also pinned the two skills' fenced copies of the comparison
-# against each other. That half is gone with the copies: both now call
-# `scripts/pr-verdict.sh`, and a single implementation cannot disagree with
-# itself. `tests/pr-verdict.bats` covers what the pin could only approximate —
-# that the check takes the last VERDICT rather than the last approval, which is
-# the bug the pin was written for and which it could only detect as a missing
-# grep hit.
+# review's commit oid compared to headRefOid. `dismiss_stale_reviews` is
+# meaningless on a repo with `required_approving_review_count: 0`, so an answer
+# read from it lets a PR merge over an unreviewed diff, and prose alone does not
+# hold the line, so this pins it. The comparison itself is `scripts/pr-verdict.sh`,
+# which `tests/pr-verdict.bats` covers, including that it takes the last VERDICT
+# rather than the last approval.
 @test "nothing reaches for branch protection to decide whether an approval counts" {
-  # Any reintroduction is a regression regardless of intent: the endpoint needs
+  # Any call is wrong regardless of intent: the endpoint needs
   # admin (403/404 on write-only access) and answers the wrong question. The
   # skills may still *name* the setting to explain why not to read it, so match
   # the call, not the words.
   #
-  # `scripts/` is in scope alongside `skills/` now that the check lives there —
+  # `scripts/` is in scope alongside `skills/` because the check lives there —
   # the wrong approach is reintroducible wherever the right one is implemented,
   # and scoping this to prose would leave the actual implementation unguarded.
   if grep -rn 'branches/[^ ]*/protection' \
@@ -288,22 +281,21 @@ EOF
 
 # "Which PRs belong to this issue?" is asked in three places, and each answer gates
 # something different: whether the reviewer wakes, whether it discovers, and whether a
-# coder believes the issue is unclaimed. They drifted — discovery grew the timeline
-# source and the other two kept only `closedByPullRequestsReferences`, which lists PRs
-# carrying a CLOSING KEYWORD and nothing else. Since `git-workflow` has exactly one
-# sibling close an issue and the rest merely mention it, the narrow sources miss the
-# shape that skill mandates: the reviewer's wait sat out its whole window on a real PR,
-# and the claim check reads an in-flight multi-repo change as unclaimed.
+# coder believes the issue is unclaimed. `closedByPullRequestsReferences` alone lists
+# only PRs carrying a CLOSING KEYWORD. Since `git-workflow` has exactly one sibling
+# close an issue and the rest merely mention it, a site polling only that source
+# misses the shape that skill mandates: the reviewer's wait sits out its whole window
+# on a real PR, and the claim check reads an in-flight multi-repo change as unclaimed.
 #
 # The failure is silent at every site — a wait that never fires and a claim check that
 # finds nothing look exactly like a quiet issue — so prose could not hold it. This is
 # the check.
 #
-# Two of the three sites now CALL `scripts/pr-sources.sh` rather than carrying their
+# Two of the three sites CALL `scripts/pr-sources.sh` rather than carrying their
 # own copy, so for them the question is only whether they still invoke it. The third
 # is `fetch-issue-state.sh`, which asks both sources inside one batched query — it
 # reads `state`, the conversation and the linked PRs together, and splitting the
-# linked-PR half back out to a CLI call would cost a request per tick to buy nothing.
+# linked-PR half out to a CLI call would cost a request per tick to buy nothing.
 # So it is the one site that can still narrow alone, and it is compared against the
 # script rather than against prose: real code on both sides.
 
@@ -376,9 +368,9 @@ EOF
   }
 }
 
-# The canonical union, and now the thing every other site is measured against.
-# Deliberately the script and not `reviewer`'s prose: the old reference could only
-# ever prove a site NAMED the same endpoints, never that it queried them the same
+# The canonical union, which every other site is measured against. Deliberately
+# the script and not `reviewer`'s prose: a prose reference could only ever prove a
+# site NAMED the same endpoints, never that it queried them the same
 # way, and `covers_discovery`'s own extractor exists because a prose mention had to
 # be told apart from a query.
 DISCOVERY="$ROOT/dnbg-workflow/scripts/pr-sources.sh"
@@ -389,10 +381,10 @@ DISCOVERY="$ROOT/dnbg-workflow/scripts/pr-sources.sh"
   [ "$status" -eq 0 ]
 }
 
-# The two prose sites can no longer narrow by rewriting a query, because they have
-# no query — so what is left to protect is that they still call the union rather
-# than growing a private one back. A site that reintroduced its own copy would fail
-# this by dropping the invocation, which is the reachable regression; one that kept
+# The two prose sites cannot narrow by rewriting a query, because they have no
+# query — so what is left to protect is that they still call the union rather
+# than growing a private one. A site that carried its own copy would fail this by
+# dropping the invocation, which is the reachable failure; one that kept
 # BOTH would be caught by review, not by a grep.
 @test "the prose discovery sites call the union rather than carrying a copy" {
   local f
@@ -470,8 +462,8 @@ EOF
 }
 
 @test "a site polling only the closing-keyword source is caught" {
-  # The exact regression, induced: the shape both sites had before, which no test
-  # could distinguish from a quiet issue.
+  # Induced: a site polling only the closing-keyword source, which every other
+  # test reads the same as a quiet issue.
   run covers_discovery \
     "$(fixture_site 'gh issue view <n> --json closedByPullRequestsReferences')" \
     "$DISCOVERY"
@@ -708,17 +700,15 @@ remote_read_calls() {  # <SKILL.md>
     echo "issue-workflow's remote read is not framed as a fallback"; false; }
 }
 
-# The decline table drifted from the skill it describes, one round after
-# the skill was corrected — `issue-workflow`'s rule cell read `same`, inheriting
-# `git-workflow`'s origin rule, so when issue-workflow stopped deciding that way
-# the cell could not go visibly stale: it still pointed at a neighbour whose rule
-# was still right *for the neighbour*.
+# A decline-table cell reading `same` inherits a neighbour's rule, so when the
+# skill it describes changes how it decides, the cell cannot go visibly stale: it
+# still points at a neighbour whose rule is still right *for the neighbour*.
 #
 # This bans the inheriting placeholder, nothing more. It cannot tell whether a
 # spelled-out rule is correct — checking prose against behavior would mean
 # parsing one into the other, which is a worse trade than the drift it prevents.
-# What it does buy is that a rule change has to touch the cell that states it,
-# which is the step that was skipped. Keeping the artifacts honest past that
+# What it does buy is that a rule change has to touch the cell that states it.
+# Keeping the artifacts honest past that
 # stays a manual step, deliberately.
 @test "every row of the decline table states its own rule instead of inheriting one" {
   local offenders
@@ -1108,7 +1098,7 @@ tree_agents() {  # -> each agent definition's path
 
 # An ERROR reason the prose does not name falls into a catch-all, and all three
 # consumers say that must not happen — a watch that could not see gets reported as
-# a quiet issue. The set now lives in four places, so it is pinned to the one that
+# a quiet issue. The set lives in four places, so it is pinned to the one that
 # emits it. Only this direction is checked: a reason the script gained and the
 # prose lacks. The reverse needs an extractor over prose, which would be fragile
 # in exactly the way this test is not.
@@ -1453,7 +1443,7 @@ MD
   done
 }
 
-# `verdict=` is now answered in three places — pr-verdict.sh, watch-pr.sh's
+# `verdict=` is answered in three places — pr-verdict.sh, watch-pr.sh's
 # level-triggered check, and the round packet — but only the first two can hold a
 # copy of the RULE. The packet delegates, so the set stays pinned by the test
 # above rather than needing a third arm that would have to be kept in step.
@@ -1480,10 +1470,10 @@ MD
 # The selection predicate is pinned, not only the object shape, and it is the half
 # that costs data. `watch-pr.sh` counts what it emits in order to set `activity=1`;
 # a count filtered differently from the emission prints `activity=1` above an EMPTY
-# payload, which a caller now told the payload is the conversation reads as nothing
+# payload, which a caller told the payload is the conversation reads as nothing
 # landed — and it then re-arms with `since_iso` set to now, losing it permanently.
-# Deriving both counts from the shared filters is what makes that unreachable, so a
-# reintroduced inline `select(...)` on those fields is the regression to catch.
+# Deriving both counts from the shared filters is what makes that unreachable, so an
+# inline `select(...)` on those fields is the failure to catch.
 @test "both activity producers source the shared filters instead of spelling them" {
   local f runlines
   for f in "$ROOT/dnbg-workflow/scripts/watch-pr.sh" \
@@ -1556,8 +1546,8 @@ MD
   [ "$bad" = 0 ]
 }
 
-# A script that calls `gh` either carries the forge seam — the header marker naming
-# https://github.com/dbaggott/dnbg-plugins-history/issues/149 and the `FORGE` guard that
+# A script that calls `gh` either carries the forge seam — the header marker, whose
+# next line says the guard refuses any other forge, and the `FORGE` guard that
 # refuses with `unsupported-forge` — or is listed here as GitHub-shaped throughout, so a
 # new forge call is one or the other by decision rather than by omission.
 GITHUB_ONLY_SCRIPTS="fetch-tree.sh pr-round.sh pr-sources.sh pr-threads.sh pr-verdict.sh watch-pr.sh"
@@ -1573,7 +1563,7 @@ calls_forge() {  # <script>
 # shellcheck disable=SC2016  # the guard is matched as literal text
 has_forge_seam() {  # <script>
   grep -A1 'THE FORGE IS ASSUMED TO BE GITHUB' "$1" \
-      | grep -qF 'https://github.com/dbaggott/dnbg-plugins-history/issues/149' \
+      | grep -qF 'below refuses any other forge' \
     && grep -qF 'FORGE="${FORGE:-github}"' "$1" \
     && grep -qE '\bfail unsupported-forge\b' "$1"
 }

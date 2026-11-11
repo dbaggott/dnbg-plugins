@@ -128,7 +128,7 @@ run_issue_hook() {  # <payload>
   [ "$status" -eq 2 ]
   [[ "$output" == *"File: tracked.txt"* ]]
   [[ "$output" == *"/.worktrees/<branch-name>/tracked.txt"* ]]
-  # The two shapes a re-introduced prefix strip produces: the payload's spelling
+  # The two shapes a prefix strip produces: the payload's spelling
   # surviving into the message, and a retry path that is two absolute paths
   # joined at a `//`.
   [[ "$output" != *"$TMP/link"* ]]
@@ -178,9 +178,8 @@ run_issue_hook() {  # <payload>
 }
 
 @test "allows a tracked file when the remote is a non-GitHub host" {
-  # End-to-end form of the host bug: same owner name, different forge. Before
-  # host scoping this was blocked, while every skill told the agent to run `gh`
-  # against a remote where it cannot work.
+  # Same owner name, different forge: the gate is scoped to GitHub hosts, since
+  # the flow it enforces runs `gh`, which cannot work against this remote.
   set_origin 'https://gitlab.com/acme-corp/repo.git'
   run_worktree_hook "$(edit_payload "$REPO/tracked.txt")"
   [ "$status" -eq 0 ]
@@ -315,9 +314,7 @@ create --title x')"
 
 # --- the gate matches a COMMAND, not a mention of one -----------------------
 #
-# Every case below is a command that creates no issue. Each was blocked before
-# https://github.com/dbaggott/dnbg-plugins-history/issues/59, and the payloads that trip
-# it are the ones written while working on this repo.
+# Every case below is a command that creates no issue.
 
 @test "a quoted mention in a commit message is not an issue creation" {
   run_issue_hook "$(bash_payload 'git commit -m "document the gh issue create gate"')"
@@ -325,15 +322,15 @@ create --title x')"
 }
 
 @test "a quoted mention in a review body is not an issue creation" {
-  # The live failure: the reviewer bot blocked posting a review about this hook.
+  # A review about this hook must be postable.
   run_issue_hook "$(bash_payload 'gh api repos/o/r/pulls/58/reviews -f body="I blocked your gh issue create call"')"
   [ "$status" -eq 0 ]
 }
 
 @test "a payload carrying a single quote reaches the hook intact" {
-  # The harness guard for run_hook. Under the old interpolated form this payload
-  # did not fail the assertion — it never reached the hook at all, dying as a
-  # shell quoting error in the command the harness built.
+  # The harness guard for run_hook. Interpolated into the command the harness
+  # builds, this payload would never reach the hook, dying as a shell quoting
+  # error rather than failing the assertion.
   run_issue_hook "$(bash_payload "git commit -m \"don't document the gh issue create gate\"")"
   [ "$status" -eq 0 ]
 }
@@ -357,7 +354,7 @@ MSG')"
 
 @test "an env-prefixed invocation is still gated" {
   # Anchoring the match straight to `gh` un-gates it — a hole worse than the
-  # over-blocking the anchor was added to fix, because it fails OPEN.
+  # over-blocking the anchor prevents, because it fails OPEN.
   run_issue_hook "$(bash_payload 'env -u GH_TOKEN gh issue create --title x')"
   [ "$status" -eq 2 ]
 }

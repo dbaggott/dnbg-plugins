@@ -14,7 +14,7 @@ specific input you have:
 
 1. **An issue named by full URL**: the host is in the URL, so read it there and
    stop, without consulting the working directory.
-   `https://github.com/dbaggott/dnbg-plugins-history/issues/23` is GitHub even from a
+   `https://github.com/acme/api/issues/23` is GitHub even from a
    GitLab checkout, and `https://gitlab.com/acme/api/-/issues/7` is GitLab even
    from a GitHub one.
 2. **A bare issue number, or creating an issue in place**: the input carries no

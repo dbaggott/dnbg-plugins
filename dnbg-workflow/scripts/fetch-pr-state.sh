@@ -21,11 +21,10 @@
 # grades a degraded source on its own counter, since one source failing forever
 # while the rest answer is a blind watch wearing a healthy one's costume.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB HERE, AND THAT IS THE ONE THING IN THIS
-# FILE THAT IS NOT YET TRUE IN GENERAL. https://github.com/dbaggott/dnbg-plugins-history/issues/149
-# replaces the constant below with host detection and adds sibling backends; the
-# split between `normalise` and the fetch exists so that change touches one
-# function. Nothing above this line is GitHub-shaped — that is the contract.
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB HERE, AND ONLY HERE: the `FORGE` guard
+# below refuses any other forge, and the GitHub backend after it maps GitHub's
+# answer onto the names above. Nothing above this line is GitHub-shaped — that
+# is the contract.
 set -euo pipefail
 
 now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }

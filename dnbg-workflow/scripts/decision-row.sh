@@ -39,9 +39,8 @@
 # listing the issue's comments or posting the row failed, so the outcome is
 # unknown; `role` means the resolver refused and nothing was read or written.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins-history/issues/149
-# replaces the constant below with host detection; the output above is not
-# GitHub-shaped.
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: the `FORGE` guard
+# below refuses any other forge. The output above is not GitHub-shaped.
 set -euo pipefail
 # `--under-role <owner/repo> <n> <body file>` is this script's own re-run under
 # the resolver, which keeps the role's token in place. Not for callers.
