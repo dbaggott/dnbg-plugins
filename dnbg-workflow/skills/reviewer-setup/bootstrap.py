@@ -207,16 +207,18 @@ def created_page(installs: list[tuple[str, str]], left: list[str]) -> str:
     role = installs[-1][0]
     if left:
         return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
-<p>Next: the {html.escape(left[0])} bot, opening in a new tab. You can close this one.</p>
-<p class="note">You install the bots together, after the last is created.</p>"""
+<p>This tab is done: you can close it.</p>
+<p class="note">The {html.escape(left[0])} bot is next, in a new tab. You install the bots together, after the last is created.</p>"""
     if len(installs) == 1:
         heading = f"The {html.escape(role)} bot is created"
         step = "One step left: install it."
-        closing = "When it is installed"
+        how = "The button opens GitHub in a new tab."
+        closing = "When it is installed, close this tab and return to Claude Code."
     else:
         heading = f"All {len(installs)} bots are created"
         step = "One step left: install each of them."
-        closing = "When all are installed"
+        how = "Each button opens GitHub in a new tab. Come back here after each one."
+        closing = "When all are installed, close this tab and return to Claude Code."
     buttons = "\n".join(
         f'<p><a class="go" target="_blank" rel="noopener" href="{html.escape(url, quote=True)}">'
         f'Install the {html.escape(r)} bot</a></p>' for r, url in installs)
@@ -227,8 +229,9 @@ def created_page(installs: list[tuple[str, str]], left: list[str]) -> str:
 <li><b>Only select repositories</b>: limits what the bot can touch; you add new repos later.</li>
 </ul>
 <p class="note">You can change this at any time on GitHub, under Settings, then Applications.</p>
+<p>{how}</p>
 {buttons}
-<p class="note">{closing}, close the tab and return to Claude Code.</p>"""
+<p class="note">{closing}</p>"""
 
 
 def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path,
