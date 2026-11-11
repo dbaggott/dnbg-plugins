@@ -21,9 +21,9 @@ stands, from its `value=`: "dnbg-workflow currently applies to: `<account>`,
 
 The question is **"Which GitHub accounts do you want to use dnbg-workflow on?
 (Repos are chosen later.)"**, with nothing said before it, and where a picker
-takes a header, it is "Accounts". How it is
-asked depends on how many accounts step 1 found. Without `AskUserQuestion`, ask
-it as the typed form whatever the count.
+takes a header, it is "Accounts". How it is asked depends on how many accounts
+step 1 found. Without `AskUserQuestion`, ask it as the typed form whatever the
+count.
 
 ### Up to 8 accounts: checkboxes
 

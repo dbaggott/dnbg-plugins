@@ -33,8 +33,8 @@ Otherwise, at `setup=complete`, ask nothing and go to step 3.
 Otherwise take the checks `open` names, in the order it lists them, one at a
 time. Go from one check's question straight to the next: no message in between
 confirming what was just done or introducing what comes next, since step 3's
-summary carries all of it. Each has
-one reference. Read a reference only when its check is in `open`:
+summary carries all of it. Each has one reference. Read a reference only when
+its check is in `open`:
 
 | In `open` | Read |
 | --- | --- |
@@ -48,8 +48,8 @@ The user may stop at any check. Go to step 3 with whatever is left.
 
 If you walked any check, run step 1's command again and read `open` from the
 new result, with one correction: the command carries the `owners` this skill
-loaded with, so where it was set during this run, count `owners` as closed,
-without telling the user about the correction.
+loaded with, so where it was set during this run, or the user answered none,
+count `owners` as closed, without telling the user about the correction.
 
 Then give the whole of it in one summary, so nothing said along the way is
 lost among the questions. Use this shape, a line each, leaving out a line that
@@ -67,29 +67,30 @@ does not apply:
 > - ❌ **Still open:** `<what is left, in plain words>`. *(or: ✅ **Setup is
 >   complete.**)*
 >
-> Run `/dnbg-workflow:setup` at any time to pick up what is left or change an
-> answer.
+> Run `/dnbg-workflow:setup` at any time to pick up what is left, or
+> `/dnbg-workflow:setup owners` to change the accounts.
 
 Each line opens with a mark, which takes its wording with it: ✅ done, ❌ not
 done and still open, ➖ not done by the user's choice or optional. Accounts of
-none is ❌ only while `owners` is still open with a value waiting to be set. There is a bot line for every role on the `check=roles` line: set up when it
-is in `configured=`, and otherwise as its bracket says. **Accounts** is the list
-saved during this run, else `value=` on the `check=owners`
-line. **Still open** names each check left in `open`, with a missing tool by
-name.
+none is ❌ only while `owners` is still open with a value waiting to be set.
+There is a bot line for every role on the `check=roles` line: set up when it is
+in `configured=`, and otherwise as its bracket says. **Accounts** is the list
+saved during this run, else `value=` on the `check=owners` line. **Still open**
+names each check left in `open`, with a missing tool by name.
 
-A session-start message repeats while `owners` or `roles` is open, until the
-marker file on the `check=marker` line exists. When the user has said they are
-leaving one of those two as it is, write the marker, and tell them that the
-message is now off and that deleting that file brings it back:
+A session-start notice repeats while `owners` is empty or a role in
+`unconfigured=` has no bot, until the marker file on the `check=marker` line
+exists. When the user answered none for the accounts or declined such a bot,
+write the marker, and tell them in one line that the notice is now off and that
+deleting that file brings it back:
 
 ```bash
 mkdir -p "$(dirname "<path>")" && touch "<path>"
 ```
 
 After the summary, name the optional extras, once, a line each, under their own
-heading, and ask about none of them. When nothing is open, end on the welcome
-below the list:
+heading, and ask about none of them. When nothing is open and the accounts are
+not none, end on the welcome below the list:
 
 - **Auto-update (recommended)**: "gets you bug fixes and enhancements as they
   ship. Turn it on with `/plugin`, then **Marketplaces**, **dnbg**, **Enable
@@ -111,7 +112,7 @@ below the list:
 
 Name each by the words above, never by its option's key.
 
-**The welcome** is the last thing said when nothing is open, in this shape. Its
+**The welcome** is the last thing said, in this shape. Its
 first line is "Restart Claude Code, then try it:" when `owners` was saved during
 this run:
 

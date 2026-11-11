@@ -46,8 +46,8 @@ dismissal, ask in one line, "Nothing was ticked. No bots, then?"
   another role "Its work keeps posting as you."
 
 Load the `reviewer-setup` skill and follow it for the roles chosen, all in one
-run, without its own confirmation, which the question was. It
-creates and installs the Apps; nothing here repeats its steps. Where it has you
+run, without its own confirmation, which the question was. It creates and
+installs the Apps; nothing here repeats its steps. Where it has you
 name the accounts to install on, they are the ones `owners` holds: those saved
 during this run, else `value=` on the `check=owners` line.
 

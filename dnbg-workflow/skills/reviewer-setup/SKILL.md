@@ -86,8 +86,8 @@ Confirm with the operator which roles to create before running it, unless the
 skill that sent you here already has their go-ahead. Describe a role's App in
 one line, as a GitHub App under their account that gives the role's activity
 its own identity, separate from theirs. When you ask with a picker, label the
-go-ahead option "Create (Recommended)" and nothing more. The Apps are publicly listed
-("Ownership model" above); say so when asked.
+go-ahead option "Create (Recommended)" and nothing more. The Apps are publicly
+listed ("Ownership model" above); say so when asked.
 
 For each role it opens your browser to a local page that immediately forwards to
 GitHub. The **one step it can't automate** is the click GitHub requires to create
@@ -108,14 +108,17 @@ and have the operator forward the port and open that URL.
 ## Install the App
 
 Creation does not install an App — an App with no installation can't mint a
-token. Open each install URL the helper printed
-(`https://github.com/apps/<slug>/installations/new`) and install it on **each
-account whose repos that role will work on**, scoped to the repos you want.
-⚠️ **Scope this deliberately: the repo list is the only lever you have.** The
-reviewer App needs `contents: write` to review at all — GitHub gates resolving a
-thread and having a verdict counted on it, with no narrower grant — so a leaked
-key can write source on every repo the App is installed on. `SECURITY.md` states
-each role's blast radius.
+token. The run's last browser page carries an install button for each App it
+created (`https://github.com/apps/<slug>/installations/new`) and says how to
+choose the repos: all of an account's, which it recommends for the least
+upkeep, or a selected list. Each App is installed on **each account whose repos
+that role will work on**.
+
+When the operator asks which to choose, give them the trade: the reviewer App
+needs `contents: write` to review at all — GitHub gates resolving a thread and
+having a verdict counted on it, with no narrower grant — so a leaked key can
+write source on every repo the App is installed on, and the repo list is the
+one lever that narrows it. `SECURITY.md` states each role's blast radius.
 
 - **Your personal account** — for your personal repos. You install it directly.
 - **Each org** — for that org's repos. An org owner approves the install (you can
