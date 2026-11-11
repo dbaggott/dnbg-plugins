@@ -2359,3 +2359,12 @@ undeclared_placeholders() {  # <plugin-dir>
   [ -n "$doc" ] || { echo "no floor parsed out of docs/requirements.md"; false; }
   [ "$doc" = "$script" ] || { echo "docs say $doc, setup-check.sh says $script"; false; }
 }
+
+@test "setup-check.sh looks for the tools docs/requirements.md lists" {
+  local doc script
+  doc=$(awk '/^\| Tool \|/{t=1; next} t && /^\| `/{print} t && !/^\|/{exit}' "$ROOT/docs/requirements.md" \
+    | sed 's/^| `\([a-z0-9]*\)`.*/\1/' | sort | tr '\n' ' ')
+  script=$(sed -n 's/^TOOLS="\(.*\)"$/\1/p' "$ROOT/dnbg-workflow/scripts/setup-check.sh" | tr ' ' '\n' | sort | tr '\n' ' ')
+  [ -n "$doc" ] || { echo "no tools parsed out of docs/requirements.md"; false; }
+  [ "$doc" = "$script" ] || { echo "docs list: $doc"; echo "setup-check.sh: $script"; false; }
+}

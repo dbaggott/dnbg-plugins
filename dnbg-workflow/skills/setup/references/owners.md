@@ -10,7 +10,7 @@ add no note on what each account is and no spelled-out combinations.
 ## 1. Read the accounts
 
 ```bash
-gh api user --jq .login; gh api user/orgs --jq '.[].login'
+gh api user --jq .login; gh api --paginate user/orgs --jq '.[].login'
 ```
 
 When the `check=owners` line reads `state=set`, open with the list as it
@@ -83,7 +83,9 @@ was recorded and how to change it.
 **An answer of none**, with `owners` empty, saves nothing. An answer of none
 that replaces a list is saved as below, with an empty value.
 
-**Any other answer**: the value is the accounts as one comma-separated line.
+**Any other answer**: the value is the accounts as one comma-separated line. A
+GitHub account name is letters, digits and hyphens: put nothing else in the
+value, and ask again about an answer that holds anything else.
 When `self=` on the `check=plugins` line names an id, save it without asking
 again, and on success go on:
 

@@ -196,19 +196,41 @@ def save_credentials(config_dir: Path, owner_type: str, org: str, app: dict) -> 
     config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
-def created_page(installs: list[tuple[str, str]], left: list[str]) -> str:
+def install_buttons(installs: list[tuple[str, str]]) -> str:
+    return "\n".join(
+        f'<p><a class="go" target="_blank" rel="noopener" href="{html.escape(url, quote=True)}">'
+        f'Install the {html.escape(r)} bot</a></p>' for r, url in installs)
+
+
+def failed_page(heading: str, detail: str, installs: list[tuple[str, str]]) -> str:
+    """A page for a role whose App was not set up. The Apps the run created
+    before it get their install buttons here, since its last page never comes."""
+    body = f"<h1>{heading}</h1><p>{html.escape(detail)}</p>"
+    if installs:
+        body += ("<p>The bots created before this one still need installing. "
+                 "Each button opens GitHub in a new tab.</p>" + install_buttons(installs))
+    return body
+
+
+def created_page(installs: list[tuple[str, str]], left: list[str], tabs: bool = True) -> str:
     """The page shown once a role's App exists. `installs` is (role, install URL)
     for every App this run has created, the newest last; `left` is the roles the
-    run still has to create.
+    run still has to create; `tabs` is whether the run opens each role's page
+    itself.
 
     Installing waits for the last page, which carries every App's button: the
     run opens the next role's tab as soon as this one is served, so a button on
     an earlier page would be left behind in a tab nobody is looking at."""
     role = installs[-1][0]
-    if left:
+    if left and tabs:
         return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
 <p>This tab is done: you can close it.</p>
 <p class="note">The {html.escape(left[0])} bot is next, in a new tab. You install the bots together, after the last is created.</p>"""
+    if left:
+        # No browser was opened for this run, so none will be for the next role.
+        return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
+<p><a class="go" href="/start/{html.escape(left[0], quote=True)}">Next: the {html.escape(left[0])} bot</a></p>
+<p class="note">You install the bots together, after the last is created.</p>"""
     if len(installs) == 1:
         heading = f"The {html.escape(role)} bot is created"
         step = "One step left: install it."
@@ -219,9 +241,7 @@ def created_page(installs: list[tuple[str, str]], left: list[str]) -> str:
         step = "One step left: install each of them."
         how = "Each button opens GitHub in a new tab. Come back here after each one."
         closing = "When all are installed, close this tab and return to Claude Code."
-    buttons = "\n".join(
-        f'<p><a class="go" target="_blank" rel="noopener" href="{html.escape(url, quote=True)}">'
-        f'Install the {html.escape(r)} bot</a></p>' for r, url in installs)
+    buttons = install_buttons(installs)
     return f"""<h1>&#10003; {heading}</h1>
 <p>{step} GitHub will ask which repos:</p>
 <ul>
@@ -255,6 +275,10 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path,
 
     result: dict = {}
     done = threading.Event()
+    before = [(e["role"], e["install_url"]) for e in earlier]
+    # Whether this run opens each role's page itself; settled below, before any
+    # callback can be served.
+    flow = {"tabs": not args.no_browser}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):  # quiet
@@ -268,7 +292,10 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path,
 
         def do_GET(self):  # noqa: N802
             parsed = urlparse(self.path)
-            if parsed.path == "/":
+            # `/start/<role>` is the link an earlier role's page carries when no
+            # browser is opened: only this role's server answers it, so a click
+            # that lands before the hand-over cannot start the earlier role again.
+            if parsed.path in ("/", f"/start/{role}"):
                 manifest = build_manifest(role, name, f"http://localhost:{args.port}/callback", public)
                 # Auto-submitting form: the manifest must be POSTed to GitHub.
                 # html.escape so the embedded JSON is safe in the attribute
@@ -286,13 +313,13 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path,
             elif parsed.path == "/callback":
                 qs = parse_qs(parsed.query)
                 if (qs.get("state") or [""])[0] != state:
-                    self._html(400, "<h1>Setup stopped</h1><p>State mismatch — possible CSRF. Setup aborted.</p>")
+                    self._html(400, failed_page("Setup stopped", "State mismatch — possible CSRF. Setup aborted.", before))
                     result["error"] = "state mismatch on callback"
                     done.set()
                     return
                 code = (qs.get("code") or [""])[0]
                 if not code:
-                    self._html(400, "<h1>Setup failed</h1><p>No code in callback.</p>")
+                    self._html(400, failed_page("Setup failed", "No code in callback.", before))
                     result["error"] = "no code in callback"
                     done.set()
                     return
@@ -304,7 +331,7 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path,
                     if not all(k in app for k in ("id", "pem", "slug")):
                         raise KeyError("conversion response missing id/pem/slug")
                 except (urllib.error.HTTPError, urllib.error.URLError, KeyError) as exc:
-                    self._html(500, f"<h1>Setup failed</h1><p>Manifest conversion failed: {html.escape(str(exc))}</p>")
+                    self._html(500, failed_page("Setup failed", f"Manifest conversion failed: {exc}", before))
                     result["error"] = f"manifest conversion failed: {exc}"
                     done.set()
                     return
@@ -317,14 +344,13 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path,
                     msg = (f"App '{app.get('slug', '')}' was created on GitHub, but saving its "
                            f"credentials to {config_dir} failed ({exc}). Delete the App in its "
                            f"GitHub settings, fix the directory, and re-run setup.")
-                    self._html(500, f"<h1>Setup failed</h1><p>{html.escape(msg)}</p>")
+                    self._html(500, failed_page("Setup failed", msg, before))
                     result["error"] = msg
                     done.set()
                     return
                 result["app"] = app
                 install_url = f"https://github.com/apps/{app.get('slug', '')}/installations/new"
-                installs = [(e["role"], e["install_url"]) for e in earlier] + [(role, install_url)]
-                self._html(200, created_page(installs, left))
+                self._html(200, created_page(before + [(role, install_url)], left, flow["tabs"]))
                 done.set()
             else:
                 self._html(404, "not found")
@@ -340,6 +366,7 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path,
     open_url = f"http://localhost:{args.port}/"
     print(f"Opening {open_url} — complete the {role} App's creation in your browser.", file=sys.stderr)
     if not args.no_browser and not webbrowser.open(open_url):
+        flow["tabs"] = False
         print(f"No browser could be opened here. Open {open_url} yourself, on this machine.",
               file=sys.stderr)
 

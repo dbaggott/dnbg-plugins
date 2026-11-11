@@ -104,7 +104,7 @@ bootstrap() {
 
 # The run opens the next role's tab the moment one App exists, so an install
 # button on an earlier page is left in a tab nobody is looking at.
-@test "only the last page of a run carries the install buttons, one per App created" {
+@test "the install buttons are on a run's last page, or on the page of the role that stopped it" {
   run python3 - "$BATS_TEST_DIRNAME/../dnbg-workflow/skills/reviewer-setup/bootstrap.py" <<'PY'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("bootstrap", sys.argv[1])
@@ -115,6 +115,11 @@ assert "installations/new" not in mid and "author bot is next" in mid, mid
 last = b.created_page([(r, url % r) for r in ("reviewer", "author", "orchestrator")], [])
 assert all(url % r in last for r in ("reviewer", "author", "orchestrator")), last
 assert "All 3 bots are created" in last, last
+untabbed = b.created_page([("reviewer", url % "reviewer")], ["author"], tabs=False)
+assert 'href="/start/author"' in untabbed and "installations/new" not in untabbed, untabbed
+failed = b.failed_page("Setup failed", "no <code>", [("reviewer", url % "reviewer")])
+assert url % "reviewer" in failed and "no &lt;code&gt;" in failed, failed
+assert "installations/new" not in b.failed_page("Setup failed", "x", [])
 one = b.created_page([("reviewer", url % "reviewer")], [])
 assert one.count("installations/new") == 1 and "The reviewer bot is created" in one, one
 PY

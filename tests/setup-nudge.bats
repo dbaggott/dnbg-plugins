@@ -65,11 +65,41 @@ NOTICE='NOTICE: Run /dnbg-workflow:setup to finish configuration.'
   [ "$(message)" = "$NOTICE" ]
 }
 
-@test "silent once the marker exists" {
-  mkdir -p "$XDG_CONFIG_HOME/dnbg"; : > "$XDG_CONFIG_HOME/dnbg/setup-acknowledged"
+ack() {  # <owners|roles>...
+  mkdir -p "$XDG_CONFIG_HOME/dnbg"
+  printf '%s\n' "$@" > "$XDG_CONFIG_HOME/dnbg/setup-acknowledged"
+}
+
+@test "silent once both are acknowledged" {
+  ack owners roles
   run "$NUDGE"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+}
+
+@test "acknowledging one leaves the other announced" {
+  ack owners
+  run "$NUDGE"
+  [ "$(message)" = "$NOTICE" ]
+  ack roles
+  run "$NUDGE"
+  [ "$(message)" = "$NOTICE" ]
+}
+
+@test "an acknowledgement silences its own condition alone" {
+  ack owners
+  DNBG_REVIEWER_APP_ID=42 run "$NUDGE"
+  [ -z "$output" ]
+  ack roles
+  CLAUDE_PLUGIN_OPTION_OWNERS=acme run "$NUDGE"
+  [ -z "$output" ]
+}
+
+@test "an empty marker acknowledges nothing" {
+  ack
+  : > "$XDG_CONFIG_HOME/dnbg/setup-acknowledged"
+  CLAUDE_PLUGIN_OPTION_OWNERS=acme run "$NUDGE"
+  [ "$(message)" = "$NOTICE" ]
 }
 
 @test "a role that falls back does not print it" {

@@ -79,14 +79,17 @@ saved during this run, else `value=` on the `check=owners` line. **Still open**
 names each check left in `open`, with a missing tool by name.
 
 A session-start notice repeats while `owners` is empty or a role in
-`unconfigured=` has no bot, until the marker file on the `check=marker` line
-exists. When the user answered none for the accounts or declined such a bot,
-write the marker, and tell them in one line that the notice is now off and that
-deleting that file brings it back:
+`unconfigured=` has no bot, each until the marker file on the `check=marker`
+line holds its word. When the user answered none for the accounts, append
+`owners`; when they declined a bot for a role in `unconfigured=`, append
+`roles`:
 
 ```bash
-mkdir -p "$(dirname "<path>")" && touch "<path>"
+mkdir -p "$(dirname "<path>")" && echo <owners|roles> >> "<path>"
 ```
+
+Tell them in one line that the notice is off for that, and that deleting the
+file brings it back.
 
 After the summary, name the optional extras, once, a line each, under their own
 heading, and ask about none of them. When nothing is open and the accounts are

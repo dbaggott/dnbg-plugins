@@ -12,7 +12,7 @@
 #   check=retrospectives state=<on|off>
 #   check=version-stamp state=<on|off>
 #   check=plugins state=<ok|unknown> self=<plugin@marketplace|none> installed=<plugin,…|none>
-#   check=marker state=<present|absent> path=<path>
+#   check=marker acknowledged=<owners,roles|owners|roles|none> path=<path>
 #   result=OK setup=<complete|incomplete> open=<check,…|none>
 #   result=ERROR reason=bad-args
 #
@@ -34,11 +34,13 @@
 # `gh-auth` asks `gh` for its stored login with no token in the environment, as
 # the resolver reads the operator's, and makes no network call. `plugins` reads
 # Claude Code's record of installs at any scope, `plugins/installed_plugins.json`
-# under its config directory: `self` is the id this plugin is installed under,
-# which `claude plugin configure` takes, and `installed` lists which of its
-# marketplace's other plugins are there. A plugin loaded with `--plugin-dir` is
-# not recorded. `marker` is the file whose presence stops the session-start
-# setup nudge.
+# under its config directory: `self` is the id of the install this script is
+# running from, matched on its path, which `claude plugin configure` takes, and
+# `installed` lists which of its marketplace's other plugins are there. A copy
+# loaded with `--plugin-dir` is not a recorded install, so its `self` is `none`
+# whatever else is installed. `marker` is the file the `setup` skill appends
+# `owners` or `roles` to when the user leaves that one unset on purpose, which
+# stops the session-start nudge for it; `acknowledged` is what it holds.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -146,9 +148,11 @@ echo "check=version-stamp state=$(on_or_off "$VERSION_STAMP")"
 
 RECORD="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/plugins/installed_plugins.json"
 if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
-  NAME=$(jq -r '.name // empty' "$HERE/../.claude-plugin/plugin.json" 2>/dev/null || true)
-  SELF=""
-  [ -z "$NAME" ] || SELF=$(grep -m1 "^$NAME@" <<<"$KEYS" || true)
+  ROOT=$(cd "$HERE/.." && pwd)
+  SELF=$(jq -r --arg a "$ROOT" --arg b "$(cd "$ROOT" && pwd -P)" '
+    first(.plugins | to_entries[]
+          | select(any(.value[]?; .installPath == $a or .installPath == $b)) | .key) // empty' \
+    "$RECORD" 2>/dev/null || true)
   INSTALLED=""
   for plugin in $SIBLING_PLUGINS; do
     case $'\n'"$KEYS" in *$'\n'"$plugin@"*) INSTALLED="${INSTALLED:+$INSTALLED,}$plugin" ;; esac
@@ -159,11 +163,15 @@ else
 fi
 
 MARKER="${XDG_CONFIG_HOME:-${HOME:-}/.config}/dnbg/setup-acknowledged"
-if [ -e "$MARKER" ]; then
-  echo "check=marker state=present path=$MARKER"
-else
-  echo "check=marker state=absent path=$MARKER"
+ACKNOWLEDGED=""
+if [ -r "$MARKER" ]; then
+  while IFS= read -r line; do
+    case "$line" in owners|roles)
+      case ",$ACKNOWLEDGED," in *",$line,"*) ;; *) ACKNOWLEDGED="${ACKNOWLEDGED:+$ACKNOWLEDGED,}$line" ;; esac ;;
+    esac
+  done < "$MARKER"
 fi
+echo "check=marker acknowledged=${ACKNOWLEDGED:-none} path=$MARKER"
 
 if [ -z "$OPEN" ]; then
   echo "result=OK setup=complete open=none"

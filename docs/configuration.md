@@ -20,17 +20,19 @@ nothing you didn't write.
 The `setup` skill reads the state of the install and walks only what is open:
 `owners`, a role that needs an App, a missing tool, a `gh` with no login, a
 client older than the [floor](requirements.md). It keeps no progress of its own,
-so running it again is how you check a setup or change an answer. Once you name
-the accounts for `owners` it offers to save the value for you, through
-`claude plugin configure`; everything else it sets up through `reviewer-setup` or
-tells you where to set.
+so running it again is how you check a setup, and `/dnbg-workflow:setup owners`
+is how you change the accounts. Once you name the accounts for `owners` it saves
+the value for you, through `claude plugin configure`, without asking a second
+time; the bots it sets up through `reviewer-setup`, and anything else it tells
+you where to set.
 
 While `owners` is empty or the reviewer has no App, each new session opens with
 a one-line message saying setup is not finished. It is shown to you and is not
-part of what the agent reads. Empty `owners` is a legitimate place to stop, so
-tell the skill you are leaving it that way and it writes
-`$XDG_CONFIG_HOME/dnbg/setup-acknowledged` (`~/.config/dnbg/setup-acknowledged`
-when that variable is unset), which turns the message off. Delete the file to
+part of what the agent reads. Empty `owners` is a legitimate place to stop, and
+so is going without the reviewer: answer none, or decline the bot, and the skill
+records that in `$XDG_CONFIG_HOME/dnbg/setup-acknowledged`
+(`~/.config/dnbg/setup-acknowledged` when that variable is unset), which turns
+the message off for that one and leaves it on for the other. Delete the file to
 get it back.
 
 ## Install scope

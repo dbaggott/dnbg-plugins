@@ -39,9 +39,13 @@ claude_version() {  # <what `claude --version` prints>
   chmod +x "$BIN/claude"
 }
 
-record_installs() {  # <plugin@marketplace>...
-  printf '%s\n' "$@" | jq -R . | jq -s '{version: 2, plugins: (map({(.): []}) | add)}' \
-    > "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json"
+# Each id is recorded as installed somewhere else, except one given as
+# `<id>=here`, which is recorded at the tree the check runs from.
+record_installs() {  # <plugin@marketplace>[=here]...
+  printf '%s\n' "$@" | jq -R --arg here "$TREE" '
+      (endswith("=here")) as $h | (sub("=here$"; "")) as $id
+      | {($id): [{scope: "user", installPath: (if $h then $here else "/elsewhere/" + $id end)}]}' \
+    | jq -s '{version: 2, plugins: add}' > "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json"
 }
 
 # Every case ends on exactly one result line, whatever else it asserts.
@@ -65,7 +69,7 @@ has_line() { grep -qxF -- "$1" <<<"$output" || { echo "no line: $1"; echo "$outp
   has_line "check=retrospectives state=off"
   has_line "check=version-stamp state=off"
   has_line "check=plugins state=unknown self=none installed=none"
-  has_line "check=marker state=absent path=$XDG_CONFIG_HOME/dnbg/setup-acknowledged"
+  has_line "check=marker acknowledged=none path=$XDG_CONFIG_HOME/dnbg/setup-acknowledged"
   has_line "result=OK setup=incomplete open=owners,roles"
   [ "${#lines[@]}" -eq 10 ]
 }
@@ -174,10 +178,15 @@ STUB
   has_line "result=OK setup=incomplete open=roles"
 }
 
-@test "plugins names this plugin's install id and the siblings recorded beside it" {
-  record_installs other@elsewhere dnbg-workflow@dnbg dnbg-agent-summaries@dnbg dnbg-practices@dnbg
+@test "plugins names the install the check runs from, and the siblings recorded beside it" {
+  record_installs other@elsewhere dnbg-workflow@old dnbg-workflow@dnbg=here \
+    dnbg-agent-summaries@dnbg dnbg-practices@dnbg
   check
   has_line "check=plugins state=ok self=dnbg-workflow@dnbg installed=dnbg-practices,dnbg-agent-summaries"
+  # Installed, but this copy is not that install: a --plugin-dir load.
+  record_installs dnbg-workflow@dnbg
+  check
+  has_line "check=plugins state=ok self=none installed=none"
   record_installs other@elsewhere
   check
   has_line "check=plugins state=ok self=none installed=none"
@@ -186,10 +195,14 @@ STUB
   has_line "check=plugins state=unknown self=none installed=none"
 }
 
-@test "the marker is reported present once it exists" {
-  mkdir -p "$XDG_CONFIG_HOME/dnbg"; : > "$XDG_CONFIG_HOME/dnbg/setup-acknowledged"
+@test "the marker line names what the file acknowledges, and nothing it does not" {
+  local marker="$XDG_CONFIG_HOME/dnbg/setup-acknowledged"
+  mkdir -p "$XDG_CONFIG_HOME/dnbg"; : > "$marker"
   check
-  has_line "check=marker state=present path=$XDG_CONFIG_HOME/dnbg/setup-acknowledged"
+  has_line "check=marker acknowledged=none path=$marker"
+  printf '%s\n' roles junk owners roles > "$marker"
+  check
+  has_line "check=marker acknowledged=roles,owners path=$marker"
 }
 
 @test "an argument it does not know is bad-args, and nothing else is printed" {
