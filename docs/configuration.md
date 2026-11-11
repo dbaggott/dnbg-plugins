@@ -229,7 +229,7 @@ searches, and neither plugin reads the other's. With both installed, set each.
 
 | Setting | Meaning |
 | --- | --- |
-| `owners` | Comma-separated GitHub orgs and/or personal logins, e.g. `acme-corp,yourname`, whose repos `work-summary` searches for your PRs and issues |
+| `owners` | Comma-separated GitHub orgs and/or personal logins, e.g. `acme-corp,yourname`, whose repos `work-summary` searches for your PRs and issues. Spaces are ignored |
 
 The value reaches the skill by substitution into its text, as `summary_dir`
 does. Left unset or empty, the skill asks which org or login to search each time

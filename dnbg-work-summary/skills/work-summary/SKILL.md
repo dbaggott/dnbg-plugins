@@ -46,15 +46,16 @@ each gather and present shipped first (what's done), then in-progress (what's op
 
 ## 2. Resolve scope + window
 
-**Owner scope** is this plugin's `owners` setting: `${user_config.owners}`. Where
-that value is empty, or is still a `${…}` placeholder, the setting is unset: ask
-which org or login to search rather than guessing, and run no search before the
-answer; a search with no owner filter spans all of GitHub and returns noise.
-Without `AskUserQuestion`, end the turn with that question as your report. A
-value or an answer holding a character outside letters, digits, `-`, `_`, `,`
-and spaces is not an owner list, and it goes into shell commands: ask again
-instead of using it. `<owners>` below is the list you end up with; `gh search`'s
-`--owner` takes it comma-separated as it stands.
+**Owner scope** is this plugin's `owners` setting, spaces stripped:
+`${user_config.owners}`. Where nothing is left, or the value is still a `${…}`
+placeholder, the setting is unset: ask which org or login to search rather than
+guessing, and run no search before the answer; a search with no owner filter
+spans all of GitHub and returns noise. A value that is not a comma-separated
+list of logins, each of letters, digits, `-` and `_`, is not usable, since it
+goes into shell commands: say the setting is malformed and ask the same
+question. Without `AskUserQuestion`, end the turn with that question as your
+report. Hold the answer to the same form. `<owners>` below is the resulting
+list, spaces stripped, which `gh search`'s `--owner` takes as it stands.
 
 **Author scope** defaults to **your own** work. Resolve your login once
 (`ME=$(gh api user --jq .login)`); `--author "$ME"` filters server-side to just your
