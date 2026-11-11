@@ -1,13 +1,16 @@
 # Setup: agent roles
 
-Part of the `setup` skill. Read this when `roles` is in the check's `open`.
-Act on the `check=roles` line's `state`.
+Part of the `setup` skill. Read this when `roles` is in the check's `open`, and
+act on the `check=roles` line's `state`. Read it too when the user asks for a
+role's bot: then ask "The questions" below for the roles they named.
 
 ## `state=unconfigured`
 
 Each role in `unconfigured=` has no GitHub App and refuses to post as the
 user's own account, so nothing it posts can run. Each role in `fallback=` has
 none either and posts as the user until it does.
+
+### The questions
 
 Say nothing before the question. Ask about every role in `unconfigured=` and
 then every role in `fallback=`, in one `AskUserQuestion` call with a question
