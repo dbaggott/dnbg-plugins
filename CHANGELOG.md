@@ -10,6 +10,15 @@ tagged, and their versions used a two-component scheme that predates the current
 
 <!-- releases below -->
 
+## dnbg-workflow 2026.11.17 — 2026-11-11
+
+Removed links to a private repository, which nobody reading the installed
+plugin could open, from the skills and scripts.
+
+`orchestrate` on a tracking issue no longer keeps a note, per child, of what
+each author's last report was waiting for. Nothing in the skill read it.
+
+
 ## dnbg-work-summary 2026.11.2 — 2026-11-11
 
 Fixed `work-summary` reading an `owners` setting that this plugin never had.
