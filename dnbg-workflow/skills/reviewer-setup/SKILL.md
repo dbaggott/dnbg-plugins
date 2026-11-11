@@ -120,15 +120,28 @@ repo each time the role acts, so install on every account you intend the role to
 work on. (An **org-owned** App, if you chose `--owner-type org`, installs on the
 org only.)
 
+When a role's App is created, tell the operator in this shape and no longer.
+The browser tab already shows the install button, so repeat neither the URL nor
+why an App needs installing:
+
+> The `<role>` bot is created: `<slug>`.
+>
+> One step left: click **Install on GitHub** in the browser tab and pick the
+> repos you want to use it with. It can write to every repo you give it.
+>
+> Tell me when it's installed.
+
+Name the accounts to install it on when you know them.
+
 ## Verify
 
 Confirm each role can act on each account you installed it on, through the same
-resolver every caller uses. `<repo>` is any repo of that account the App is
-installed on:
+resolver every caller uses. The token is minted for the account, so the repo
+name is not looked up and you need not ask for one:
 
 ```bash
-"<skill-dir>/../../scripts/as-role.sh" <role> <your-login>/<repo> -- true && echo "ready: personal"
-"<skill-dir>/../../scripts/as-role.sh" <role> <org-login>/<repo> -- true && echo "ready: org"
+"<skill-dir>/../../scripts/as-role.sh" <role> <your-login>/_ -- true && echo "ready: personal"
+"<skill-dir>/../../scripts/as-role.sh" <role> <org-login>/_ -- true && echo "ready: org"
 ```
 
 A quiet run, apart from the resolver's `as=` line, means setup is complete for

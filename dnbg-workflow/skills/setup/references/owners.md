@@ -34,6 +34,9 @@ label is its bare name and its description "Every repo under `<name>`". With
 more than one question, each ends "(1 of 3)", "(2 of 3)" and so on. The picker's
 own "Other" takes an account that is not listed.
 
+Before the call, say in one line: "This picks the accounts. You choose which
+of their repos the reviewer bot can work in at a later step."
+
 The answer is every account ticked on any page. None ticked, or nothing ticked
 anywhere, is none. If the call fails or comes back without an answer for a
 page, ask again in the typed form.
@@ -59,7 +62,8 @@ in as many calls as the accounts need at four questions a call.
 
 > Which repos do you want to use dnbg-workflow on? It is set per GitHub
 > account: `<account>`, `<account>`, `<account>`. Name any of them, another
-> account, or none.
+> account, or none. You choose which of their repos the reviewer bot can work
+> in at a later step.
 
 ### Reading the answer
 

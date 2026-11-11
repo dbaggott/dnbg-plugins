@@ -14,7 +14,9 @@ Tell the user that, and that creating an App is a click in the browser per role
 and an install on the accounts and repos they choose, with the key staying on
 this machine. Then load the `reviewer-setup` skill and follow it for the roles
 in `unconfigured=`. It creates and installs the Apps; nothing here repeats its
-steps.
+steps. Where it has you name the accounts to install on, they are the ones
+`owners` holds: those saved during this run, else `value=` on the `check=owners`
+line.
 
 While there, offer the roles in `fallback=` as optional: they work now, posting
 as the user's own account, and `reviewer-setup` gives each its own bot identity
