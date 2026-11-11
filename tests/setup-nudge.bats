@@ -11,19 +11,17 @@ setup() {
   stub_forge
   add_role author operator
   NUDGE="$TREE/hooks/setup-nudge.sh"
-  unset CLAUDE_PLUGIN_OPTION_OWNERS
+  unset CLAUDE_PLUGIN_OPTION_OWNERS CLAUDE_CODE_ENTRYPOINT NO_COLOR
 }
 
 message() { jq -er '.systemMessage' <<<"$output"; }
+NOTICE='NOTICE: Run /dnbg-workflow:setup to finish configuration.'
 
-@test "a fresh install is told about owners and the reviewer, and the command" {
+@test "a fresh install is pointed at the setup command, in one line and with no network call" {
   run "$NUDGE"
   [ "$status" -eq 0 ]
   [ "${#lines[@]}" -eq 1 ]
-  local msg; msg=$(message)
-  [[ "$msg" == *'`owners` is not set'* ]]
-  [[ "$msg" == *"no GitHub App is set up for the reviewer role"* ]]
-  [[ "$msg" == *"/dnbg-workflow:setup"* ]]
+  [ "$(message)" = "$NOTICE" ]
   [ ! -s "$NET_LOG" ]
 }
 
@@ -32,20 +30,26 @@ message() { jq -er '.systemMessage' <<<"$output"; }
   [ "$(jq -c 'keys' <<<"$output")" = '["systemMessage"]' ]
 }
 
-@test "with owners set, only the role is named" {
+@test "printed with owners set while the reviewer has no App" {
   export CLAUDE_PLUGIN_OPTION_OWNERS=acme
   run "$NUDGE"
-  local msg; msg=$(message)
-  [[ "$msg" != *owners* ]]
-  [[ "$msg" == *"the reviewer role"* ]]
+  [ "$(message)" = "$NOTICE" ]
 }
 
-@test "with the reviewer configured, only owners is named" {
+@test "printed with the reviewer configured while owners is empty" {
   export DNBG_REVIEWER_APP_ID=42
   run "$NUDGE"
-  local msg; msg=$(message)
-  [[ "$msg" == *'`owners` is not set'* ]]
-  [[ "$msg" != *"GitHub App"* ]]
+  [ "$(message)" = "$NOTICE" ]
+}
+
+@test "the terminal client gets it in bold yellow, as valid JSON, unless NO_COLOR is set" {
+  export CLAUDE_CODE_ENTRYPOINT=cli
+  run "$NUDGE"
+  [ "$(message)" = $'\033[1;33m'"$NOTICE"$'\033[0m' ]
+  NO_COLOR=1 run "$NUDGE"
+  [ "$(message)" = "$NOTICE" ]
+  CLAUDE_CODE_ENTRYPOINT=sdk-ts run "$NUDGE"
+  [ "$(message)" = "$NOTICE" ]
 }
 
 @test "silent when owners is set and the reviewer configured" {
@@ -58,7 +62,7 @@ message() { jq -er '.systemMessage' <<<"$output"; }
 @test "owners of separators alone is empty, as the hooks read it" {
   export CLAUDE_PLUGIN_OPTION_OWNERS=' , ' DNBG_REVIEWER_APP_ID=42
   run "$NUDGE"
-  [[ "$(message)" == *'`owners` is not set'* ]]
+  [ "$(message)" = "$NOTICE" ]
 }
 
 @test "silent once the marker exists" {
@@ -68,9 +72,12 @@ message() { jq -er '.systemMessage' <<<"$output"; }
   [ -z "$output" ]
 }
 
-@test "a role that falls back is not named" {
+@test "a role that falls back does not print it" {
+  export CLAUDE_PLUGIN_OPTION_OWNERS=acme DNBG_REVIEWER_APP_ID=42
   run "$NUDGE"
-  [[ "$(message)" != *author* ]]
+  [ -z "$output" ]
+  run "$TREE/scripts/as-role.sh" --fallbacks
+  [ "$output" = "result=OK roles=author" ]
 }
 
 @test "a resolver refusal leaves the roles to the fallback notice" {
@@ -80,14 +87,14 @@ message() { jq -er '.systemMessage' <<<"$output"; }
   [ -z "$output" ]
 }
 
-@test "without jq it still names owners, and says nothing of roles" {
+@test "without jq, owners alone decides" {
   local bin="$BATS_TEST_TMPDIR/nojq" b; mkdir -p "$bin"
   for b in bash dirname tr; do ln -sf "$(command -v "$b")" "$bin/$b"; done
   run env PATH="$bin" "$NUDGE"
   [ "$status" -eq 0 ]
-  local msg; msg=$(message)
-  [[ "$msg" == *'`owners` is not set'* ]]
-  [[ "$msg" != *"GitHub App"* ]]
+  [ "$output" = "{\"systemMessage\":\"$NOTICE\"}" ]
+  run env PATH="$bin" CLAUDE_PLUGIN_OPTION_OWNERS=acme "$NUDGE"
+  [ -z "$output" ]
 }
 
 @test "the manifest runs it at startup, and never for a subagent" {
