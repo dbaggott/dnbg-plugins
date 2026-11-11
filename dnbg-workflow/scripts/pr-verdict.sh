@@ -17,11 +17,12 @@
 # than reduced to a single yes/no here.
 #
 # ⚠️ `at_head` ALONE DOES NOT MEAN HEAD HAS BEEN REVIEWED. A force-push moves an
-# existing review's `commit_id` onto the rewritten commit, so a review can report
-# a commit created after the review was submitted. SHA and tree comparisons are
-# both defeated by that rewrite (the re-anchored review's tree IS head's tree),
-# so this compares the two things it cannot touch: `reviewed_after_head=1`
-# means the standing verdict was submitted after the commit at head was created.
+# existing review's `commit_id` onto the rewritten commit — observed: a review
+# submitted 18:44:21Z reporting a commit created 18:46:23Z. SHA and tree
+# comparisons are both defeated by that rewrite (the re-anchored review's tree
+# IS head's tree), so this compares the two things it cannot touch:
+# `reviewed_after_head=1` means the standing verdict was submitted after the
+# commit at head was created.
 # Both dates come from the `gh pr view` already made here, so it costs no extra
 # request.
 #

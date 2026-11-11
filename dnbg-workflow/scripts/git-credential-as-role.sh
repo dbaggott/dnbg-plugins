@@ -48,7 +48,7 @@
 # Run it again on every worktree you take up: it is idempotent, and the helper
 # path it records is this copy's, which a plugin update can remove.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: the `FORGE` guard
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: each subcommand's `FORGE` check
 # below refuses any other forge. Two parts are GitHub's: the
 # `x-access-token` username an installation token pushes under, and the
 # operator's `gh auth git-credential`. The resolver already refuses a host it
