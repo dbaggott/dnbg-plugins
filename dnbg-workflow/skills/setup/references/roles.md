@@ -6,14 +6,15 @@ Act on the `check=roles` line's `state`.
 ## `state=unconfigured`
 
 Each role in `unconfigured=` has no GitHub App and refuses to post as the
-user's own account, so nothing it posts can run. For the reviewer that is every
-PR review and every spec review: an independent verdict needs an identity that
-is not the author's.
+user's own account, so nothing it posts can run. For the reviewer, say this and
+no more:
 
-Tell the user that, and that creating an App is a click in the browser per role
-and an install on the accounts and repos they choose, with the key staying on
-this machine. Then load the `reviewer-setup` skill and follow it for the roles
-in `unconfigured=`. It creates and installs the Apps; nothing here repeats its
+> Next, the reviewer bot. It reviews your PRs and issues under its own GitHub
+> identity, and no review can run without it. It takes two clicks in the
+> browser: one to create it, one to install it.
+
+Then load the `reviewer-setup` skill and follow it for the roles in
+`unconfigured=`. It creates and installs the Apps; nothing here repeats its
 steps. Where it has you name the accounts to install on, they are the ones
 `owners` holds: those saved during this run, else `value=` on the `check=owners`
 line.

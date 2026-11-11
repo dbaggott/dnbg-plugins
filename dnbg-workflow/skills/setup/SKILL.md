@@ -60,7 +60,8 @@ does not apply:
 > - **Other roles:** `<role>` and `<role>` post as your own account. *(the roles
 >   in `fallback=`; or: each has its own bot.)*
 > - **Restart Claude Code** for the repos to take effect. *(only when `owners`
->   was saved during this run)*
+>   was saved during this run and something is still open; otherwise the
+>   welcome says it)*
 > - **Still open:** `<what is left, in plain words>`. *(or: nothing. Setup is
 >   complete.)*
 >
@@ -81,7 +82,8 @@ mkdir -p "$(dirname "<path>")" && touch "<path>"
 ```
 
 After the summary, name the optional extras, once, a line each, under their own
-heading, and ask about none of them:
+heading, and ask about none of them. When nothing is open, end on the welcome
+below the list:
 
 - **`retrospectives`**, with its state from the check: on, every agent role
   writes a file on where the process slowed it when its work ends, for
@@ -100,3 +102,15 @@ heading, and ask about none of them:
 - **`owners` on `dnbg-work-summary`**, when `installed=` names that plugin:
   whose repos a recap searches, set with `/plugin configure dnbg-work-summary`.
   It is a separate setting from this plugin's `owners`.
+
+**The welcome** is the last thing said when nothing is open, in this shape. Its
+first line is "Restart Claude Code, then try it:" when `owners` was saved during
+this run:
+
+> **Welcome to dnbg-workflow.** You're ready to go.
+>
+> Try it: open a session in one of your repos and ask for a change, such as
+> *add a `--json` flag to the export script*. You'll get a worktree, a draft PR
+> and an offer to send it to review.
+>
+> For something bigger: *I want to `<the work>`. File an issue for it.*
