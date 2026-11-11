@@ -2300,3 +2300,47 @@ reviewer_handoff_leaves_merge() {  # <report.md> <watch.md>
   [ "$status" -ne 0 ] && [[ "$output" == *"no longer says"* ]] \
     || { echo "removing the Done sentence was not caught: $output"; false; }
 }
+
+# A `${user_config.<key>}` in a skill is filled only from the options its own
+# plugin declares, and one naming a key the manifest lacks reaches the agent as
+# the literal placeholder, which nothing reports.
+undeclared_placeholders() {  # <plugin-dir>
+  local dir="${1%/}" manifest hit key
+  manifest="$dir/.claude-plugin/plugin.json"
+  [ -d "$dir/skills" ] || return 0
+  while IFS= read -r hit; do
+    key=${hit##*\$\{user_config.}
+    key=${key%\}}
+    jq -e --arg k "$key" '.userConfig // {} | has($k)' "$manifest" > /dev/null \
+      || echo "${hit%:*}: \${user_config.$key} names no userConfig key in $manifest"
+  done < <(grep -rnoE '\$\{user_config\.[A-Za-z0-9_]+\}' "$dir/skills")
+}
+
+@test "every user_config placeholder in a skill names a key its own plugin declares" {
+  local dir
+  for dir in "$ROOT"/dnbg-*/; do
+    undeclared_placeholders "$dir"
+  done > "$BATS_TEST_TMPDIR/undeclared"
+  cat "$BATS_TEST_TMPDIR/undeclared"
+  [ ! -s "$BATS_TEST_TMPDIR/undeclared" ]
+}
+
+@test "a placeholder naming an undeclared key is caught, and one naming a declared key passes" {
+  local plugin="$BATS_TEST_TMPDIR/plugin"
+  mkdir -p "$plugin/.claude-plugin" "$plugin/skills/recap"
+  printf '%s\n' '{"userConfig": {"summary_dir": {"type": "string"}}}' > "$plugin/.claude-plugin/plugin.json"
+  printf '%s\n' 'Write under `${user_config.summary_dir}`.' > "$plugin/skills/recap/SKILL.md"
+  run undeclared_placeholders "$plugin"
+  [ -z "$output" ] || { echo "a declared key was reported: $output"; false; }
+
+  printf '%s\n' 'Search `${user_config.owners}`.' >> "$plugin/skills/recap/SKILL.md"
+  run undeclared_placeholders "$plugin"
+  [[ "$output" == *'SKILL.md:2: ${user_config.owners} names no userConfig key'* ]] \
+    || { echo "an undeclared key was not caught: $output"; false; }
+  [[ "$output" != *summary_dir* ]] || { echo "the declared key was reported with it: $output"; false; }
+
+  printf '%s\n' '{"name": "recap"}' > "$plugin/.claude-plugin/plugin.json"
+  run undeclared_placeholders "$plugin"
+  [[ "$output" == *'${user_config.summary_dir} names no'* && "$output" == *'${user_config.owners} names no'* ]] \
+    || { echo "a manifest with no userConfig did not fail both placeholders: $output"; false; }
+}

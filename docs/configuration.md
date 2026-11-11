@@ -10,6 +10,7 @@ nothing you didn't write.
 - [`version_stamp`](#version_stamp--recording-which-prompts-published-what) — off by default; adds a hidden version marker to what you publish
 - [`retrospectives`](#retrospectives--where-process-friction-goes) — off by default; writes a retrospective file at every close-out
 - [`summary_dir`](#summary_dir--where-dnbg-agent-summaries-keeps-summary-files) — `dnbg-agent-summaries`' one setting: where summary files are written
+- [`owners` on `dnbg-work-summary`](#owners-on-dnbg-work-summary--whose-repos-a-recap-searches) — `dnbg-work-summary`'s one setting: where `work-summary` looks for your work
 - [Agent roles](#agent-roles--whose-login-each-agent-posts-under) — each role's App, the resolver, and the fallback to your own account
 - [Role Apps' private keys](#role-apps-private-keys) — where each is read from
 
@@ -216,6 +217,23 @@ The value reaches the skill by substitution into its text, so no hook runs. Left
 unset, the skill sees its own placeholder and uses the default instead. A value
 that breaks the rule is not rejected at session start, since no
 hook reads it: the skill uses the default and says so when it next runs.
+
+Like every value here it is read from your **user** `settings.json`.
+
+## `owners` on `dnbg-work-summary` — whose repos a recap searches
+
+This one belongs to the `dnbg-work-summary` plugin, so it is set on that plugin
+from `/plugin`. It shares a name with `dnbg-workflow`'s `owners` and nothing
+else: that one says where the hooks enforce, this one says where `work-summary`
+searches, and neither plugin reads the other's. With both installed, set each.
+
+| Setting | Meaning |
+| --- | --- |
+| `owners` | Comma-separated GitHub orgs and/or personal logins, e.g. `acme-corp,yourname`, whose repos `work-summary` searches for your PRs and issues |
+
+The value reaches the skill by substitution into its text, as `summary_dir`
+does. Left unset or empty, the skill asks which org or login to search each time
+it runs.
 
 Like every value here it is read from your **user** `settings.json`.
 
