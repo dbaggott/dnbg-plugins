@@ -133,6 +133,11 @@ why an App needs installing:
 
 Name the accounts to install it on when you know them.
 
+Keep the key's mechanics out of what you tell the operator: where the
+credentials were saved, which config directory or variable is in force, and
+what you will or will not do with the key. Raise them only when asked, or when
+a step fails and the fix is there.
+
 ## Verify
 
 Confirm each role can act on each account you installed it on, through the same
