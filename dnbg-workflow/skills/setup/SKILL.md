@@ -87,25 +87,25 @@ After the summary, name the optional extras, once, a line each, under their own
 heading, and ask about none of them. When nothing is open, end on the welcome
 below the list:
 
-- **`retrospectives`**, with its state from the check: on, every agent role
-  writes a file on where the process slowed it when its work ends, for
-  `process-review` to find the patterns in. Set with
-  `/plugin configure dnbg-workflow`.
-- **`version_stamp`**, with its state from the check: on, PR descriptions,
-  reviews and issue claims carry a hidden comment naming the plugin version.
-  Set in the same place.
+- **Auto-update (recommended)**: "gets you bug fixes and enhancements as they
+  ship. Turn it on with `/plugin`, then **Marketplaces**, **dnbg**, **Enable
+  auto-update**."
 - **Bots for the roles in `fallback=`** on the `check=roles` line, when it
   names any, recommended: "`<role>` and `<role>` post as you. Say *create the
   `<role>` and `<role>` bots* to give them their own identities." Asked for
   them, read `references/roles.md` and ask its questions for those roles.
-- **Auto-update**: `/plugin`, then **Marketplaces**, **dnbg**, **Enable
-  auto-update**.
-- **`summary_dir`**, when `installed=` on the `check=plugins` line names
-  `dnbg-agent-summaries`: where summary files are written, set with
-  `/plugin configure dnbg-agent-summaries`.
-- **`owners` on `dnbg-work-summary`**, when `installed=` names that plugin:
-  whose repos a recap searches, set with `/plugin configure dnbg-work-summary`.
-  It is a separate setting from this plugin's `owners`.
+- **Retrospectives**, with its state from the check: on, every agent role
+  writes a file on where the process slowed it when its work ends, for
+  `process-review` to find the patterns in. Set with
+  `/plugin configure dnbg-workflow`.
+- **Version stamp**, with its state from the check: on, PR descriptions,
+  reviews and issue claims carry a hidden comment naming the plugin version.
+  Set in the same place.
+- **Where summary files are written**, when `installed=` on the `check=plugins`
+  line names `dnbg-agent-summaries`: "`~/.claude/dnbg-agent-summaries` unless
+  you change it, with `/plugin configure dnbg-agent-summaries`."
+
+Name each by the words above, never by its option's key.
 
 **The welcome** is the last thing said when nothing is open, in this shape. Its
 first line is "Restart Claude Code, then try it:" when `owners` was saved during
