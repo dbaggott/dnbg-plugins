@@ -96,11 +96,6 @@ child is that agent's report: run the loop, and handle a `CHANGES REQUESTED`
 from a re-review in `references/design-change.md`. The closeout PR's review is
 handled from the PR, per `references/closeout.md`.
 
-Keep, per child, what its author's last report said it is waiting for, when the
-report ends on a wait rather than a question or a result. Several authors can
-be waiting at once, and that record is what
-https://github.com/dbaggott/dnbg-plugins-history/issues/260's resume rule reads.
-
 ## Triage and the log
 
 Triage against the parent's body first, its decisions with their rationale,

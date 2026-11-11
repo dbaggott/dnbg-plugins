@@ -47,9 +47,8 @@
 # was read or written. Without `--as` the script runs as the operator, as it
 # always has, and its output is unchanged.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins-history/issues/149
-# replaces the constant below with host detection; the output above is not
-# GitHub-shaped.
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: the `FORGE` guard
+# below refuses any other forge. The output above is not GitHub-shaped.
 set -euo pipefail
 # `--under-role` is this script's own re-run under the resolver (`--as`, below),
 # which keeps the role's token the resolver put in place. Not for callers.

@@ -15,9 +15,8 @@
 # with `This is a **tracking issue**` (issue-workflow's tracking-issue.md) or
 # the issue has sub-issues; `children` counts its sub-issues, open or closed.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins-history/issues/149
-# replaces the constant below with host detection; the output above is not
-# GitHub-shaped.
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: the `FORGE` guard
+# below refuses any other forge. The output above is not GitHub-shaped.
 set -euo pipefail
 
 now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }

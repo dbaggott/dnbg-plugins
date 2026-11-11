@@ -221,8 +221,6 @@ line() { tail -1 <<<"$1"; }
   [[ "$output" == *"reason=bad-args"* ]]
 }
 
-# The seam https://github.com/dbaggott/dnbg-plugins-history/issues/149 widens. It must
-# refuse rather than silently answer as GitHub.
 @test "a forge with no backend is refused rather than assumed" {
   pr CLEAN '[]'
   FORGE=gitlab run "$FETCH" o/r 1
@@ -297,9 +295,9 @@ line() { tail -1 <<<"$1"; }
 }
 
 # The fourth wait that arrives as BLOCKED. On a repo with no required-approval
-# protection `reviewDecision` is empty, so a failed required check reached the
-# terminal fallback — and a terminal block prints no re-arm line, so the author's
-# review watch ended permanently the first time CI went red.
+# protection `reviewDecision` is empty, so a failed required check must not reach
+# the terminal fallback: a terminal block prints no re-arm line, so the author's
+# review watch would end permanently the first time CI went red.
 @test "BLOCKED on a failed required check is not terminal" {
   pr BLOCKED '[{"name":"ci","status":"COMPLETED","conclusion":"FAILURE"}]' ""
   run "$FETCH" o/r 1

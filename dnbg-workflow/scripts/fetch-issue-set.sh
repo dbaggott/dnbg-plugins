@@ -28,9 +28,8 @@
 # `now` is stamped before the query, so an edit landing while it runs carries a
 # later `body_edited` than `now` and reads as moved.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins-history/issues/149
-# replaces the constant below with host detection; the output above is not
-# GitHub-shaped.
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: the `FORGE` guard
+# below refuses any other forge. The output above is not GitHub-shaped.
 set -euo pipefail
 
 now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }

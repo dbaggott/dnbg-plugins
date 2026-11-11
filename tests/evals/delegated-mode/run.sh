@@ -38,11 +38,11 @@
 #                   the turn and a departure noted beside a send-to-review
 #                   question is one decided.
 #
-# `Delegated question:` is the opening line R13 of
-# https://github.com/dbaggott/dnbg-plugins-history/issues/223 fixes. In the
-# contradiction and departure fixtures it is what separates asking from
-# deciding: "names the contradiction" only means containing both planted
-# strings, which a comment announcing a choice also does.
+# `Delegated question:` is the opening line `issue-workflow`'s
+# `references/delegated.md` fixes. In the contradiction and departure fixtures
+# it is what separates asking from deciding: "names the contradiction" only
+# means containing both planted strings, which a comment announcing a choice
+# also does.
 #
 # Run by hand, not in CI — every run spends model calls:
 #

@@ -18,9 +18,8 @@
 # one would silently move it out of the other project, so that is refused rather
 # than done. On any rejection the forge's own message goes to stderr.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins-history/issues/149
-# replaces the constant below with host detection; the output above is not
-# GitHub-shaped.
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: the `FORGE` guard
+# below refuses any other forge. The output above is not GitHub-shaped.
 set -euo pipefail
 
 now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }

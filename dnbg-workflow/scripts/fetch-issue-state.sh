@@ -35,9 +35,8 @@
 # Discovery keeps it for the one thing a poll does not need: finding a sibling in
 # a DIFFERENT repo, which a caller re-runs on wake anyway.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB. https://github.com/dbaggott/dnbg-plugins-history/issues/149
-# replaces the constant below with host detection; nothing above this line is
-# GitHub-shaped.
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: the `FORGE` guard
+# below refuses any other forge. Nothing above this line is GitHub-shaped.
 set -euo pipefail
 
 now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }

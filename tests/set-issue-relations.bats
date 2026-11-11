@@ -152,5 +152,5 @@ url() { echo "https://github.com/o/r/issues/$1"; }
 
 @test "the GitHub assumption carries the forge marker" {
   grep -A1 'THE FORGE IS ASSUMED TO BE GITHUB' "$SET" \
-    | grep -qF 'https://github.com/dbaggott/dnbg-plugins-history/issues/149'
+    | grep -qF 'below refuses any other forge'
 }
