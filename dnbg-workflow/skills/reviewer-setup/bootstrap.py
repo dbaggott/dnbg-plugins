@@ -96,6 +96,28 @@ def gh_login() -> str:
         return ""
 
 
+# Every page the local server answers with. Self-contained: no script, font or
+# image is fetched, so the page renders with no network beyond GitHub itself.
+PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dnbg-workflow setup</title>
+<style>
+  :root {{ color-scheme: light dark; }}
+  body {{ font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
+         display: grid; place-items: center; min-height: 100vh; padding: 16px;
+         box-sizing: border-box; background: Canvas; color: CanvasText; }}
+  main {{ max-width: 34rem; }}
+  h1 {{ font-size: 1.5rem; margin: 0 0 .5rem; }}
+  code {{ font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }}
+  .go {{ display: inline-block; font: inherit; font-weight: 600; cursor: pointer;
+        padding: .6rem 1.1rem; border: 0; border-radius: 6px; text-decoration: none;
+        background: #1f883d; color: #fff; }}
+  .note {{ font-size: .875rem; opacity: .7; }}
+</style></head><body><main>
+{body}
+</main></body></html>"""
+
+
 def build_manifest(role: str, name: str, redirect_url: str, public: bool) -> dict:
     return {
         "name": name,
@@ -196,7 +218,7 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
             self.send_response(code)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(body.encode())
+            self.wfile.write(PAGE.format(body=body).encode())
 
         def do_GET(self):  # noqa: N802
             parsed = urlparse(self.path)
@@ -206,25 +228,24 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
                 # html.escape so the embedded JSON is safe in the attribute
                 # regardless of manifest content (defense-in-depth).
                 manifest_attr = html.escape(json.dumps(manifest), quote=True)
-                self._html(200, f"""<!doctype html><html><body>
-<form id="f" action="{html.escape(create_url, quote=True)}" method="post">
+                self._html(200, f"""<form id="f" action="{html.escape(create_url, quote=True)}" method="post">
   <input type="hidden" name="manifest" value="{manifest_attr}">
 </form>
-<p>Redirecting you to GitHub to create the {html.escape(role)} App
-(<b>{name}</b>)&hellip; if nothing happens, click Create.</p>
-<button form="f" type="submit">Create GitHub App</button>
-<script>document.getElementById('f').submit();</script>
-</body></html>""")
+<h1>Taking you to GitHub&hellip;</h1>
+<p>to create the {html.escape(role)} bot, <code>{html.escape(name)}</code>.</p>
+<p><button class="go" form="f" type="submit">Create GitHub App</button></p>
+<p class="note">If nothing happens, click the button.</p>
+<script>document.getElementById('f').submit();</script>""")
             elif parsed.path == "/callback":
                 qs = parse_qs(parsed.query)
                 if (qs.get("state") or [""])[0] != state:
-                    self._html(400, "<p>State mismatch — possible CSRF. Setup aborted.</p>")
+                    self._html(400, "<h1>Setup stopped</h1><p>State mismatch — possible CSRF. Setup aborted.</p>")
                     result["error"] = "state mismatch on callback"
                     done.set()
                     return
                 code = (qs.get("code") or [""])[0]
                 if not code:
-                    self._html(400, "<p>No code in callback. Setup failed.</p>")
+                    self._html(400, "<h1>Setup failed</h1><p>No code in callback.</p>")
                     result["error"] = "no code in callback"
                     done.set()
                     return
@@ -236,7 +257,7 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
                     if not all(k in app for k in ("id", "pem", "slug")):
                         raise KeyError("conversion response missing id/pem/slug")
                 except (urllib.error.HTTPError, urllib.error.URLError, KeyError) as exc:
-                    self._html(500, f"<p>Manifest conversion failed: {html.escape(str(exc))}</p>")
+                    self._html(500, f"<h1>Setup failed</h1><p>Manifest conversion failed: {html.escape(str(exc))}</p>")
                     result["error"] = f"manifest conversion failed: {exc}"
                     done.set()
                     return
@@ -249,17 +270,18 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
                     msg = (f"App '{app.get('slug', '')}' was created on GitHub, but saving its "
                            f"credentials to {config_dir} failed ({exc}). Delete the App in its "
                            f"GitHub settings, fix the directory, and re-run setup.")
-                    self._html(500, f"<p>{html.escape(msg)}</p>")
+                    self._html(500, f"<h1>Setup failed</h1><p>{html.escape(msg)}</p>")
                     result["error"] = msg
                     done.set()
                     return
                 result["app"] = app
                 install_url = f"https://github.com/apps/{app.get('slug', '')}/installations/new"
-                self._html(200, f"""<!doctype html><html><body>
-<h3>{html.escape(role)} App created: {html.escape(app.get('slug', ''))}</h3>
-<p>Credentials saved to {html.escape(str(config_dir))}. You can close this tab and return to the terminal.</p>
-<p>Next: install it &mdash; <a href="{html.escape(install_url)}">{html.escape(install_url)}</a></p>
-</body></html>""")
+                self._html(200, f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
+<p><code>{html.escape(app.get('slug', ''))}</code></p>
+<p>One step left: install it on the accounts and repos it should work in.</p>
+<p><a class="go" href="{html.escape(install_url, quote=True)}">Install on GitHub</a></p>
+<p class="note">When it is installed, close the tab and return to Claude Code.
+Its key is saved on this machine, in <code>{html.escape(str(config_dir))}</code>.</p>""")
                 done.set()
             else:
                 self._html(404, "not found")
