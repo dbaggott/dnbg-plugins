@@ -57,8 +57,8 @@
 # unauthenticated and its `git fetch` fails, and a prompt that ends in a push
 # has to stop before it. These cases also need a git the sandbox can read: on
 # macOS, `/usr/bin/git` hands off to the Command Line Tools' git, which the
-# sandbox cannot read, so install another, such as Homebrew's. The two cases
-# that grant it:
+# sandbox cannot read, so install another, such as Homebrew's. The cases that
+# grant it:
 #   scripts/dev/prose-ab.sh --case worktree-before-edit --scaffold \
 #       --allow-tools Bash --allow-tools Edit /tmp/trim.patch
 #       Whether an edit in a covered repo is made in a worktree created first.
@@ -66,6 +66,10 @@
 #       --allow-tools Bash /tmp/trim.patch
 #       Whether a repo whose origin is on gitlab.com is declined, with no `gh`
 #       call.
+#   scripts/dev/prose-ab.sh --case spec-offer-no-reviewer \
+#       --allow-tools Bash /tmp/trim.patch
+#       Whether filing an issue with no reviewer bot set up ends on
+#       `reviewer-setup`. Its read of the reviewer role needs no git.
 #
 # The arms run one after the other; -j is the runner's concurrency within an
 # arm. Output, last:

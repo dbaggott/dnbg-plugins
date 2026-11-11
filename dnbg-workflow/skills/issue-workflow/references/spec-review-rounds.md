@@ -54,13 +54,15 @@ Set it up now?"
 2. **"Stop here"**: "Nothing is reviewed, and the next stage waits for the
    review."
 
-On "Set up the reviewer bot", load `reviewer-setup`, and once the read answers
-`result=OK`, ask "Who runs the spec review?". On "Stop here", stop short of the
-next stage: ask no acceptance question, give no next-stage prompt, and after
-decomposing keep the parent's claim, since the set's review is still owed. End
-on the closing line in `<skill-dir>/../findings-review/references/report.md`:
+On "Set up the reviewer bot", load `reviewer-setup`, then run the read again:
+on `result=OK`, ask "Who runs the spec review?", and on anything else go on as
+"Stop here" does. On "Stop here", stop short of the next stage: ask no
+acceptance question, give no next-stage prompt, and after decomposing keep the
+parent's claim, since no review has ended and the set's is still owed. End on
+the closing line in `<skill-dir>/../findings-review/references/report.md`:
 "**Your move:** set up the reviewer bot with `reviewer-setup`, then, in a
-**new** session: `review <URL> as a spec`."
+**new** session: `review <URL> as a spec`. This session is not watching for the
+review: tell it when the first round is posted, and it answers."
 
 Without `AskUserQuestion`, post that question per `references/delegated.md` and
 stop. Never go on without the review.

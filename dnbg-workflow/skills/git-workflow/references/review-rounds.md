@@ -51,7 +51,7 @@ HEAD=$(gh pr view <num> --repo <repo> --json headRefOid --jq .headRefOid)
      reviewer in a **new** session: `review <PR URL>`. Leave this session open:
      it is watching for the first review."
    - **Any other `result=ERROR`**: the `not-configured` line, with its
-     `reason=` and the fix printed under it in place of the setup.
+     `reason=` and the line printed under it in place of the setup.
 
 **Re-arm from the line the watch prints, not from the clock.** Every result you
 re-arm from is preceded by a `── re-arm ──` line carrying the next invocation

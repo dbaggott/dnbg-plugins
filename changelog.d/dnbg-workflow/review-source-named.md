@@ -4,7 +4,6 @@ the PR ready and wait half an hour in silence. It now ends that turn with the
 prompt to paste into a new session, `review <PR URL>`, and the message you get
 when no review arrives names the same prompt.
 
-The spec-review offers no longer recommend a review that cannot run. When no
-reviewer bot is set up, filing an issue and handing a design or a decomposed
+When no reviewer bot is set up, filing an issue and handing a design or a decomposed
 set to review offer `reviewer-setup` instead of starting a reviewer that fails,
 and sending a PR to review names `reviewer-setup` before the prompt.

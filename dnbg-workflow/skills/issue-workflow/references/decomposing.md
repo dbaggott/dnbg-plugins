@@ -182,9 +182,10 @@ One body edit, after the last child is filed:
 
 Hand the parent and its children to a set review per
 `references/spec-review-rounds.md`, "Handing the issue to its reviewer", and
-answer its rounds there. When the review ends, with every issue in the set
-reading `READY` or with the operator stopping it, release the parent's claim
-from step 0, passing the `--label` the claim did, if any:
+answer its rounds there. A hand-over that stops with no reviewer set up has
+started no review, so the claim stays. When the review ends, with every issue
+in the set reading `READY` or with the operator stopping it, release the
+parent's claim from step 0, passing the `--label` the claim did, if any:
 
 ```bash
 "<skill-dir>/../../scripts/claim-issue.sh" <owner/repo> <parent> --release --as=author [--label=<label>]

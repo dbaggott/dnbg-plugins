@@ -61,14 +61,14 @@ bot is set up, so <URL> cannot be spec-reviewed yet. Set it up now?"
 2. **"Not now"**: "Nothing more happens here. Once `reviewer-setup` has run,
    paste `review <URL> as a spec` into a new session when you want the review."
 
-On "Set up the reviewer bot", load `reviewer-setup`, then make the offer again
-from its read. On "Not now", end as the offer's "Not now" does, saying that the
-prompt needs `reviewer-setup` first. Without `AskUserQuestion`, take "Not now"
-and say in the report that no reviewer is set up.
+On "Set up the reviewer bot", load `reviewer-setup`, then run the read again:
+on `result=OK`, make the offer above, and on anything else take "Not now". On
+"Not now", end with the prompt `review <URL> as a spec` and one sentence saying
+it needs `reviewer-setup` first. Without `AskUserQuestion`, take "Not now" and
+say in the report that no reviewer is set up.
 
-On any other `result=ERROR`, make no offer: give the operator its `reason=` and
-the line printed under it, then end as "Not now" does, the prompt working once
-that is fixed.
+On any other `result=ERROR`, make no offer: end with its `reason=`, the line
+printed under it, and the prompt, which works once that is fixed.
 
 ### Offer the spec review for a batch
 
