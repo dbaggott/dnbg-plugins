@@ -307,25 +307,45 @@ with_retrospectives() {  # <value>
   [ -z "$(legacy_dir_move "$BATS_TEST_TMPDIR/old" "$BATS_TEST_TMPDIR/new")" ]
 }
 
-@test "a legacy directory that is the resolved one needs no move" {
+@test "a legacy directory that is the resolved one, or holds it, needs no move" {
   mkdir -p "$BATS_TEST_TMPDIR/old/acme"
   [ -z "$(legacy_dir_move "$BATS_TEST_TMPDIR/old" "$BATS_TEST_TMPDIR/old")" ]
+  [ -z "$(legacy_dir_move "$BATS_TEST_TMPDIR/old" "$BATS_TEST_TMPDIR/old/findings")" ]
 }
 
 @test "a legacy directory with entries moves to a resolved directory that does not exist" {
   local old="$BATS_TEST_TMPDIR/old" new="$BATS_TEST_TMPDIR/data/new"
-  mkdir -p "$old/acme"
+  mkdir -p "$old/acme/api" && touch "$old/acme/api/a.md"
   eval "$(legacy_dir_move "$old" "$new")"
-  [ -d "$new/acme" ]
+  [ -f "$new/acme/api/a.md" ]
   [ ! -e "$old" ]
 }
 
-@test "a legacy directory's entries move into a resolved directory that exists" {
+@test "a legacy directory merges into a resolved directory holding the same repo" {
   local old="$BATS_TEST_TMPDIR/old" new="$BATS_TEST_TMPDIR/new"
-  mkdir -p "$old/acme" "$new/other"
+  mkdir -p "$old/acme/api" "$new/acme/api"
+  touch "$old/acme/api/a.md" "$new/acme/api/b.md"
   eval "$(legacy_dir_move "$old" "$new")"
-  [ -d "$new/acme" ] && [ -d "$new/other" ]
+  [ -f "$new/acme/api/a.md" ] && [ -f "$new/acme/api/b.md" ]
   [ ! -e "$old" ]
+}
+
+@test "the move never overwrites, and names what it left behind" {
+  local old="$BATS_TEST_TMPDIR/old" new="$BATS_TEST_TMPDIR/new"
+  mkdir -p "$old/acme" "$new/acme"
+  echo old > "$old/acme/a.md"; echo new > "$new/acme/a.md"; echo moved > "$old/acme/b.md"
+  run eval "$(legacy_dir_move "$old" "$new")"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"skipped: $old/acme/a.md"* ]]
+  [ "$(cat "$new/acme/a.md")" = new ] && [ "$(cat "$old/acme/a.md")" = old ]
+  [ "$(cat "$new/acme/b.md")" = moved ]
+}
+
+@test "the move creates a top-level resolved directory" {
+  # `mkdir -p` of a parent that is `/` is the case a hand-built command got wrong.
+  local old="$BATS_TEST_TMPDIR/old"
+  mkdir -p "$old/acme" && touch "$old/acme/a.md"
+  [[ "$(legacy_dir_move "$old" /findings)" == *'"/findings"' ]]
 }
 
 @test "a home-relative resolved directory is expanded in the move" {

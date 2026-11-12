@@ -15,11 +15,12 @@ MSG=""
 for pair in "${HOME:-}/.claude/dnbg-retrospectives|$(resolve_retrospective_dir)" \
             "${HOME:-}/.claude/dnbg-findings|$(resolve_findings_dir)"; do
   MOVE=$(legacy_dir_move "${pair%%|*}" "${pair#*|}")
+  MOVE=${MOVE//\\/\\\\}
+  MOVE=${MOVE//\"/\\\"}
   [ -n "$MOVE" ] && MSG="${MSG:+$MSG\\n}  $MOVE"
 done
 [ -n "$MSG" ] || exit 0
 
 MSG="NOTICE: dnbg-workflow no longer reads these directories. Move their entries with:\\n$MSG"
-MSG=${MSG//\"/\\\"}
 printf '{"systemMessage":"%s"}\n' "$MSG"
 exit 0

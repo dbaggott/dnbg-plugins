@@ -278,17 +278,15 @@ resolve_findings_dir() {
 
 # The command that moves a directory's entries to where this session reads them,
 # empty when there is nothing to move: the legacy directory is missing or empty,
-# or it is the resolved directory. `~` is expanded, since the operator pastes it.
+# or the resolved directory is it or inside it. `~` is expanded, since the
+# operator pastes it.
 legacy_dir_move() {  # <legacy-dir> <resolved-dir>
   local legacy="$1" target="${2/#\~/${HOME:-}}"
-  [ "$legacy" != "$target" ] || return 0
+  case "$target/" in "$legacy"/*) return 0 ;; esac
   set -- "$legacy"/*
   [ -e "$1" ] || return 0
-  if [ -e "$target" ]; then
-    printf 'mv "%s"/* "%s"/ && rmdir "%s"' "$legacy" "$target" "$legacy"
-  else
-    printf 'mkdir -p "%s" && mv "%s" "%s"' "${target%/*}" "$legacy" "$target"
-  fi
+  printf '"%s/move-legacy-dir.sh" "%s" "%s"' \
+    "$(cd "$(dirname "${BASH_SOURCE[0]}")/../scripts" && pwd)" "$legacy" "$target"
 }
 
 # Has the operator asked for the version stamp?

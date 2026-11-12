@@ -54,7 +54,9 @@
 # `dnbg-agent-summaries` writes, `absent` when that plugin is not installed: its
 # `summary_dir` option from the user's `settings.json` where that holds a value
 # its skill accepts, else `agent-summaries/` under its `data_dir` option held to
-# the same rule, else under the `data_dir` default its installed manifest states.
+# the same rule, else under the `data_dir` default its installed manifest states,
+# else that manifest's `summary_dir` default, which a release before `data_dir`
+# states instead.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -215,8 +217,9 @@ if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
       local value
       value=$(jq -r --arg id "$SUMMARIES_ID" --arg key "$1" \
         '.pluginConfigs[$id].options[$key] // empty' "$CONFIG_DIR/settings.json" 2>/dev/null || true)
+      while [ "${value%/}" != "$value" ]; do value="${value%/}"; done
       case "${value#\~}" in
-        /*) case "${value#\~}" in *[!A-Za-z0-9._/-]*) ;; *) printf '%s' "${value%/}" ;; esac ;;
+        /?*) case "${value#\~}" in *[!A-Za-z0-9._/-]*) ;; *) printf '%s' "$value" ;; esac ;;
       esac
     }
     SUMMARY_DIR=$(summaries_option summary_dir)
@@ -224,12 +227,15 @@ if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
       DATA_DIR=$(summaries_option data_dir)
       if [ -z "$DATA_DIR" ]; then
         while IFS= read -r MANIFEST; do
-          DATA_DIR=$(jq -r '.userConfig.data_dir.default // empty' \
+          SUMMARY_DIR=$(jq -r '
+            if .userConfig.data_dir.default then "\(.userConfig.data_dir.default)/agent-summaries"
+            else .userConfig.summary_dir.default // empty end' \
             "$MANIFEST/.claude-plugin/plugin.json" 2>/dev/null || true)
-          [ -z "$DATA_DIR" ] || break
+          [ -z "$SUMMARY_DIR" ] || break
         done < <(jq -r --arg id "$SUMMARIES_ID" '.plugins[$id][]?.installPath // empty' "$RECORD" 2>/dev/null || true)
+      else
+        SUMMARY_DIR="$DATA_DIR/agent-summaries"
       fi
-      [ -z "$DATA_DIR" ] || SUMMARY_DIR="$DATA_DIR/agent-summaries"
     fi
     [ -n "$SUMMARY_DIR" ] && SUMMARY_DIR_LINE="check=summary-dir state=ok value=$SUMMARY_DIR"
   fi

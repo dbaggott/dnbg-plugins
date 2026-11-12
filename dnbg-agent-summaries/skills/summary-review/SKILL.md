@@ -22,10 +22,10 @@ directory. `<summary_dir>` below means this directory.
 
 This plugin no longer reads `~/.claude/dnbg-agent-summaries`. When that
 directory holds files and is not `<summary_dir>`, tell the operator so and give
-them the command that moves the files, without running it: `mkdir -p` of
-`<summary_dir>`'s parent and an `mv` of the directory to `<summary_dir>` when
-`<summary_dir>` does not exist, an `mv` of its contents into `<summary_dir>`
-otherwise.
+them a command that moves each file to the same path under `<summary_dir>`,
+without running it. The command never overwrites: a file whose path already
+exists under `<summary_dir>`, `archive/` included, stays where it is and is
+named.
 
 ## Writing or updating a summary file
 

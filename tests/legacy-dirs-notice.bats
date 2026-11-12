@@ -23,19 +23,27 @@ message() { jq -er '.systemMessage' <<<"$output"; }
 
 @test "names the move for each legacy directory that holds entries" {
   mkdir -p "$HOME/.claude/dnbg-retrospectives/acme/api" "$HOME/.claude/dnbg-findings/acme/api"
+  touch "$HOME/.claude/dnbg-retrospectives/acme/api/r.md" "$HOME/.claude/dnbg-findings/acme/api/f.md"
   run "$HOOK"
   [ "$status" -eq 0 ]
   [ "$(jq -c 'keys' <<<"$output")" = '["systemMessage"]' ]
-  [[ "$(message)" == *"mv \"$HOME/.claude/dnbg-retrospectives\" \"$HOME/.claude/dnbg/retrospectives\""* ]]
-  [[ "$(message)" == *"mv \"$HOME/.claude/dnbg-findings\" \"$HOME/.claude/dnbg/findings\""* ]]
+  [[ "$(message)" == *"move-legacy-dir.sh\" \"$HOME/.claude/dnbg-retrospectives\" \"$HOME/.claude/dnbg/retrospectives\""* ]]
+  [[ "$(message)" == *"move-legacy-dir.sh\" \"$HOME/.claude/dnbg-findings\" \"$HOME/.claude/dnbg/findings\""* ]]
+}
+
+@test "the message stays valid JSON when a path holds a backslash" {
+  export HOME="$BATS_TEST_TMPDIR/ho\\me"
+  mkdir -p "$HOME/.claude/dnbg-findings/acme" && touch "$HOME/.claude/dnbg-findings/acme/f.md"
+  run "$HOOK"
+  [[ "$(message)" == *"$HOME/.claude/dnbg-findings"* ]]
 }
 
 @test "the named move lands the entries where the session reads them" {
-  mkdir -p "$HOME/.claude/dnbg-findings/acme/api"
+  mkdir -p "$HOME/.claude/dnbg-findings/acme/api" && touch "$HOME/.claude/dnbg-findings/acme/api/f.md"
   export CLAUDE_PLUGIN_OPTION_DATA_DIR='~/dnbg'
   run "$HOOK"
   eval "$(message | sed -n 's/^  //p')"
-  [ -d "$HOME/dnbg/findings/acme/api" ]
+  [ -f "$HOME/dnbg/findings/acme/api/f.md" ]
   run "$HOOK"
   [ -z "$output" ]
 }
