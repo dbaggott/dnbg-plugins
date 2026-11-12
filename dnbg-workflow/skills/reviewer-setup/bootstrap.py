@@ -17,9 +17,8 @@ browser click GitHub requires to create any App:
      never leaves this machine; `as-role.sh` mints short-lived tokens from it.
 
 A role whose App already exists, created from another machine, is connected
-(`--adopt`): GitHub has no API that generates an App private key, so you click
-"Generate a private key" on the App's settings page, and the downloaded key is
-proven against the App (`GET /app` under a JWT it signed) before it is saved in
+(`--adopt`): GitHub has no API that generates an App private key, so you
+generate one in the App's settings, and the downloaded key is proven against the App (`GET /app` under a JWT it signed) before it is saved in
 the same files a create writes. `--detect` reports which of the two each role
 needs.
 
@@ -489,8 +488,8 @@ def connect_page(targets: list[dict], state: str, watching: bool) -> str:
 <h2>The {role} bot: <code>{html.escape(t["slug"])}</code></h2>
 <ol class="steps">
 <li class="now"><a class="go" target="_blank" rel="noopener" data-role="{role}" href="{html.escape(t["settings_url"], quote=True)}">Open its settings on GitHub</a></li>
-<li>On that page, scroll down to <b>Private keys</b> and click <b>Generate a private key</b>.
-<span class="note">A <code>.pem</code> file downloads.</span></li>
+<li>On GitHub, find the App's <b>credentials</b> and generate a new <b>private key</b>.
+<span class="note">A private key, <b>not</b> a client secret. A <code>.pem</code> file downloads.</span></li>
 <li><span id="status-{role}">{html.escape(waiting_text(watching))}</span>
 <span class="note pick">{"Download not picked up? Choose the file:" if watching else "Choose the downloaded file:"}
 <input type="file" accept=".pem" data-role="{role}"></span></li>

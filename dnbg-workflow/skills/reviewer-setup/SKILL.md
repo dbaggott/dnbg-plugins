@@ -127,7 +127,8 @@ instead.
 
 **Connecting** comes first, on one browser page with a row per role. GitHub has
 no API that generates an App's private key, so the operator opens each App's
-settings from its row and clicks **"Generate a private key"**. The page picks
+settings from its row, finds its credentials there and generates a new
+**private key**, which is not a client secret. The page picks
 the downloaded key up from `~/Downloads`, checks with GitHub that it is that
 App's key, saves it, and removes the download. Each row also takes the file
 through a file picker, for a download saved elsewhere or a browser on another

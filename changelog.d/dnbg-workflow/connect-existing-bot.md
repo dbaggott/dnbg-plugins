@@ -1,7 +1,7 @@
 Setting up on a second machine now connects it to the bots you already have
 instead of offering to create them again. `/dnbg-workflow:setup` and
 `reviewer-setup` look for each role's bot on GitHub first; for one that exists
-you click **Generate a private key** on its settings page, and the downloaded
+you generate a private key in its settings on GitHub, and the downloaded
 key is checked against the bot, saved, and removed from your Downloads folder.
 Nothing is reinstalled, and each machine has a key of its own, so one machine
 can be revoked by deleting its key.

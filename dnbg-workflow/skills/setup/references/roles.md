@@ -49,8 +49,8 @@ Each role's words:
   (Recommended)", "Gives reviews their own identity. No review can run without
   it."
 - For a role that is `yours`, the option is labelled "`<Role>` bot: connect
-  (Recommended)" and described "Your `<slug>` already exists. One click in the
-  browser adds a key for this machine."
+  (Recommended)" and described "Your `<slug>` already exists. A few clicks in the
+  browser add a key for this machine."
 
 The roles ticked are the ones to set up. When the call comes back unanswered,
 which is how the picker reports both a submit with nothing ticked and a
@@ -64,7 +64,7 @@ dismissal, ask in one line, "Nothing was ticked. No bots, then?"
   opens "Connect the `<role>` bot?" and has no last sentence.
 - **"Create (Recommended)"**, first: "A few quick clicks in the browser: create
   and install it." For a role that is `yours`, **"Connect (Recommended)"**:
-  "Your `<slug>` already exists. One click in the browser adds a key for this
+  "Your `<slug>` already exists. A few clicks in the browser add a key for this
   machine."
 - **"Not now"**: "Reviews stay off until it exists." for the reviewer, and for
   another role "Its work keeps posting as you."
