@@ -19,9 +19,9 @@ A repo opts in with a short section in its own `CLAUDE.md`:
 > whether to split a PR. This repo has opted in, and only the operator ends
 > that.
 
-It carries two things, the posture and **who can end it**. Write both. An
-opt-in that states only the posture reads as permanent, and nothing in the
-repo tells the next agent whose call it is to end.
+It says the repo has opted in and **who can end that**. Write both. An opt-in
+without the second reads as permanent, and nothing in the repo tells the next
+agent whose call it is to end.
 
 Don't restate the rest of this skill in that section — point at it. A copy of the
 inputs below is a second thing to keep true, and it will drift.

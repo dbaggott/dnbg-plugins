@@ -8,8 +8,8 @@ They apply to every repo. A repo's own `.claude/settings.json` is not read.
 
 ## Settings
 
-An invalid value falls back to its default. A path may use only letters, digits
-and `. _ - /`.
+An invalid value falls back to its default, and you are told. A path may use
+only letters, digits and `. _ - /`.
 
 ### `dnbg-workflow`
 
@@ -18,7 +18,7 @@ Edit with `/plugin configure dnbg-workflow`.
 | Setting | Default | Controls |
 | --- | --- | --- |
 | `owners` | empty | GitHub orgs and logins, comma-separated, whose repos the hooks enforce on. Empty: nothing is ever blocked. `/dnbg-workflow:setup` asks for it |
-| `worktree_path` | `.worktrees` | Directory worktrees are created in, relative to the repo |
+| `worktree_path` | `.worktrees` | Directory worktrees are created in. Relative to the repo and inside it |
 | `claim_label` | `assigned:agent-session` | Label that marks an issue as claimed. Must start with `assigned:` |
 | `findings_dir` | `~/.claude/dnbg-findings` | Where agents write what their reports found about the code. Absolute or under `~/` |
 | `retrospectives` | off | On: each agent writes a file on where the process slowed it when its work ends. Off: it reports only where a skill was wrong, in chat |
@@ -43,6 +43,9 @@ Edit with `/plugin configure dnbg-work-summary`.
 
 ## `velocity-tradeoff`
 
+Has agents ship a whole capability in one PR, with no backwards-compatibility
+or migration shims, where they would otherwise split the work into safer steps.
+
 Off by default. Enable it per repo by adding a section like this to the repo's
 `CLAUDE.md`:
 
@@ -57,9 +60,10 @@ that.
 ## The setup notice
 
 Each session opens with a one-line notice while `owners` is empty or the
-reviewer has no bot. Answering none or declining the bot in
-`/dnbg-workflow:setup` turns it off. Deleting
-`~/.config/dnbg/setup-acknowledged` brings it back.
+reviewer has no bot. In `/dnbg-workflow:setup`, answering none turns it off
+for `owners`, and declining the bot turns it off for the reviewer. Deleting
+`~/.config/dnbg/setup-acknowledged` (under `$XDG_CONFIG_HOME` when that is set)
+brings it back.
 
 ## Agent roles
 
@@ -91,7 +95,7 @@ The first source that yields a key is used:
 
 | Order | Source | Notes |
 | --- | --- | --- |
-| 1 | `DNBG_<ROLE>_PRIVATE_KEY` | The PEM itself. For CI: with `DNBG_<ROLE>_APP_ID` set, no file is needed |
+| 1 | `DNBG_<ROLE>_PRIVATE_KEY` | The PEM itself. Meant for CI, since every process you own can read it. With `DNBG_<ROLE>_APP_ID` set, no file is needed |
 | 2 | `DNBG_<ROLE>_PRIVATE_KEY_COMMAND`, or `private_key_command` in `config.json` | A command that prints the PEM, such as `op read` or `pass show`. Runs on every write, so one that prompts will prompt often |
 | 3 | `~/.config/dnbg/<role>/private-key.pem` | The default: plaintext, mode `0600` |
 
