@@ -11,7 +11,7 @@
 # It reads every main transcript, `<config>/projects/*/*.jsonl`, and every
 # subagent transcript, `<config>/projects/*/*/subagents/agent-*.jsonl` with its
 # `.meta.json`, `<config>` being ${CLAUDE_CONFIG_DIR:-$HOME/.claude}. `--until`
-# defaults to today (UTC) and `--root` to ~/.claude/dnbg-retrospectives; the
+# defaults to today (UTC) and `--root` to ~/.claude/dnbg/retrospectives; the
 # report is written there with a `.json` twin of the same name.
 #
 # - Range. A transcript is in the range when the earliest `timestamp` among
@@ -75,7 +75,7 @@ exec 3>&1
 unknown() { echo "result=UNKNOWN reason=$1" >&3; exit 0; }
 
 DATE_RE='^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
-SINCE="" UNTIL=$(date -u +%F) ROOT="$HOME/.claude/dnbg-retrospectives"
+SINCE="" UNTIL=$(date -u +%F) ROOT="$HOME/.claude/dnbg/retrospectives"
 for a in "$@"; do
   case "$a" in
     --since=*) SINCE=${a#--since=} ;;

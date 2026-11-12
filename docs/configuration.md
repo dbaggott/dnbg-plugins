@@ -22,9 +22,10 @@ Edit with `/plugin configure dnbg-workflow`.
 | `owners` | empty | GitHub orgs and logins, comma-separated, whose repos the hooks enforce on. Empty: nothing is ever blocked. `/dnbg-workflow:setup` asks for it |
 | `worktree_path` | `.worktrees` | Directory worktrees are created in. Relative to the repo and inside it |
 | `claim_label` | `assigned:agent-session` | Label that marks an issue as claimed. Must start with `assigned:` |
-| `findings_dir` | `~/.claude/dnbg-findings` | Where agents write what their reports found about the code. Absolute or under `~/` |
+| `data_dir` | `~/.claude/dnbg` | Directory `findings_dir` and `retrospective_dir` sit under when not set on their own. Absolute or under `~/` |
+| `findings_dir` | `<data_dir>/findings` | Where agents write what their reports found about the code. Absolute or under `~/` |
 | `retrospectives` | off | On: each agent writes a file on where the process slowed it when its work ends. Off: it reports in chat only where a skill was wrong or had to be worked around |
-| `retrospective_dir` | `~/.claude/dnbg-retrospectives` | Where those files go. Absolute or under `~/` |
+| `retrospective_dir` | `<data_dir>/retrospectives` | Where those files go. Absolute or under `~/` |
 | `version_stamp` | off | On: PR descriptions, reviews and issue claim comments end with a hidden `<!-- dnbg-workflow <version> -->` |
 | `setup_notice` | on | On: each session opens with a one-line notice while `/dnbg-workflow:setup` still has something open, such as no accounts or no reviewer bot |
 
@@ -52,7 +53,11 @@ Edit with `/plugin configure dnbg-agent-summaries`.
 
 | Setting | Default | Controls |
 | --- | --- | --- |
-| `summary_dir` | `~/.claude/dnbg-agent-summaries` | Where agents write summary files. Absolute or under `~/` |
+| `data_dir` | `~/.claude/dnbg` | Directory `summary_dir` sits under when not set on its own. Absolute or under `~/` |
+| `summary_dir` | `<data_dir>/agent-summaries` | Where agents write summary files. Absolute or under `~/` |
+
+`data_dir` is set per plugin. To move every dnbg directory, set it to the same
+value here and in `dnbg-workflow`.
 
 ### `dnbg-work-summary`
 

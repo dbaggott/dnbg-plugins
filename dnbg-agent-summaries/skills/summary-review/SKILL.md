@@ -13,10 +13,12 @@ skill sweeps the ones that are not into `archive/`.
 
 The summary directory is `${user_config.summary_dir}`. Where that value is
 empty, or is still a `${…}` placeholder, the setting is unset: use
-`~/.claude/dnbg-agent-summaries`. A value that is neither an absolute path nor
-one under `~/`, or that holds a character outside letters, digits and `.` `_`
-`-` `/`, is not usable either, since it goes into shell commands: use the
-default, and say so in your reply. Expand `~` to your home directory. `<summary_dir>` below means this directory.
+`agent-summaries/` under the data directory, `${user_config.data_dir}`, itself
+`~/.claude/dnbg` when unset the same way. A value of either that is neither an
+absolute path nor one under `~/`, or that holds a character outside letters,
+digits and `.` `_` `-` `/`, is not usable either, since it goes into shell
+commands: treat it as unset, and say so in your reply. Expand `~` to your home
+directory. `<summary_dir>` below means this directory.
 
 ## Writing or updating a summary file
 

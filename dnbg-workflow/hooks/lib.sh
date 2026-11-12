@@ -120,10 +120,15 @@ remote_is_covered() {
 DEFAULT_WORKTREE_PATH='.worktrees'
 DEFAULT_CLAIM_LABEL='assigned:agent-session'
 # Literal `~`s: they are printed to an agent, which expands them when it writes.
+# The per-kind directories sit under the data directory unless set on their own,
+# so this is the one literal path.
 # shellcheck disable=SC2088
-DEFAULT_RETROSPECTIVE_DIR='~/.claude/dnbg-retrospectives'
-# shellcheck disable=SC2088
-DEFAULT_FINDINGS_DIR='~/.claude/dnbg-findings'
+DEFAULT_DATA_DIR='~/.claude/dnbg'
+# Read by rules-payload.sh, which names them as what the skills spell out.
+# shellcheck disable=SC2034
+DEFAULT_RETROSPECTIVE_DIR="$DEFAULT_DATA_DIR/retrospectives"
+# shellcheck disable=SC2034
+DEFAULT_FINDINGS_DIR="$DEFAULT_DATA_DIR/findings"
 
 # The namespace every claim label has to sit in. `issue-workflow`'s in-progress
 # check matches this prefix rather than an enumerated list, deliberately, so that
@@ -259,12 +264,16 @@ resolve_outside_repo_dir() {  # <configured-value> <default>
   fi
 }
 
+resolve_data_dir() {
+  resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_DATA_DIR:-}" "$DEFAULT_DATA_DIR"
+}
+
 resolve_retrospective_dir() {
-  resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_RETROSPECTIVE_DIR:-}" "$DEFAULT_RETROSPECTIVE_DIR"
+  resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_RETROSPECTIVE_DIR:-}" "$(resolve_data_dir)/retrospectives"
 }
 
 resolve_findings_dir() {
-  resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_FINDINGS_DIR:-}" "$DEFAULT_FINDINGS_DIR"
+  resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_FINDINGS_DIR:-}" "$(resolve_data_dir)/findings"
 }
 
 # Has the operator asked for the version stamp?

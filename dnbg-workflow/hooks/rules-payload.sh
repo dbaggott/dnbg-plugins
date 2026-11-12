@@ -86,27 +86,37 @@ EOF
 
 CONFIGURED_WORKTREE_PATH="${CLAUDE_PLUGIN_OPTION_WORKTREE_PATH:-}"
 CONFIGURED_CLAIM_LABEL="${CLAUDE_PLUGIN_OPTION_CLAIM_LABEL:-}"
+CONFIGURED_DATA_DIR="${CLAUDE_PLUGIN_OPTION_DATA_DIR:-}"
 CONFIGURED_RETROSPECTIVE_DIR="${CLAUDE_PLUGIN_OPTION_RETROSPECTIVE_DIR:-}"
 CONFIGURED_FINDINGS_DIR="${CLAUDE_PLUGIN_OPTION_FINDINGS_DIR:-}"
 
 WORKTREE_PATH_BAD=""
 CLAIM_LABEL_BAD=""
+DATA_DIR_BAD=""
 RETROSPECTIVE_DIR_BAD=""
 FINDINGS_DIR_BAD=""
 [ -n "$CONFIGURED_WORKTREE_PATH" ] &&
   WORKTREE_PATH_BAD=$(worktree_path_rejection "$CONFIGURED_WORKTREE_PATH")
 [ -n "$CONFIGURED_CLAIM_LABEL" ] &&
   CLAIM_LABEL_BAD=$(claim_label_rejection "$CONFIGURED_CLAIM_LABEL")
+[ -n "$CONFIGURED_DATA_DIR" ] &&
+  DATA_DIR_BAD=$(outside_repo_dir_rejection "$CONFIGURED_DATA_DIR")
 [ -n "$CONFIGURED_RETROSPECTIVE_DIR" ] &&
   RETROSPECTIVE_DIR_BAD=$(outside_repo_dir_rejection "$CONFIGURED_RETROSPECTIVE_DIR")
 [ -n "$CONFIGURED_FINDINGS_DIR" ] &&
   FINDINGS_DIR_BAD=$(outside_repo_dir_rejection "$CONFIGURED_FINDINGS_DIR")
 
+WORKTREE_PATH=$(resolve_worktree_path)
+CLAIM_LABEL=$(resolve_claim_label)
+DATA_DIR=$(resolve_data_dir)
+RETROSPECTIVE_DIR=$(resolve_retrospective_dir)
+FINDINGS_DIR=$(resolve_findings_dir)
+
 # Rejections first. A reader who sees only the override note below would take the
 # default it names as their configuration working, when in fact their value was
 # thrown away — so the reason has to arrive before, not after.
-if [ -n "$WORKTREE_PATH_BAD" ] || [ -n "$CLAIM_LABEL_BAD" ] || [ -n "$RETROSPECTIVE_DIR_BAD" ] ||
-   [ -n "$FINDINGS_DIR_BAD" ]; then
+if [ -n "$WORKTREE_PATH_BAD" ] || [ -n "$CLAIM_LABEL_BAD" ] || [ -n "$DATA_DIR_BAD" ] ||
+   [ -n "$RETROSPECTIVE_DIR_BAD" ] || [ -n "$FINDINGS_DIR_BAD" ]; then
   printf '\n## dnbg-workflow: INVALID configuration (ignored)\n\n'
 fi
 
@@ -127,20 +137,20 @@ theirs invisible here — two workers on one issue, which is what the label exis
 to prevent. **Using \`$DEFAULT_CLAIM_LABEL\` instead.**
 EOF
 
+[ -n "$DATA_DIR_BAD" ] && cat <<EOF
+The configured data directory \`$CONFIGURED_DATA_DIR\` cannot be used:
+$DATA_DIR_BAD. **Using \`$DATA_DIR\` instead.**
+EOF
+
 [ -n "$RETROSPECTIVE_DIR_BAD" ] && cat <<EOF
 The configured retrospective directory \`$CONFIGURED_RETROSPECTIVE_DIR\` cannot be
-used: $RETROSPECTIVE_DIR_BAD. **Using \`$DEFAULT_RETROSPECTIVE_DIR\` instead.**
+used: $RETROSPECTIVE_DIR_BAD. **Using \`$RETROSPECTIVE_DIR\` instead.**
 EOF
 
 [ -n "$FINDINGS_DIR_BAD" ] && cat <<EOF
 The configured findings directory \`$CONFIGURED_FINDINGS_DIR\` cannot be used:
-$FINDINGS_DIR_BAD. **Using \`$DEFAULT_FINDINGS_DIR\` instead.**
+$FINDINGS_DIR_BAD. **Using \`$FINDINGS_DIR\` instead.**
 EOF
-
-WORKTREE_PATH=$(resolve_worktree_path)
-CLAIM_LABEL=$(resolve_claim_label)
-RETROSPECTIVE_DIR=$(resolve_retrospective_dir)
-FINDINGS_DIR=$(resolve_findings_dir)
 
 # Compared against the defaults rather than against "was anything set", so an
 # operator who configures a knob to the value it already had gets no note. There

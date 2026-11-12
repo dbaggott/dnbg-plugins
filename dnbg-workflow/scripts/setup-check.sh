@@ -53,7 +53,10 @@
 # plugin updates whatever the entries say. `summary-dir` is where
 # `dnbg-agent-summaries` writes, `absent` when that plugin is not installed: its
 # `summary_dir` option from the user's `settings.json` where that holds a value
-# its skill accepts, else the default its installed manifest states.
+# its skill accepts, else `agent-summaries/` under its `data_dir` option held to
+# the same rule, else under the `data_dir` default its installed manifest states,
+# else that manifest's `summary_dir` default, which a release before `data_dir`
+# states instead.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -208,19 +211,31 @@ if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
   if [ -z "$SUMMARIES_ID" ]; then
     SUMMARY_DIR_LINE="check=summary-dir state=absent"
   else
-    SUMMARY_DIR=$(jq -r --arg id "$SUMMARIES_ID" \
-      '.pluginConfigs[$id].options.summary_dir // empty' "$CONFIG_DIR/settings.json" 2>/dev/null || true)
-    # The rule the plugin's own skill holds a value to before using it.
-    case "${SUMMARY_DIR#\~}" in
-      /*) case "${SUMMARY_DIR#\~}" in *[!A-Za-z0-9._/-]*) SUMMARY_DIR="" ;; esac ;;
-      *) SUMMARY_DIR="" ;;
-    esac
+    # An option from the user's settings, where it holds a value the plugin's own
+    # skill accepts.
+    summaries_option() {  # <key>
+      local value
+      value=$(jq -r --arg id "$SUMMARIES_ID" --arg key "$1" \
+        '.pluginConfigs[$id].options[$key] // empty' "$CONFIG_DIR/settings.json" 2>/dev/null || true)
+      while [ "${value%/}" != "$value" ]; do value="${value%/}"; done
+      case "${value#\~}" in
+        /?*) case "${value#\~}" in *[!A-Za-z0-9._/-]*) ;; *) printf '%s' "$value" ;; esac ;;
+      esac
+    }
+    SUMMARY_DIR=$(summaries_option summary_dir)
     if [ -z "$SUMMARY_DIR" ]; then
-      while IFS= read -r MANIFEST; do
-        SUMMARY_DIR=$(jq -r '.userConfig.summary_dir.default // empty' \
-          "$MANIFEST/.claude-plugin/plugin.json" 2>/dev/null || true)
-        [ -z "$SUMMARY_DIR" ] || break
-      done < <(jq -r --arg id "$SUMMARIES_ID" '.plugins[$id][]?.installPath // empty' "$RECORD" 2>/dev/null || true)
+      DATA_DIR=$(summaries_option data_dir)
+      if [ -z "$DATA_DIR" ]; then
+        while IFS= read -r MANIFEST; do
+          SUMMARY_DIR=$(jq -r '
+            if .userConfig.data_dir.default then "\(.userConfig.data_dir.default)/agent-summaries"
+            else .userConfig.summary_dir.default // empty end' \
+            "$MANIFEST/.claude-plugin/plugin.json" 2>/dev/null || true)
+          [ -z "$SUMMARY_DIR" ] || break
+        done < <(jq -r --arg id "$SUMMARIES_ID" '.plugins[$id][]?.installPath // empty' "$RECORD" 2>/dev/null || true)
+      else
+        SUMMARY_DIR="$DATA_DIR/agent-summaries"
+      fi
     fi
     [ -n "$SUMMARY_DIR" ] && SUMMARY_DIR_LINE="check=summary-dir state=ok value=$SUMMARY_DIR"
   fi

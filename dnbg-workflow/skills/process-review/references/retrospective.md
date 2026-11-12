@@ -68,11 +68,11 @@ where the answers go.
 
 ## Where a retrospective goes
 
-In `~/.claude/dnbg-retrospectives/<owner>/<repo>/`, where `<owner>/<repo>` is
+In `~/.claude/dnbg/retrospectives/<owner>/<repo>/`, where `<owner>/<repo>` is
 the repo the issue lives in. Expand `~` to your home directory and
 create the directory if it is missing.
 
-**`~/.claude/dnbg-retrospectives` is the default, not a constant.** If a
+**`~/.claude/dnbg/retrospectives` is the default, not a constant.** If a
 `dnbg-workflow` note at session start names a different retrospective root, that
 root wins, and `<owner>/<repo>/` goes under it the same way.
 

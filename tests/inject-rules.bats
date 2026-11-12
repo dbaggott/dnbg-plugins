@@ -324,7 +324,7 @@ run_hook_retrospectives() {  # [option-value]
 
 @test "says nothing when the retrospective directory is set to its default" {
   stub_path jq git gh
-  run_hook_configured '' '' '~/.claude/dnbg-retrospectives/'
+  run_hook_configured '' '' '~/.claude/dnbg/retrospectives/'
   [ "$output" = "$RULES_TEXT" ]
 }
 
@@ -335,7 +335,7 @@ run_hook_retrospectives() {  # [option-value]
   [[ "$output" == *"INVALID configuration"* ]]
   [[ "$output" == *'`retros`'* ]]
   [[ "$output" == *"neither an absolute path"* ]]
-  [[ "$output" == *'`~/.claude/dnbg-retrospectives`'* ]]
+  [[ "$output" == *'`~/.claude/dnbg/retrospectives`'* ]]
   [[ "$output" != *"configuration overrides"* ]]
 }
 
@@ -350,7 +350,7 @@ run_hook_retrospectives() {  # [option-value]
 
 @test "says nothing when the findings directory is set to its default" {
   stub_path jq git gh
-  run_hook_configured '' '' '' '~/.claude/dnbg-findings/'
+  run_hook_configured '' '' '' '~/.claude/dnbg/findings/'
   [ "$output" = "$RULES_TEXT" ]
 }
 
@@ -361,8 +361,32 @@ run_hook_retrospectives() {  # [option-value]
   [[ "$output" == *"INVALID configuration"* ]]
   [[ "$output" == *'`findings`'* ]]
   [[ "$output" == *"neither an absolute path"* ]]
-  [[ "$output" == *'`~/.claude/dnbg-findings`'* ]]
+  [[ "$output" == *'`~/.claude/dnbg/findings`'* ]]
   [[ "$output" != *"configuration overrides"* ]]
+}
+
+@test "a configured data directory announces both directories under it" {
+  stub_path jq git gh
+  run_hook_configured '' '' '' '' '~/dnbg'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'`~/dnbg/retrospectives/<owner>/<repo>/`'* ]]
+  [[ "$output" == *'`~/dnbg/findings/<owner>/<repo>/`'* ]]
+}
+
+@test "a rejected data directory is reported with its value and fallback" {
+  stub_path jq git gh
+  run_hook_configured '' '' '' '' 'dnbg'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"INVALID configuration"* ]]
+  [[ "$output" == *'`dnbg`'* ]]
+  [[ "$output" == *'`~/.claude/dnbg`'* ]]
+  [[ "$output" != *"configuration overrides"* ]]
+}
+
+@test "a rejected directory names the fallback under the configured data directory" {
+  stub_path jq git gh
+  run_hook_configured '' '' 'retros' '' '~/dnbg'
+  [[ "$output" == *'Using `~/dnbg/retrospectives` instead'* ]]
 }
 
 @test "announces only the knob that moved" {

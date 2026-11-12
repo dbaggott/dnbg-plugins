@@ -17,7 +17,7 @@ directory** announced when this skill loads.
 
 ## 1. Gather the batch
 
-The root is `~/.claude/dnbg-retrospectives/` by default, not a constant: if a
+The root is `~/.claude/dnbg/retrospectives/` by default, not a constant: if a
 `dnbg-workflow` note at session start names a different retrospective root, use
 that one. The batch is drawn from every `*.md` file under the root, recursively,
 **except** under `<root>/_reviews/`, which holds this skill's own reports

@@ -211,17 +211,17 @@ STUB
 
 # The summaries plugin, recorded as installed from a directory holding its
 # manifest, with the user's settings.json holding <summary_dir> when given.
-install_summaries() {  # [<summary_dir>]
+install_summaries() {  # [<summary_dir> [<data_dir>]]
   local at="$BATS_TEST_TMPDIR/summaries"
   mkdir -p "$at/.claude-plugin"
-  echo '{"userConfig":{"summary_dir":{"default":"~/.claude/dnbg-agent-summaries"}}}' \
+  echo '{"userConfig":{"data_dir":{"default":"~/.claude/dnbg"},"summary_dir":{"default":""}}}' \
     > "$at/.claude-plugin/plugin.json"
   jq -n --arg at "$at" \
     '{version: 2, plugins: {"dnbg-agent-summaries@dnbg": [{scope: "user", installPath: $at}]}}' \
     > "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json"
   rm -f "$CLAUDE_CONFIG_DIR/settings.json"
-  [ $# -eq 0 ] || jq -n --arg d "$1" \
-    '{pluginConfigs: {"dnbg-agent-summaries@dnbg": {options: {summary_dir: $d}}}}' \
+  [ $# -eq 0 ] || jq -n --arg d "$1" --arg data "${2-}" \
+    '{pluginConfigs: {"dnbg-agent-summaries@dnbg": {options: ({summary_dir: $d} + if $data == "" then {} else {data_dir: $data} end)}}}' \
     > "$CLAUDE_CONFIG_DIR/settings.json"
 }
 
@@ -237,15 +237,35 @@ install_summaries() {  # [<summary_dir>]
   has_line "check=summary-dir state=absent"
 }
 
-@test "summary-dir is the manifest's default when unset, or set to a value the skill refuses" {
+@test "summary-dir is under the data directory the user set when summary_dir is unset" {
+  install_summaries '' '~/dnbg/'
+  check
+  has_line "check=summary-dir state=ok value=~/dnbg/agent-summaries"
+  install_summaries '/srv/notes' '~/dnbg'
+  check
+  has_line "check=summary-dir state=ok value=/srv/notes"
+  install_summaries '' 'relative'
+  check
+  has_line "check=summary-dir state=ok value=~/.claude/dnbg/agent-summaries"
+}
+
+@test "summary-dir is the summary_dir default of an installed manifest that predates data_dir" {
   install_summaries
+  echo '{"userConfig":{"summary_dir":{"default":"~/.claude/dnbg-agent-summaries"}}}' \
+    > "$BATS_TEST_TMPDIR/summaries/.claude-plugin/plugin.json"
   check
   has_line "check=summary-dir state=ok value=~/.claude/dnbg-agent-summaries"
+}
+
+@test "summary-dir is under the manifest's data directory when unset, or set to a value the skill refuses" {
+  install_summaries
+  check
+  has_line "check=summary-dir state=ok value=~/.claude/dnbg/agent-summaries"
   local v
-  for v in '' relative/path '/has space' '~other/notes' '/a;b' '/srv/a~b' '~/a/~'; do
+  for v in '' relative/path '/has space' '~other/notes' '/a;b' '/srv/a~b' '~/a/~' '~/' '/' '~//'; do
     install_summaries "$v"
     check
-    has_line "check=summary-dir state=ok value=~/.claude/dnbg-agent-summaries"
+    has_line "check=summary-dir state=ok value=~/.claude/dnbg/agent-summaries"
   done
 }
 
@@ -256,7 +276,7 @@ install_summaries() {  # [<summary_dir>]
     "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json" > "$BATS_TEST_TMPDIR/record"
   mv "$BATS_TEST_TMPDIR/record" "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json"
   check
-  has_line "check=summary-dir state=ok value=~/.claude/dnbg-agent-summaries"
+  has_line "check=summary-dir state=ok value=~/.claude/dnbg/agent-summaries"
 }
 
 @test "summary-dir is unknown when the installed manifest cannot be read" {
