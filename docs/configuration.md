@@ -8,6 +8,9 @@ They apply to every repo. A repo's own `.claude/settings.json` is not read.
 
 ## Settings
 
+An invalid value falls back to its default. A path may use only letters, digits
+and `. _ - /`.
+
 ### `dnbg-workflow`
 
 Edit with `/plugin configure dnbg-workflow`.
@@ -17,9 +20,9 @@ Edit with `/plugin configure dnbg-workflow`.
 | `owners` | empty | GitHub orgs and logins, comma-separated, whose repos the hooks enforce on. Empty: nothing is ever blocked. `/dnbg-workflow:setup` asks for it |
 | `worktree_path` | `.worktrees` | Directory worktrees are created in, relative to the repo |
 | `claim_label` | `assigned:agent-session` | Label that marks an issue as claimed. Must start with `assigned:` |
-| `findings_dir` | `~/.claude/dnbg-findings` | Where agents write what their reports found about the code |
+| `findings_dir` | `~/.claude/dnbg-findings` | Where agents write what their reports found about the code. Absolute or under `~/` |
 | `retrospectives` | off | On: each agent writes a file on where the process slowed it when its work ends. Off: it reports only where a skill was wrong, in chat |
-| `retrospective_dir` | `~/.claude/dnbg-retrospectives` | Where those files go |
+| `retrospective_dir` | `~/.claude/dnbg-retrospectives` | Where those files go. Absolute or under `~/` |
 | `version_stamp` | off | On: PR descriptions, reviews and issue claim comments end with a hidden `<!-- dnbg-workflow <version> -->` |
 
 ### `dnbg-agent-summaries`
@@ -28,7 +31,7 @@ Edit with `/plugin configure dnbg-agent-summaries`.
 
 | Setting | Default | Controls |
 | --- | --- | --- |
-| `summary_dir` | `~/.claude/dnbg-agent-summaries` | Where agents write summary files |
+| `summary_dir` | `~/.claude/dnbg-agent-summaries` | Where agents write summary files. Absolute or under `~/` |
 
 ### `dnbg-work-summary`
 
@@ -37,12 +40,6 @@ Edit with `/plugin configure dnbg-work-summary`.
 | Setting | Default | Controls |
 | --- | --- | --- |
 | `owners` | empty | GitHub orgs and logins, comma-separated, whose repos a recap searches. Empty: it asks each time. Separate from `dnbg-workflow`'s `owners` |
-
-The three `_dir` settings take an absolute path or one under `~/`. Every path
-is limited to letters, digits and `. _ - /`. An invalid value falls back to its
-default.
-
-Not configurable: PRs open as drafts, and only a human merges.
 
 ## Install scope
 
