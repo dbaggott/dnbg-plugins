@@ -26,6 +26,22 @@ Edit with `/plugin configure dnbg-workflow`.
 | `version_stamp` | off | On: PR descriptions, reviews and issue claim comments end with a hidden `<!-- dnbg-workflow <version> -->` |
 | `setup_notice` | on | On: each session opens with a one-line notice while `/dnbg-workflow:setup` still has something open, such as no accounts or no reviewer bot |
 
+#### `velocity-tradeoff`
+
+Set per repo, not in `settings.json`. Has agents ship a whole capability in one PR, with no backwards-compatibility
+or migration shims, where they would otherwise split the work into safer steps.
+
+Off by default. Enable it per repo by adding a section like this to the repo's
+`CLAUDE.md`:
+
+```markdown
+## How to size a change here
+
+Load `dnbg-workflow:velocity-tradeoff` when sizing a change or deciding
+whether to split a PR. This repo has opted in, and only the operator ends
+that.
+```
+
 ### `dnbg-agent-summaries`
 
 Edit with `/plugin configure dnbg-agent-summaries`.
@@ -41,22 +57,6 @@ Edit with `/plugin configure dnbg-work-summary`.
 | Setting | Default | Controls |
 | --- | --- | --- |
 | `owners` | empty | GitHub orgs and logins, comma-separated, whose repos a recap searches. Empty: it asks each time. Separate from `dnbg-workflow`'s `owners` |
-
-## `velocity-tradeoff`
-
-Has agents ship a whole capability in one PR, with no backwards-compatibility
-or migration shims, where they would otherwise split the work into safer steps.
-
-Off by default. Enable it per repo by adding a section like this to the repo's
-`CLAUDE.md`:
-
-```markdown
-## How to size a change here
-
-Load `dnbg-workflow:velocity-tradeoff` when sizing a change or deciding
-whether to split a PR. This repo has opted in, and only the operator ends
-that.
-```
 
 ## Agent roles
 
