@@ -92,7 +92,7 @@ It finishes by naming the optional extras, such as retrospectives and auto-updat
 
 **Installed before the plugins moved to this repo?** Run `/plugin marketplace remove dnbg`, then the three commands again.
 
-[`docs/configuration.md`](docs/configuration.md) covers every setting and why its default is what it is.
+[`docs/configuration.md`](docs/configuration.md) lists every setting.
 
 ## What's in it
 
