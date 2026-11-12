@@ -233,8 +233,7 @@ its own `DNBG_<ROLE>_*` set and `~/.config/dnbg/<role>/` directory): the
 `~/.config/dnbg/reviewer/private-key.pem`, mode `0600` in a `0700` directory —
 the default `bootstrap.py` writes.
 [`docs/configuration.md`](docs/configuration.md#role-apps-private-keys)
-covers configuring these and why the plaintext default is a considered choice
-rather than an oversight.
+covers configuring these.
 
 The key never leaves your machine: `mint-token.sh` signs a ~9-minute JWT
 locally and exchanges it for a short-lived installation token, and only that

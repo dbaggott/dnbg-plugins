@@ -88,11 +88,11 @@ It finishes with one list of every setting, what it is now and how to change it,
 
 **Taking only part of it.** `dnbg-all` installs all four plugins. To take less, install any of `dnbg-workflow@dnbg`, `dnbg-practices@dnbg`, `dnbg-work-summary@dnbg` or `dnbg-agent-summaries@dnbg`; none requires another. Only `dnbg-workflow` has a setup step.
 
-**Install scope.** The install asks for one: `user` for one person across many repos, or `project` for one repo shared with a team ([details](docs/configuration.md#install-scope)).
+**Install scope.** The install asks for one: `user` for one person across many repos, or `project` for one repo shared with a team.
 
 **Installed before the plugins moved to this repo?** Run `/plugin marketplace remove dnbg`, then the three commands again.
 
-[`docs/configuration.md`](docs/configuration.md) covers every setting and why its default is what it is.
+[`docs/configuration.md`](docs/configuration.md) lists every setting.
 
 ## What's in it
 
@@ -130,7 +130,7 @@ The hooks make no network calls, write no files and hold no credentials. They fa
 
 ## Documentation
 
-- [`docs/configuration.md`](docs/configuration.md): settings, install scope, agent roles and key handling
+- [`docs/configuration.md`](docs/configuration.md): settings, agent roles and key handling
 - [`docs/forge-support.md`](docs/forge-support.md): what each skill does outside GitHub
 - [`docs/requirements.md`](docs/requirements.md): the Claude Code floor and command-line tools
 - [`docs/releases.md`](docs/releases.md): updating and versioning

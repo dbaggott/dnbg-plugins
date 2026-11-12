@@ -1,437 +1,104 @@
 # Configuration
 
-Every value here is optional. Leave all of them alone and the plugin still
-works — it loads its skills and rules, advises, blocks nothing, and publishes
-nothing you didn't write.
+Settings are stored in `~/.claude/settings.json`, under
+`pluginConfigs.<plugin>@dnbg.options`. Edit them there or with the command
+given for each plugin.
 
-- [`/dnbg-workflow:setup`](#dnbg-workflowsetup--your-setup-and-what-it-still-needs) — shows how an install is set up, after walking you through what it still needs
-- [`setup_notice`](#setup_notice--the-session-start-notice-while-setup-is-incomplete) — on by default; the one-line notice a session opens with while setup is incomplete
-- [Install scope](#install-scope) — which of two adoption modes you're in
-- [`owners`](#owners--which-repos-it-enforces-on) — **the only setting that turns the hooks on**
-- [`worktree_path`, `claim_label`, `retrospective_dir` and `findings_dir`](#the-mechanical-opinions) — names and paths you can change
-- [`version_stamp`](#version_stamp--recording-which-prompts-published-what) — off by default; adds a hidden version marker to what you publish
-- [`retrospectives`](#retrospectives--where-process-friction-goes) — off by default; writes a retrospective file at every close-out
-- [`summary_dir`](#summary_dir--where-dnbg-agent-summaries-keeps-summary-files) — `dnbg-agent-summaries`' one setting: where summary files are written
-- [`owners` on `dnbg-work-summary`](#owners-on-dnbg-work-summary--whose-repos-a-recap-searches) — `dnbg-work-summary`'s one setting: where `work-summary` looks for your work
-- [Agent roles](#agent-roles--whose-login-each-agent-posts-under) — each role's App, the resolver, and the fallback to your own account
-- [Role Apps' private keys](#role-apps-private-keys) — where each is read from
+They apply to every repo. A repo's own `.claude/settings.json` is not read.
 
-## `/dnbg-workflow:setup` — your setup, and what it still needs
+A change reaches a session that is already running after `/reload-plugins`.
 
-The `setup` skill reads the state of the install, walks only what is open, and
-then shows the whole setup as one list: each setting, what it is now, and how to
-change it. Open is `owners`, a role that needs an App, a missing tool, a `gh`
-with no login, or a client older than the [floor](requirements.md). It keeps no
-progress of its own, so running it again is how you look at a setup, and
-`/dnbg-workflow:setup owners` is how you change the accounts. Once you name the
-accounts for `owners` it saves the value for you, through `claude plugin
-configure`, without asking a second time; the bots it sets up through
-`reviewer-setup`, and anything else it tells you where to set.
+## Settings
 
-A saved `owners` reaches the hooks of a session that is already running only
-after `/reload-plugins`, or in the next session. The skill says so when it saves
-one.
+An invalid value falls back to its default. A path may use only letters, digits
+and `. _ - /`.
 
-## `setup_notice` — the session-start notice while setup is incomplete
+### `dnbg-workflow`
 
-| Setting | Default | Meaning |
+Edit with `/plugin configure dnbg-workflow`.
+
+| Setting | Default | Controls |
 | --- | --- | --- |
-| `setup_notice` | on | While anything `/dnbg-workflow:setup` counts as open is open, each new session opens with a one-line message saying setup is not finished |
+| `owners` | empty | GitHub orgs and logins, comma-separated, whose repos the hooks enforce on. Empty: nothing is ever blocked. `/dnbg-workflow:setup` asks for it |
+| `worktree_path` | `.worktrees` | Directory worktrees are created in. Relative to the repo and inside it |
+| `claim_label` | `assigned:agent-session` | Label that marks an issue as claimed. Must start with `assigned:` |
+| `findings_dir` | `~/.claude/dnbg-findings` | Where agents write what their reports found about the code. Absolute or under `~/` |
+| `retrospectives` | off | On: each agent writes a file on where the process slowed it when its work ends. Off: it reports in chat only where a skill was wrong or had to be worked around |
+| `retrospective_dir` | `~/.claude/dnbg-retrospectives` | Where those files go. Absolute or under `~/` |
+| `version_stamp` | off | On: PR descriptions, reviews and issue claim comments end with a hidden `<!-- dnbg-workflow <version> -->` |
+| `setup_notice` | on | On: each session opens with a one-line notice while `/dnbg-workflow:setup` still has something open, such as no accounts or no reviewer bot |
 
-The message is shown to you and is not part of what the agent reads. Empty
-`owners` is a legitimate place to stop, and so is going without the reviewer:
-turn the notice off with `/plugin configure dnbg-workflow` and those sessions
-open quietly. Setup still shows what is open whenever you run it.
+#### `velocity-tradeoff`
 
-## Install scope
+Off by default. When enabled, agents favor velocity over safety. For example,
+they ship a whole capability in one PR, with no backwards-compatibility or
+migration shims, where they would otherwise split the work into safer steps.
+Useful where a bad change is cheap to undo, such as a project that is not yet
+live or one that can tolerate brief disruption.
 
-The install asks for one. Which you want depends on whether you're adopting this
-for **yourself across many repos** or for **one repo shared with other people** —
-the two are different problems and the plugin supports both.
+Enable per repo by adding the following to the repo's `CLAUDE.md`:
 
-### Mode A — one person, many repos
+```markdown
+## How to size a change here
 
-```
-/plugin install dnbg-workflow@dnbg --scope user
-```
-
-Active in every session on the machine, in any directory. Then set `owners`
-(below) to the accounts you want enforced, and the hooks gate every repo under
-them without any per-repo setup.
-
-This is the mode the enforcement hooks were built for, and it does something
-project scope cannot: the hooks resolve a repo from **the path being edited**,
-not from where Claude Code was launched. Working out of a parent directory and
-editing files across three repos, the gates still apply correctly to each.
-
-### Mode B — one repo, shared with a team
-
-```
-/plugin install dnbg-workflow@dnbg --scope project
+Load `dnbg-workflow:velocity-tradeoff` when sizing a change or deciding
+whether to split a PR. This repo has opted in, and only the operator ends
+that.
 ```
 
-Writes the plugin into that repo's committed `.claude/settings.json`, so every
-collaborator picks it up. Pair it with `extraKnownMarketplaces` in the same file
-and teammates get prompted to install it when they trust the folder — the
-standard way a repository declares the tooling it expects.
+### `dnbg-agent-summaries`
 
-Leave `owners` **empty** in this mode. The skills and rules load for everyone
-working in the repo, and the blocking hooks stay inert — which is usually what
-you want, because how someone drives their own editor is a personal choice a
-repository shouldn't impose on contributors.
+Edit with `/plugin configure dnbg-agent-summaries`.
 
-(`--scope local` is the same as B but private to you and gitignored — useful for
-trying the plugin in a repo without committing anything.)
+| Setting | Default | Controls |
+| --- | --- | --- |
+| `summary_dir` | `~/.claude/dnbg-agent-summaries` | Where agents write summary files. Absolute or under `~/` |
 
-## `owners` — which repos it enforces on
+### `dnbg-work-summary`
 
-**This is what turns the hooks on, and it only matters in Mode A.** It is the
-first of the values Claude Code prompts for at enable time — the others are
-below, and none of them turns any *enforcement* on or off:
+Edit with `/plugin configure dnbg-work-summary`.
 
-| Setting | Meaning |
+| Setting | Default | Controls |
+| --- | --- | --- |
+| `owners` | empty | GitHub orgs and logins, comma-separated, whose repos a recap searches. Empty: it asks each time. Separate from `dnbg-workflow`'s `owners` |
+
+## Agent roles
+
+Each role posts under its own GitHub App once `/dnbg-workflow:reviewer-setup`
+has created one.
+
+| Role | Posts | Without an App |
+| --- | --- | --- |
+| `reviewer` | PR reviews and issue verdicts | Refuses to run |
+| `author` | PRs, issues, comments and pushes | Posts as you |
+| `orchestrator` | Claims, questions and tracking-issue edits | Posts as you |
+
+[`SECURITY.md`](../SECURITY.md) lists each App's permissions and what a leaked
+key can reach.
+
+Each role reads `~/.config/dnbg/<role>/` (under `$XDG_CONFIG_HOME` when that is
+set). Environment variables override it, with `<ROLE>` as `REVIEWER`, `AUTHOR`
+or `ORCHESTRATOR`:
+
+| Variable | Overrides |
 | --- | --- |
-| `owners` | Comma-separated GitHub orgs and/or personal logins — e.g. `acme-corp,yourname` |
-
-A repository is **covered** when its `origin` remote points at one of those
-owners. In a covered repo the two hooks block; everywhere else they do
-nothing. Matching ignores case and whitespace, and compares whole names — so
-`acme` does not match `acme-corp`.
-
-**Leave it empty and nothing is ever blocked.** The skills still load and still
-advise, but no hook halts an edit. That is the deliberate default: a plugin that
-can stop your work shouldn't start doing so before you've said where.
-
-To change it later, re-run the plugin's configuration from `/plugin`. The value
-is stored in your **user** `settings.json` — and unlike `enabledPlugins`, plugin
-config is deliberately *not* read from a project's `.claude/settings.json`, so a
-repository you clone can never widen or narrow what gets enforced on your
-machine. That asymmetry is also why the opt-in for `velocity-tradeoff` goes
-through a repo's `CLAUDE.md` rather than through config.
-
-## The mechanical opinions
-
-Some of this plugin's choices are mechanical — where worktrees go, what a claim
-is labelled, and where retrospectives and findings entries are kept — and you
-can change them without forking. Each defaults to what the skills say, so leaving
-them alone is the same as not having them:
-
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `worktree_path` | `.worktrees` | Repo-relative directory worktrees are created in. Must stay inside the repo and must be a plain path — an absolute path, a `~` path, any `..` segment, a leading `-`, or a character outside letters, digits and `. _ - /` is rejected and the default used instead |
-| `claim_label` | `assigned:agent-session` | Label an agent session applies when it claims an issue. Must start with `assigned:` |
-| `retrospective_dir` | `~/.claude/dnbg-retrospectives` | Where agents write their retrospectives, one subdirectory per repo (`<dir>/<owner>/<repo>/`), and where `process-review` reads them and keeps its own reports, under `<dir>/_reviews/`; `usage-sweep.sh` writes its reports under `<dir>/_usage/`. Must be an absolute path or one under `~/`, with the same character rule as `worktree_path`; anything else is rejected and the default used instead |
-| `findings_dir` | `~/.claude/dnbg-findings` | Where agents write a findings entry for each finding about the code in their reports, one subdirectory per repo (`<dir>/<owner>/<repo>/`), and where `findings-review` and a tracking issue's closeout read them. Same rule as `retrospective_dir` |
-
-Set one and the session-start hook prints a short note saying so; the skills read
-that note as overriding the defaults they spell out. Set nothing and the hook
-prints nothing at all.
-
-**These are user-scope too**, for the same reason `owners` is: plugin config is
-read from your **user** `settings.json` and deliberately not from a project's
-`.claude/settings.json`. So in Mode B a repository cannot set a worktree
-directory for everyone who clones it — each collaborator sets their own, or
-leaves the default. That is the same asymmetry that stops a cloned repo widening
-what gets enforced on your machine, and it costs the same thing here.
-
-**The rejections are enforced rather than advisory, and for the same kind of
-reason.** Worktrees outside the repo are not covered by `.gitignore` and the
-skills' cleanup steps stop resolving against them; a path carrying a space, a
-leading dash, or a shell metacharacter renders a `git worktree add` that cannot
-run as printed, and the printed command is the whole point of the block message.
-A claim label outside `assigned:` is worse, because it fails silently in *both*
-directions: the check
-for an existing claim matches the whole `assigned:` namespace deliberately, so
-that any claimant — another agent, a bot, a teammate's tooling — is visible
-without this plugin knowing their name. Step outside it and your claims stop
-being seen by them while theirs stop being seen by you, which puts two workers on
-one issue. A retrospective or findings directory is the reverse of a worktree
-root, outside every repo by design, so it has to name a place on its own: a
-relative path would land in whichever checkout the writing agent happened to
-stand in. Its
-character rule is the worktree one, because an agent retypes the value into the
-command that creates it. Where a value is rejected, the session-start note
-names the value, the reason, and the default it fell back to.
-
-What is deliberately **not** configurable: PRs always open as drafts, the
-send-to-review picker and its fixed option order, the `[<branch-name>]` sibling
-PR title tag, and "only a human merges". Those are what the workflow *does*
-rather than parameters of it — the tag in particular is a join key, so a
-per-adopter format would destroy the signal exactly when someone is reading a PR
-list across repos.
-
-## `version_stamp` — recording which prompts published what
-
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `version_stamp` | off | Append `<!-- dnbg-workflow <version> -->` to PR descriptions, review bodies, and issue claim comments |
-
-Turn it on and three surfaces carry an HTML comment naming the plugin and the
-version that produced them: the PR description `git-workflow` writes, the review
-body `reviewer` posts, and the claim comment `issue-workflow` leaves on an issue.
-It renders invisibly, so nobody reading the PR sees it, and
-`gh pr view <n> --json body` is enough to read it back out.
-
-**It answers a question nothing else can.** A transcript records the plugin's
-*name* and Claude Code's version, never the plugin's own, and transcripts expire
-on a rolling window while a merged PR does not. So without the stamp, "which
-version of these prompts wrote this review" has no answer six months later —
-which matters exactly when you have changed a skill and want to know whether the
-PRs that went sideways predate the fix.
-
-**It is off by default because the stamp lands on other people's screens.** Every
-other value here changes how the plugin behaves on your machine; this one adds
-text to artifacts published under your name, in repos you may share with people
-who never installed this plugin and did not agree to carry a marker for it.
-Something with that reach should be something you switched on, and a default of
-off costs only the provenance you didn't ask for. The same reasoning sets the
-failure direction: a value the hook can't make sense of leaves the stamp **off**
-rather than on, and with it off the session-start note carrying the version is
-not emitted at all — so a skill has no version to stamp with rather than a
-decision to make. None of them will substitute one from the manifest or from
-memory, since a guessed version reads downstream exactly like a genuine one.
-
-Two things it is not. It is **not** a per-repo setting — like every value here it
-is read from your **user** `settings.json`, so it is on for all your repos or
-none. And it does **not** stamp commits, issue bodies, or inline review comments;
-only the three surfaces above, each of which is a single artifact whose author is
-already you.
-
-## `retrospectives` — where process friction goes
-
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `retrospectives` | off | Every close-out writes a retrospective file under `retrospective_dir` for `process-review` to count, and says nothing else about process friction |
-
-Every agent role ends its part of the work with a close-out: the author once its
-PR merges or closes, the reviewer when its review ends, both sides of a spec
-review (the issue's author and the issue reviewer) when it ends, the
-orchestrator at Stop. At each, it answers four questions about where the
-*process* hurt — what slowed it, what a skill got wrong, what it worked
-around, what it wished it could ask. This setting decides where those answers go.
-
-**On**, each close-out writes them to a file under `retrospective_dir`, and the
-report only names the file. `process-review` reads a batch of those files later
-and drafts upstream issues for what recurs. The offer to file an issue upstream
-that the always-on rules make is then kept for friction that stopped the task.
-
-**Off**, nothing is written. The report instead carries, one line each, every
-item where a skill was wrong or missing or had to be worked around, followed by
-an offer to file them upstream with your approval of the exact text. Friction
-that only slowed the work, and questions it wished it could ask, are dropped.
-Both states sort friction by the same two headings, so turning it on changes
-where an item goes, never which items count.
-
-**It is off by default because the files are for whoever maintains these
-prompts.** Retrospectives exist to improve the plugin, and a user who is not
-improving it would collect files under `~/.claude` that nothing of theirs reads.
-Writing the file regardless and gating only what is said in chat was considered
-and rejected for that reason. The failure direction is the stamp's: a value the
-hook can't make sense of leaves retrospectives **off**, and the session-start
-note, which is the only thing that tells a skill it is on, is not emitted.
-
-Like every value here it is read from your **user** `settings.json`, so it is on
-for all your repos or none.
-
-## `summary_dir` — where `dnbg-agent-summaries` keeps summary files
-
-This one belongs to the `dnbg-agent-summaries` plugin rather than to
-`dnbg-workflow`, so it is set on that plugin from `/plugin`.
-
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `summary_dir` | `~/.claude/dnbg-agent-summaries` | Where agents write summary files, flat, one Markdown file per topic, and where `summary-review` sweeps them into `archive/`. Must be an absolute path or one under `~/`, with the same character rule as `worktree_path` |
-
-The value reaches the skill by substitution into its text, so no hook runs. Left
-unset, the skill sees its own placeholder and uses the default instead. A value
-that breaks the rule is not rejected at session start, since no
-hook reads it: the skill uses the default and says so when it next runs.
-
-Like every value here it is read from your **user** `settings.json`.
-
-## `owners` on `dnbg-work-summary` — whose repos a recap searches
-
-This one belongs to the `dnbg-work-summary` plugin, so it is set on that plugin
-from `/plugin`. It shares a name with `dnbg-workflow`'s `owners` and nothing
-else: that one says where the hooks enforce, this one says where `work-summary`
-searches, and neither plugin reads the other's. With both installed, set each.
-
-| Setting | Meaning |
-| --- | --- |
-| `owners` | Comma-separated GitHub orgs and/or personal logins, e.g. `acme-corp,yourname`, whose repos `work-summary` searches for your PRs and issues. Spaces are ignored |
-
-The value reaches the skill by substitution into its text, as `summary_dir`
-does. Left unset or empty, the skill asks which org or login to search each time
-it runs.
-
-Like every value here it is read from your **user** `settings.json`.
-
-## Opting a repo into `velocity-tradeoff`
-
-`velocity-tradeoff` is **opt-in per repo** and off unless a project asks for
-it, since it trades away protections most projects need. Whether the trade holds
-is a ratio — blast radius, reversibility, how fast breakage is noticed, test
-coverage, and users — not a headcount, so a live project with forgiving users and
-one-command rollback can sit on the velocity side while a pre-launch one doing an
-irreversible migration cannot.
-
-A repo opts in with a short section in its own `CLAUDE.md` naming the posture and
-who can unmake it; the skill carries the template. It goes through `CLAUDE.md`
-rather than plugin config for the same reason `owners` is user-scope: a cloned
-repository must not be able to change what your machine enforces, and this is
-the one direction where the repo genuinely is the right authority — it is the
-project, not the machine, that has the risk profile.
-
-## Agent roles — whose login each agent posts under
-
-The agents act on GitHub in roles, and a role with a GitHub App of its own posts
-under that App's bot login rather than yours. Each role is a directory under
-`dnbg-workflow/roles/<role>/` holding its `permissions.json`: the permissions its
-App is created with and every minted token is checked against, and its
-`fallback`. The `reviewer-setup` skill creates the Apps, for any subset of
-roles, in one run.
-
-| Per role | Default | Override |
-| --- | --- | --- |
-| Config directory | `$XDG_CONFIG_HOME/dnbg/<role>/` when `XDG_CONFIG_HOME` is set, else `~/.config/dnbg/<role>/` | `DNBG_<ROLE>_CONFIG_DIR`: an absolute path, or one starting with `~/`; a `~user` path is refused |
-| App id, installation, key | `config.json`, `private-key.pem` there | `DNBG_<ROLE>_APP_ID`, `_INSTALLATION_ID`, `_PRIVATE_KEY`, `_PRIVATE_KEY_COMMAND` |
-| Login (App slug) | `slug` in `config.json` | `DNBG_<ROLE>_SLUG` |
-
-`<ROLE>` is the role's name upper-cased, with hyphens as underscores
-(`DNBG_REVIEWER_*`). The reviewer's existing directory and variables are this
-layout, so a setup made before roles existed keeps working.
-
-| Role | Posts | App permissions | Without an App |
-| --- | --- | --- | --- |
-| `reviewer` | PR reviews, inline comments, issue-body verdicts | `pull_requests`, `issues`, `contents` write; `checks`, `actions`, `statuses`, `metadata` read | refuses |
-| `author` | issues it files, claims, body edits, comments and labels; PRs, their descriptions and thread replies; pushes from a worktree | `contents`, `pull_requests`, `issues`, `workflows` write; `checks`, `actions`, `statuses`, `metadata` read | posts as you |
-| `orchestrator` | `orchestrate`'s claims, decision-log rows, questions and tracking-issue body edits | `issues` write; `metadata` read | posts as you |
-
-[`SECURITY.md`](../SECURITY.md#role-apps-private-keys) says what a leaked key of
-each can reach, and how to rotate it.
-
-### The resolver
-
-`dnbg-workflow/scripts/as-role.sh` is the one place that knows how a role
-reaches the forge; skills and scripts ask it. `<repo>` is `owner/name` (short
-for `github.com/owner/name`), `host/namespace/name`, or a remote URL — never a
-bare owner. Only github.com is implemented.
-
-| Call | Answer |
-| --- | --- |
-| `as-role.sh <role> <repo> -- <cmd…>` | Runs `<cmd…>` with the role's token in `GH_TOKEN`, after one stderr line `as-role.sh: result=OK as=<login> fallback=<none\|unconfigured>`. If the resolver fails, the command does not run: exit 125, with `as-role.sh: result=ERROR reason=<reason>` on stderr. |
-| `as-role.sh --login <role> <repo>` | `result=OK login=<login> fallback=<none\|unconfigured>` — the App slug (GitHub's REST spelling adds `[bot]`), or your login when the role falls back. |
-| `as-role.sh --operator <repo>` | `result=OK login=<your login> fallback=none`, read under your own `gh` auth with no role token in place. |
-| `as-role.sh --fallbacks` | `result=OK roles=<role,…\|none>`: the roles that would act as you, read from configuration presence only, with no network call. The session-start notice uses it. |
-| `as-role.sh --roles` | `result=OK configured=<role,…\|none> fallback=<role,…\|none> unconfigured=<role,…\|none>`: every role's state, read the same way. `unconfigured` is the roles with no App that refuse to act as you. The `setup` skill and the session-start setup message use it. |
-
-The last four print exactly one line on stdout and exit 0; when they cannot
-answer, that line is `result=ERROR reason=<reason>`, with what to do on stderr.
-A configured role whose login is unknown (an env-only setup without
-`DNBG_<ROLE>_SLUG`) answers `--login` with `reason=no-login`, never with your
-login. Since a wrapped command can exit 125 itself, the credential form's stderr
-`result=ERROR` line, not the exit status, is what says the resolver refused.
-
-The token is minted for the App's installation on the repo's owner, lives only
-in the command's environment, and is never written to disk, git config or a
-remote URL, or printed.
-
-### Pushing as the author
-
-`git-workflow` runs `dnbg-workflow/scripts/git-credential-as-role.sh --install
-author <worktree>` on each worktree it works in. That writes, in the worktree's
-own `config.worktree` only, after enabling `extensions.worktreeConfig` in the
-repository's shared config:
-
-| Key | Value | Why |
-| --- | --- | --- |
-| `credential.helper` | an empty entry, then the helper | the empty entry clears every helper read before it, `gh auth setup-git`'s `credential.https://github.com.helper` included, so your own helpers never answer first |
-| `credential.useHttpPath` | `true` | git then sends the repository path, which picks the App installation |
-| `remote.origin.pushurl` | the HTTPS form of an SSH `origin` | git asks no credential helper over SSH; fetches stay on SSH |
-
-The helper answers each push with a freshly minted author token, or with your
-`gh auth git-credential` answer when the author falls back, so an author App set
-up partway through a session takes effect at the next push. With no author App
-and an SSH `origin`, pushes go over HTTPS with `gh`'s token: check that it has
-the `workflow` scope (`gh auth status`) if you push workflow changes. The helper
-path recorded is that plugin version's, so re-run `--install` on a worktree that
-outlives a plugin update.
-
-### Falling back to your account
-
-A role with no configuration (no `config.json`, and none of
-`DNBG_<ROLE>_APP_ID`, `_PRIVATE_KEY` or `_PRIVATE_KEY_COMMAND`) acts as your own
-account only when its `permissions.json` says
-`"fallback": "operator"`; the author and the orchestrator do, the reviewer says `"refuse"`, which
-is also what an absent key means. A session-start notice names each role falling back, from
-configuration presence alone, with no network call. A role that *is* configured
-but whose credential fails — a failed mint, a revoked grant, a key command that
-prints nothing — is an error and never falls back, and so is any setup where two
-roles resolve to the same App.
+| `DNBG_<ROLE>_CONFIG_DIR` | The directory itself |
+| `DNBG_<ROLE>_APP_ID`, `_INSTALLATION_ID`, `_SLUG` | The same fields in its `config.json` |
+| `DNBG_<ROLE>_PRIVATE_KEY`, `_PRIVATE_KEY_COMMAND` | Where the key comes from, below |
 
 ## Role Apps' private keys
 
-That key is the bot's entire credential, so it's worth being explicit about how
-it's handled rather than leaving you to read the scripts. [`SECURITY.md`](../SECURITY.md)
-covers what a leaked key can do and how to revoke one; this section covers where
-the key is read from. It is shown for the reviewer; every role reads the same
-three sources from its own `DNBG_<ROLE>_*` variables and directory.
+`/dnbg-workflow:reviewer-setup` saves each bot's key to
+`~/.config/dnbg/<role>/private-key.pem`, plaintext, mode `0600`. Most installs
+need nothing more.
 
-**By default it is a plaintext PEM at `~/.config/dnbg/reviewer/private-key.pem`,
-mode `0600`, in a `0700` directory.** That is a deliberate choice, not an
-oversight — `aws`, `npm`, and `docker` all keep plaintext credentials in your
-home directory, and anyone who can read that file can already read your shell
-profile. It is stated here so you can disagree with it, because you have two
-ways to.
+There are two alternatives. Either one, when set, is used ahead of the file:
 
-The key is resolved from the first of these that yields one:
-
-| Order | Source | For |
+| To | Set | Notes |
 | --- | --- | --- |
-| 1 | `DNBG_REVIEWER_PRIVATE_KEY` | CI and headless runs |
-| 2 | `DNBG_REVIEWER_PRIVATE_KEY_COMMAND`, or `private_key_command` in `config.json` | any secret manager |
-| 3 | `$CONFIG_DIR/private-key.pem` | the default |
+| Keep the key in a secret manager | `DNBG_<ROLE>_PRIVATE_KEY_COMMAND`, or `private_key_command` in `config.json` | A command that prints the key, such as `op read` or `pass show`. Move the key into the manager yourself. The command runs on every write, so one that prompts will prompt often |
+| Run in CI | `DNBG_<ROLE>_PRIVATE_KEY`, with `DNBG_<ROLE>_APP_ID` | The key itself, so no file is needed. Every process you own can read it, so keep it off your own machine |
 
-Route 2 is one hook that reaches every manager without this project integrating
-with any of them — `op read`, `pass show`, `security find-generic-password -w`,
-`secret-tool lookup`, `vault kv get`, `sops -d`. `git`'s `credential.helper` is
-the same idea.
-
-Route 1 stands alone: with `DNBG_REVIEWER_APP_ID` set too, no config file or PEM
-needs to exist anywhere, which is what makes running the reviewer in CI possible.
-`DNBG_REVIEWER_INSTALLATION_ID` is optional alongside it — set it to skip the
-`/app/installations` lookup, or leave it and the installation is resolved from
-the owner argument. Both fall back to `config.json` when one exists.
-
-Two things to weigh before switching off the default:
-
-- **The command runs on every mint**, and a role mints per write.
-  If yours prompts — a Touch ID or vault unlock on `op read` — you will see that
-  prompt repeatedly during a busy PR. Nothing here caches the key.
-- **Route 1 puts the PEM in your environment**, where any process you own can
-  read it (`/proc/PID/environ` on Linux). Exporting it from a shell profile is
-  arguably worse than the `0600` file it replaces. It is meant for CI, where the
-  runner is ephemeral and the secret store injects it for one job.
-
-Three properties worth knowing:
-
-- **The command is read only from your user config or environment — never from a
-  repository.** Nothing reads config from the working directory. This is the
-  property the feature's safety rests on: the command is harmless because anyone
-  who can write `~/.config/dnbg/<role>` can already edit your shell profile,
-  and that stops being true the moment a repo you cloned can supply the value.
-- **A key from routes 1 or 2 is never written to disk.** It reaches `openssl`
-  through a pipe, so there is no temp file to leak on a crash or a `SIGKILL` —
-  the guarantee holds by construction rather than by cleanup. This is the point
-  of those routes: if you keep the key in a vault, the tool must not quietly
-  materialise it in `/tmp` on every mint. Route 3 hands `openssl` the path it
-  already had, because its key is by definition already on that disk — so the
-  default setup gains no new dependency.
-- **A group- or world-writable config directory or key file is refused**, the way
-  `ssh` refuses an over-permissive private key. A key others can *replace* is as
-  dangerous as one they can read.
-
-The key never leaves your machine in any case: the scripts sign a ~9-minute JWT
-locally and exchange it for a short-lived installation token, and only that token
-is sent anywhere. The JWT reaches `curl` through a pipe rather than on its command
-line, which other users on the machine can read.
+With both set, `DNBG_<ROLE>_PRIVATE_KEY` wins. A key from either alternative is
+never written to disk. A config directory or key file that is group- or
+world-writable is refused.
