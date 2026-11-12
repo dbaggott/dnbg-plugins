@@ -27,7 +27,7 @@ it](../README.md#whats-in-it) — and read the **Plugin** column beside it, beca
 *forge-neutral is a property of the skill, not of the plugin shipping it*. The
 two neutral skills are obtained differently: `coding-practices` ships in
 `dnbg-practices`, which mentions no forge anywhere and installs on its own
-(`/plugin install dnbg-practices@dnbg`), while `velocity-tradeoff` ships inside
+([Setup](../README.md#setup)), while `velocity-tradeoff` ships inside
 `dnbg-workflow` because it governs how to size a change and whether to split a
 PR — a workflow question. A non-GitHub user therefore gets `velocity-tradeoff`
 only by installing the GitHub-coupled plugin, where it then works normally: the
