@@ -28,11 +28,11 @@ Edit with `/plugin configure dnbg-workflow`.
 
 #### `velocity-tradeoff`
 
-Set per repo, not in `settings.json`. Has agents ship a whole capability in one PR, with no backwards-compatibility
+Has agents ship a whole capability in one PR, with no backwards-compatibility
 or migration shims, where they would otherwise split the work into safer steps.
 
-Off by default. Enable it per repo by adding a section like this to the repo's
-`CLAUDE.md`:
+Off by default. It is enabled per repo, not in `settings.json`, by adding a
+section like this to the repo's `CLAUDE.md`:
 
 ```markdown
 ## How to size a change here
