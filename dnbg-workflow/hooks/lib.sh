@@ -276,19 +276,6 @@ resolve_findings_dir() {
   resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_FINDINGS_DIR:-}" "$(resolve_data_dir)/findings"
 }
 
-# The command that moves a directory's entries to where this session reads them,
-# empty when there is nothing to move: the legacy directory is missing or empty,
-# or the resolved directory is it or inside it. `~` is expanded, since the
-# operator pastes it.
-legacy_dir_move() {  # <legacy-dir> <resolved-dir>
-  local legacy="$1" target="${2/#\~/${HOME:-}}"
-  case "$target/" in "$legacy"/*) return 0 ;; esac
-  set -- "$legacy"/*
-  [ -e "$1" ] || return 0
-  printf '"%s/move-legacy-dir.sh" "%s" "%s"' \
-    "$(cd "$(dirname "${BASH_SOURCE[0]}")/../scripts" && pwd)" "$legacy" "$target"
-}
-
 # Has the operator asked for the version stamp?
 #
 # Unlike the knobs above this is a gate rather than a value, so it matches

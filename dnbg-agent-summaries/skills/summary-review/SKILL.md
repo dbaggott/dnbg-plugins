@@ -20,13 +20,6 @@ digits and `.` `_` `-` `/`, is not usable either, since it goes into shell
 commands: treat it as unset, and say so in your reply. Expand `~` to your home
 directory. `<summary_dir>` below means this directory.
 
-This plugin no longer reads `~/.claude/dnbg-agent-summaries`. When that
-directory holds files and is not `<summary_dir>`, tell the operator so and give
-them a command that moves each file to the same path under `<summary_dir>`,
-without running it. The command never overwrites: a file whose path already
-exists under `<summary_dir>`, `archive/` included, stays where it is and is
-named.
-
 ## Writing or updating a summary file
 
 Read `<skill-dir>/references/summary.md`, where `<skill-dir>` is this skill's
