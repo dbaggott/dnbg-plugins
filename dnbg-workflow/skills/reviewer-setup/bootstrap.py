@@ -96,6 +96,33 @@ def gh_login() -> str:
         return ""
 
 
+# Every page the local server answers with. Self-contained: no script, font or
+# image is fetched, so the page renders with no network beyond GitHub itself.
+PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dnbg-workflow setup</title>
+<style>
+  :root {{ color-scheme: light dark; }}
+  body {{ font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
+         display: grid; place-items: center; min-height: 100vh; padding: 16px;
+         box-sizing: border-box; background: Canvas; color: CanvasText; }}
+  main {{ max-width: 34rem; }}
+  h1 {{ font-size: 1.5rem; margin: 0 0 .5rem; }}
+  ul {{ padding-left: 1.25rem; }}
+  li {{ margin: .25rem 0; }}
+  code {{ font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }}
+  .go {{ display: inline-block; font: inherit; font-weight: 600; cursor: pointer;
+        padding: .6rem 1.1rem; border: 0; border-radius: 6px; text-decoration: none;
+        background: #1f883d; color: #fff; }}
+  .note {{ font-size: .875rem; opacity: .7; }}
+  /* The fallback for a redirect that did not happen: hidden while it should. */
+  .late {{ visibility: hidden; animation: late 0s 3s forwards; }}
+  @keyframes late {{ to {{ visibility: visible; }} }}
+</style></head><body><main>
+{body}
+</main></body></html>"""
+
+
 def build_manifest(role: str, name: str, redirect_url: str, public: bool) -> dict:
     return {
         "name": name,
@@ -169,8 +196,69 @@ def save_credentials(config_dir: Path, owner_type: str, org: str, app: dict) -> 
     config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
-def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -> dict | None:
-    """Create one role's App. Returns its summary, or None after printing why not."""
+def install_buttons(installs: list[tuple[str, str]]) -> str:
+    return "\n".join(
+        f'<p><a class="go" target="_blank" rel="noopener" href="{html.escape(url, quote=True)}">'
+        f'Install the {html.escape(r)} bot</a></p>' for r, url in installs)
+
+
+def failed_page(heading: str, detail: str, installs: list[tuple[str, str]]) -> str:
+    """A page for a role whose App was not set up. The Apps the run created
+    before it get their install buttons here, since its last page never comes."""
+    body = f"<h1>{heading}</h1><p>{html.escape(detail)}</p>"
+    if installs:
+        body += ("<p>The bots created before this one still need installing. "
+                 "Each button opens GitHub in a new tab.</p>" + install_buttons(installs))
+    return body
+
+
+def created_page(installs: list[tuple[str, str]], left: list[str], tabs: bool = True) -> str:
+    """The page shown once a role's App exists. `installs` is (role, install URL)
+    for every App this run has created, the newest last; `left` is the roles the
+    run still has to create; `tabs` is whether the run opens each role's page
+    itself.
+
+    Installing waits for the last page, which carries every App's button: the
+    run opens the next role's tab as soon as this one is served, so a button on
+    an earlier page would be left behind in a tab nobody is looking at."""
+    role = installs[-1][0]
+    if left and tabs:
+        return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
+<p>This tab is done: you can close it.</p>
+<p class="note">The {html.escape(left[0])} bot is next, in a new tab. You install the bots together, after the last is created.</p>"""
+    if left:
+        # No browser was opened for this run, so none will be for the next role.
+        return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
+<p><a class="go" href="/start/{html.escape(left[0], quote=True)}">Next: the {html.escape(left[0])} bot</a></p>
+<p class="note">You install the bots together, after the last is created.</p>"""
+    if len(installs) == 1:
+        heading = f"The {html.escape(role)} bot is created"
+        step = "One step left: install it."
+        how = "The button opens GitHub in a new tab."
+        closing = "When it is installed, close this tab and return to Claude Code."
+    else:
+        heading = f"All {len(installs)} bots are created"
+        step = "One step left: install each of them."
+        how = "Each button opens GitHub in a new tab. Come back here after each one."
+        closing = "When all are installed, close this tab and return to Claude Code."
+    buttons = install_buttons(installs)
+    return f"""<h1>&#10003; {heading}</h1>
+<p>{step} GitHub will ask which repos:</p>
+<ul>
+<li><b>All repositories</b> (recommended): least upkeep; new repos are covered automatically.</li>
+<li><b>Only select repositories</b>: limits what the bot can touch; you add new repos later.</li>
+</ul>
+<p class="note">You can change this at any time on GitHub, under Settings, then Applications.</p>
+<p>{how}</p>
+{buttons}
+<p class="note">{closing}</p>"""
+
+
+def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path,
+             earlier: list[dict], left: list[str]) -> dict | None:
+    """Create one role's App. Returns its summary, or None after printing why not.
+    `earlier` is the summaries of the Apps this run already created, and `left`
+    the roles it creates after this one."""
     # Default to user-owned + public: the only model installable on BOTH the org
     # (for org PRs) and your personal account (for personal repos). Private Apps
     # install only on their owner, so --owner-type org covers org repos only.
@@ -187,6 +275,10 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
 
     result: dict = {}
     done = threading.Event()
+    before = [(e["role"], e["install_url"]) for e in earlier]
+    # Whether this run opens each role's page itself; settled below, before any
+    # callback can be served.
+    flow = {"tabs": not args.no_browser}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):  # quiet
@@ -196,35 +288,38 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
             self.send_response(code)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(body.encode())
+            self.wfile.write(PAGE.format(body=body).encode())
 
         def do_GET(self):  # noqa: N802
             parsed = urlparse(self.path)
-            if parsed.path == "/":
+            # `/start/<role>` is the link an earlier role's page carries when no
+            # browser is opened: only this role's server answers it, so a click
+            # that lands before the hand-over cannot start the earlier role again.
+            if parsed.path in ("/", f"/start/{role}"):
                 manifest = build_manifest(role, name, f"http://localhost:{args.port}/callback", public)
                 # Auto-submitting form: the manifest must be POSTed to GitHub.
                 # html.escape so the embedded JSON is safe in the attribute
                 # regardless of manifest content (defense-in-depth).
                 manifest_attr = html.escape(json.dumps(manifest), quote=True)
-                self._html(200, f"""<!doctype html><html><body>
-<form id="f" action="{html.escape(create_url, quote=True)}" method="post">
+                self._html(200, f"""<form id="f" action="{html.escape(create_url, quote=True)}" method="post">
   <input type="hidden" name="manifest" value="{manifest_attr}">
 </form>
-<p>Redirecting you to GitHub to create the {html.escape(role)} App
-(<b>{name}</b>)&hellip; if nothing happens, click Create.</p>
-<button form="f" type="submit">Create GitHub App</button>
-<script>document.getElementById('f').submit();</script>
-</body></html>""")
+<p>Taking you to GitHub to create the {html.escape(role)} bot&hellip;</p>
+<div class="late">
+<p class="note">Still here? Continue by hand:</p>
+<p><button class="go" form="f" type="submit">Continue to GitHub</button></p>
+</div>
+<script>document.getElementById('f').submit();</script>""")
             elif parsed.path == "/callback":
                 qs = parse_qs(parsed.query)
                 if (qs.get("state") or [""])[0] != state:
-                    self._html(400, "<p>State mismatch — possible CSRF. Setup aborted.</p>")
+                    self._html(400, failed_page("Setup stopped", "State mismatch — possible CSRF. Setup aborted.", before))
                     result["error"] = "state mismatch on callback"
                     done.set()
                     return
                 code = (qs.get("code") or [""])[0]
                 if not code:
-                    self._html(400, "<p>No code in callback. Setup failed.</p>")
+                    self._html(400, failed_page("Setup failed", "No code in callback.", before))
                     result["error"] = "no code in callback"
                     done.set()
                     return
@@ -236,7 +331,7 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
                     if not all(k in app for k in ("id", "pem", "slug")):
                         raise KeyError("conversion response missing id/pem/slug")
                 except (urllib.error.HTTPError, urllib.error.URLError, KeyError) as exc:
-                    self._html(500, f"<p>Manifest conversion failed: {html.escape(str(exc))}</p>")
+                    self._html(500, failed_page("Setup failed", f"Manifest conversion failed: {exc}", before))
                     result["error"] = f"manifest conversion failed: {exc}"
                     done.set()
                     return
@@ -249,17 +344,13 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
                     msg = (f"App '{app.get('slug', '')}' was created on GitHub, but saving its "
                            f"credentials to {config_dir} failed ({exc}). Delete the App in its "
                            f"GitHub settings, fix the directory, and re-run setup.")
-                    self._html(500, f"<p>{html.escape(msg)}</p>")
+                    self._html(500, failed_page("Setup failed", msg, before))
                     result["error"] = msg
                     done.set()
                     return
                 result["app"] = app
                 install_url = f"https://github.com/apps/{app.get('slug', '')}/installations/new"
-                self._html(200, f"""<!doctype html><html><body>
-<h3>{html.escape(role)} App created: {html.escape(app.get('slug', ''))}</h3>
-<p>Credentials saved to {html.escape(str(config_dir))}. You can close this tab and return to the terminal.</p>
-<p>Next: install it &mdash; <a href="{html.escape(install_url)}">{html.escape(install_url)}</a></p>
-</body></html>""")
+                self._html(200, created_page(before + [(role, install_url)], left, flow["tabs"]))
                 done.set()
             else:
                 self._html(404, "not found")
@@ -274,8 +365,10 @@ def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path) -
 
     open_url = f"http://localhost:{args.port}/"
     print(f"Opening {open_url} — complete the {role} App's creation in your browser.", file=sys.stderr)
-    if not args.no_browser:
-        webbrowser.open(open_url)
+    if not args.no_browser and not webbrowser.open(open_url):
+        flow["tabs"] = False
+        print(f"No browser could be opened here. Open {open_url} yourself, on this machine.",
+              file=sys.stderr)
 
     if not done.wait(timeout=args.timeout):
         print(f"Timed out after {args.timeout}s waiting for the GitHub callback.", file=sys.stderr)
@@ -335,10 +428,10 @@ def run(args: argparse.Namespace) -> int:
     status = 0
     for role in roles:
         name = args.name or (f"agent-{role}-{login}" if login else f"agent-{role}")
-        summary = run_flow(args, role, name, config_dirs[role])
+        left = roles[roles.index(role) + 1:]
+        summary = run_flow(args, role, name, config_dirs[role], created, left)
         if summary is None:
             status = 1
-            left = roles[roles.index(role) + 1:]
             if left:
                 print(f"Stopped before: {', '.join(left)}.", file=sys.stderr)
             break

@@ -767,7 +767,7 @@ remote_read_calls() {  # <SKILL.md>
   # references directly, and `issue-workflow SKILL.md still points at each of
   # its paths` covers its own pointers.
   for ps in dnbg-workflow/reviewer dnbg-workflow/issue-reviewer \
-            dnbg-workflow/git-workflow dnbg-workflow/orchestrate \
+            dnbg-workflow/git-workflow dnbg-workflow/orchestrate dnbg-workflow/setup \
             dnbg-practices/coding-practices dnbg-agent-summaries/summary-review; do
     plugin=${ps%/*}; s=${ps#*/}
     local found=0
@@ -1550,7 +1550,7 @@ MD
 # next line says the guard refuses any other forge, and the `FORGE` guard that
 # refuses with `unsupported-forge` — or is listed here as GitHub-shaped throughout, so a
 # new forge call is one or the other by decision rather than by omission.
-GITHUB_ONLY_SCRIPTS="fetch-tree.sh pr-round.sh pr-sources.sh pr-threads.sh pr-verdict.sh watch-pr.sh"
+GITHUB_ONLY_SCRIPTS="fetch-tree.sh pr-round.sh pr-sources.sh pr-threads.sh pr-verdict.sh setup-check.sh watch-pr.sh"
 # The role resolver is the seam itself: it reads the forge from the repo it is
 # given rather than assuming one, so it needs only the refusal for a forge with
 # no backend.
@@ -2347,4 +2347,24 @@ undeclared_placeholders() {  # <plugin-dir>
   run undeclared_placeholders "$plugin"
   [[ "$output" == *'${user_config.summary_dir} names no'* && "$output" == *'${user_config.owners} names no'* ]] \
     || { echo "a manifest with no userConfig did not fail both placeholders: $output"; false; }
+}
+
+# The setup check compares the client against the floor the requirements page
+# states. The page is not shipped with the plugin, so the script carries its own
+# copy of the number.
+@test "setup-check.sh's Claude Code floor is the one docs/requirements.md states" {
+  local doc script
+  doc=$(sed -n 's/^\*\*Claude Code v\([0-9.]*[0-9]\) or newer\.\*\*.*/\1/p' "$ROOT/docs/requirements.md")
+  script=$(sed -n 's/^CLAUDE_CODE_FLOOR=//p' "$ROOT/dnbg-workflow/scripts/setup-check.sh")
+  [ -n "$doc" ] || { echo "no floor parsed out of docs/requirements.md"; false; }
+  [ "$doc" = "$script" ] || { echo "docs say $doc, setup-check.sh says $script"; false; }
+}
+
+@test "setup-check.sh looks for the tools docs/requirements.md lists" {
+  local doc script
+  doc=$(awk '/^\| Tool \|/{t=1; next} t && /^\| `/{print} t && !/^\|/{exit}' "$ROOT/docs/requirements.md" \
+    | sed 's/^| `\([a-z0-9]*\)`.*/\1/' | sort | tr '\n' ' ')
+  script=$(sed -n 's/^TOOLS="\(.*\)"$/\1/p' "$ROOT/dnbg-workflow/scripts/setup-check.sh" | tr ' ' '\n' | sort | tr '\n' ' ')
+  [ -n "$doc" ] || { echo "no tools parsed out of docs/requirements.md"; false; }
+  [ "$doc" = "$script" ] || { echo "docs list: $doc"; echo "setup-check.sh: $script"; false; }
 }

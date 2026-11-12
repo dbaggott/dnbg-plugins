@@ -4,6 +4,7 @@ Every value here is optional. Leave all of them alone and the plugin still
 works — it loads its skills and rules, advises, blocks nothing, and publishes
 nothing you didn't write.
 
+- [`/dnbg-workflow:setup`](#dnbg-workflowsetup--what-is-left-to-set-up) — checks what an install still needs and walks you through it
 - [Install scope](#install-scope) — which of two adoption modes you're in
 - [`owners`](#owners--which-repos-it-enforces-on) — **the only setting that turns the hooks on**
 - [`worktree_path`, `claim_label`, `retrospective_dir` and `findings_dir`](#the-mechanical-opinions) — names and paths you can change
@@ -13,6 +14,26 @@ nothing you didn't write.
 - [`owners` on `dnbg-work-summary`](#owners-on-dnbg-work-summary--whose-repos-a-recap-searches) — `dnbg-work-summary`'s one setting: where `work-summary` looks for your work
 - [Agent roles](#agent-roles--whose-login-each-agent-posts-under) — each role's App, the resolver, and the fallback to your own account
 - [Role Apps' private keys](#role-apps-private-keys) — where each is read from
+
+## `/dnbg-workflow:setup` — what is left to set up
+
+The `setup` skill reads the state of the install and walks only what is open:
+`owners`, a role that needs an App, a missing tool, a `gh` with no login, a
+client older than the [floor](requirements.md). It keeps no progress of its own,
+so running it again is how you check a setup, and `/dnbg-workflow:setup owners`
+is how you change the accounts. Once you name the accounts for `owners` it saves
+the value for you, through `claude plugin configure`, without asking a second
+time; the bots it sets up through `reviewer-setup`, and anything else it tells
+you where to set.
+
+While `owners` is empty or the reviewer has no App, each new session opens with
+a one-line message saying setup is not finished. It is shown to you and is not
+part of what the agent reads. Empty `owners` is a legitimate place to stop, and
+so is going without the reviewer: answer none, or decline the bot, and the skill
+records that in `$XDG_CONFIG_HOME/dnbg/setup-acknowledged`
+(`~/.config/dnbg/setup-acknowledged` when that variable is unset), which turns
+the message off for that one and leaves it on for the other. Delete the file to
+get it back.
 
 ## Install scope
 
@@ -294,8 +315,9 @@ bare owner. Only github.com is implemented.
 | `as-role.sh --login <role> <repo>` | `result=OK login=<login> fallback=<none\|unconfigured>` — the App slug (GitHub's REST spelling adds `[bot]`), or your login when the role falls back. |
 | `as-role.sh --operator <repo>` | `result=OK login=<your login> fallback=none`, read under your own `gh` auth with no role token in place. |
 | `as-role.sh --fallbacks` | `result=OK roles=<role,…\|none>`: the roles that would act as you, read from configuration presence only, with no network call. The session-start notice uses it. |
+| `as-role.sh --roles` | `result=OK configured=<role,…\|none> fallback=<role,…\|none> unconfigured=<role,…\|none>`: every role's state, read the same way. `unconfigured` is the roles with no App that refuse to act as you. The `setup` skill and the session-start setup message use it. |
 
-The last three print exactly one line on stdout and exit 0; when they cannot
+The last four print exactly one line on stdout and exit 0; when they cannot
 answer, that line is `result=ERROR reason=<reason>`, with what to do on stderr.
 A configured role whose login is unknown (an env-only setup without
 `DNBG_<ROLE>_SLUG`) answers `--login` with `reason=no-login`, never with your

@@ -82,9 +82,12 @@ python3 "<skill-dir>/bootstrap.py" --roles reviewer
 python3 "<skill-dir>/bootstrap.py" --roles reviewer --owner-type org --org <org-login>
 ```
 
-Confirm with the operator which roles to create before running it, and, since
-the default creates **public** Apps, that they are fine being publicly listed
-(harmless, but worth a nod).
+Confirm with the operator which roles to create before running it, unless the
+skill that sent you here already has their go-ahead. Describe a role's App in
+one line, as a GitHub App under their account that gives the role's activity
+its own identity, separate from theirs. When you ask with a picker, label the
+go-ahead option "Create (Recommended)" and nothing more. The Apps are publicly
+listed ("Ownership model" above); say so when asked.
 
 For each role it opens your browser to a local page that immediately forwards to
 GitHub. The **one step it can't automate** is the click GitHub requires to create
@@ -94,20 +97,28 @@ next role. At the end it prints a JSON list with each role's App slug, config
 dir, and **install URL**. A failure stops the run and names the roles it did not
 reach.
 
-If the browser doesn't open (headless/SSH), pass `--no-browser` and open the
-printed `http://localhost:<port>/` yourself, or forward the port.
+The run waits on the browser, so say this in the same message as the call that
+starts it, with the port you passed, 8765 by default:
+
+> Opening your browser. If nothing opens, go to `http://localhost:<port>/`.
+
+On a machine with no browser of its own (headless, SSH), pass `--no-browser`
+and have the operator forward the port and open that URL.
 
 ## Install the App
 
 Creation does not install an App — an App with no installation can't mint a
-token. Open each install URL the helper printed
-(`https://github.com/apps/<slug>/installations/new`) and install it on **each
-account whose repos that role will work on**, scoped to the repos you want.
-⚠️ **Scope this deliberately: the repo list is the only lever you have.** The
-reviewer App needs `contents: write` to review at all — GitHub gates resolving a
-thread and having a verdict counted on it, with no narrower grant — so a leaked
-key can write source on every repo the App is installed on. `SECURITY.md` states
-each role's blast radius.
+token. The run's last browser page carries an install button for each App it
+created (`https://github.com/apps/<slug>/installations/new`) and says how to
+choose the repos: all of an account's, which it recommends for the least
+upkeep, or a selected list. Each App is installed on **each account whose repos
+that role will work on**.
+
+When the operator asks which to choose, give them the trade: the reviewer App
+needs `contents: write` to review at all — GitHub gates resolving a thread and
+having a verdict counted on it, with no narrower grant — so a leaked key can
+write source on every repo the App is installed on, and the repo list is the
+one lever that narrows it. `SECURITY.md` states each role's blast radius.
 
 - **Your personal account** — for your personal repos. You install it directly.
 - **Each org** — for that org's repos. An org owner approves the install (you can
@@ -118,15 +129,37 @@ repo each time the role acts, so install on every account you intend the role to
 work on. (An **org-owned** App, if you chose `--owner-type org`, installs on the
 org only.)
 
+When the run ends, tell the operator in this shape and no longer. The last
+browser tab already shows an install button for each bot the run created, so
+repeat neither the URLs nor why an App needs installing:
+
+> The `<role>` bot is created: `<slug>`. *(or: The `<role>`, `<role>` and
+> `<role>` bots are created.)*
+>
+> One step left: click **Install** for each in the browser tab. The page says
+> how to choose the repos.
+>
+> Tell me when it's done.
+
+A run that stopped early showed no install buttons: give the install URL of
+each bot it did create, from the JSON it printed.
+
+Name the accounts to install it on when you know them.
+
+Keep the key's mechanics out of what you tell the operator: where the
+credentials were saved, which config directory or variable is in force, and
+what you will or will not do with the key. Raise them only when asked, or when
+a step fails and the fix is there.
+
 ## Verify
 
 Confirm each role can act on each account you installed it on, through the same
-resolver every caller uses. `<repo>` is any repo of that account the App is
-installed on:
+resolver every caller uses. The token is minted for the account, so the repo
+name is not looked up and you need not ask for one:
 
 ```bash
-"<skill-dir>/../../scripts/as-role.sh" <role> <your-login>/<repo> -- true && echo "ready: personal"
-"<skill-dir>/../../scripts/as-role.sh" <role> <org-login>/<repo> -- true && echo "ready: org"
+"<skill-dir>/../../scripts/as-role.sh" <role> <your-login>/_ -- true && echo "ready: personal"
+"<skill-dir>/../../scripts/as-role.sh" <role> <org-login>/_ -- true && echo "ready: org"
 ```
 
 A quiet run, apart from the resolver's `as=` line, means setup is complete for

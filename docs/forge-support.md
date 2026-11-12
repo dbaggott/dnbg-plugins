@@ -70,6 +70,7 @@ repo you're standing in:
 | `findings-review` | findings files on your machine, and the repo each one names | an entry's `source` URL isn't on `github.com`, which skips that entry's re-check and proposes keeping it; the other entries are swept either way |
 | `reviewer` | a pull request you name explicitly | the *named* repo isn't on GitHub |
 | `reviewer-setup` | a GitHub App on your machine | never — no repo is involved |
+| `setup` | this machine's install: its settings, tools and role Apps | never — no repo is involved |
 | `work-summary` | your GitHub account, via `gh search` | never — no repo is involved |
 
 `reviewer`, `reviewer-setup` and `work-summary` deliberately ignore your working

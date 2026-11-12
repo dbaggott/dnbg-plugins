@@ -6,6 +6,8 @@
 #   as-role.sh --login <role> <repo>     the login the role acts under
 #   as-role.sh --operator <repo>         the operator's own login
 #   as-role.sh --fallbacks               the roles that would act as the operator
+#   as-role.sh --roles                   every role's state: its own App, the
+#                                        operator's account, or neither
 #
 # <repo> is `host/namespace/…/name`, a remote URL (https://, ssh://, or
 # `git@host:namespace/name`), or `owner/name`, which is short for
@@ -25,11 +27,12 @@
 # followed by what to do about it. The command may exit 125 itself, so that
 # stderr line, not the exit status, is what says the resolver refused.
 #
-# ## Login, operator, fallbacks
+# ## Login, operator, fallbacks, roles
 #
 # One line on stdout, then exit 0:
 #   result=OK login=<login> fallback=<none|unconfigured>   # --login, --operator
 #   result=OK roles=<role,…|none>                          # --fallbacks
+#   result=OK configured=<role,…|none> fallback=<role,…|none> unconfigured=<role,…|none>   # --roles
 #   result=ERROR reason=<reason>
 #
 # On GitHub a role's login is its App slug; GitHub spells the bot's user
@@ -39,7 +42,9 @@
 # operator's own forge auth, with no role credential in place. `--fallbacks`
 # reads configuration presence only, through the same test the other calls
 # use, and makes no network call, for the SessionStart notice. It takes no
-# repo, and answers for GitHub, the only backend.
+# repo, and answers for GitHub, the only backend. `--roles` answers under the
+# same rules for every role: `fallback` is the roles `--fallbacks` lists, and
+# `unconfigured` the roles with no configuration that refuse to fall back.
 #
 # ## Fallback
 #
@@ -225,16 +230,22 @@ case "${1:-}" in
     MODE=answer; [ "$#" -eq 2 ] || fail bad-args
     parse_repo "$2"; forge_of; read_operator
     echo "result=OK login=$OPERATOR fallback=none" ;;
-  --fallbacks)
+  --fallbacks|--roles)
     MODE=answer; [ "$#" -eq 1 ] || fail bad-args
     FORGE=github; check_distinct
-    LIST=""
+    CONFIGURED=""; FALLBACK=""; UNCONFIGURED=""
     while IFS= read -r role; do
       check_role "$role"
-      github_configured "$role" && continue
-      [ "$(role_fallback "$role")" = operator ] && LIST="${LIST:+$LIST,}$role"
+      if github_configured "$role"; then CONFIGURED="${CONFIGURED:+$CONFIGURED,}$role"
+      elif [ "$(role_fallback "$role")" = operator ]; then FALLBACK="${FALLBACK:+$FALLBACK,}$role"
+      else UNCONFIGURED="${UNCONFIGURED:+$UNCONFIGURED,}$role"
+      fi
     done < <(role_names)
-    echo "result=OK roles=${LIST:-none}" ;;
+    if [ "$1" = --fallbacks ]; then
+      echo "result=OK roles=${FALLBACK:-none}"
+    else
+      echo "result=OK configured=${CONFIGURED:-none} fallback=${FALLBACK:-none} unconfigured=${UNCONFIGURED:-none}"
+    fi ;;
   -*) MODE=answer; fail bad-args ;;
   *)
     MODE=credential
