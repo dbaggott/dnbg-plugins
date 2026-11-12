@@ -10,8 +10,8 @@ A change reaches a session that is already running after `/reload-plugins`.
 
 ## Settings
 
-An invalid value falls back to its default, and you are told. A path may use
-only letters, digits and `. _ - /`.
+An invalid value falls back to its default. A path may use only letters, digits
+and `. _ - /`.
 
 ### `dnbg-workflow`
 
@@ -23,7 +23,7 @@ Edit with `/plugin configure dnbg-workflow`.
 | `worktree_path` | `.worktrees` | Directory worktrees are created in. Relative to the repo and inside it |
 | `claim_label` | `assigned:agent-session` | Label that marks an issue as claimed. Must start with `assigned:` |
 | `findings_dir` | `~/.claude/dnbg-findings` | Where agents write what their reports found about the code. Absolute or under `~/` |
-| `retrospectives` | off | On: each agent writes a file on where the process slowed it when its work ends. Off: it reports only where a skill was wrong, in chat |
+| `retrospectives` | off | On: each agent writes a file on where the process slowed it when its work ends. Off: it reports in chat only where a skill was wrong or had to be worked around |
 | `retrospective_dir` | `~/.claude/dnbg-retrospectives` | Where those files go. Absolute or under `~/` |
 | `version_stamp` | off | On: PR descriptions, reviews and issue claim comments end with a hidden `<!-- dnbg-workflow <version> -->` |
 | `setup_notice` | on | On: each session opens with a one-line notice while `/dnbg-workflow:setup` still has something open, such as no accounts or no reviewer bot |
