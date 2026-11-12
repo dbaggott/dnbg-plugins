@@ -54,8 +54,21 @@ Not configurable: PRs open as drafts, and only a human merges.
 
 ## `velocity-tradeoff`
 
-Off unless a repo opts in with a section in its own `CLAUDE.md`. The skill
-carries the template.
+Off by default. Enable it per repo by adding a section like this to the repo's
+`CLAUDE.md`:
+
+```markdown
+## How to size a change here
+
+Load `dnbg-workflow:velocity-tradeoff` when sizing a change or deciding
+whether to split a PR. <Project> is on the velocity side of that skill's
+risk/benefit trade.
+
+Per that skill's own framing this is a ratio, not a fact about the project, so
+the inputs it weighs can move. **Say something when you notice one of them
+moving.** But this opt-in comes out when the operator decides it comes out —
+not on an agent's read of the inputs.
+```
 
 ## The setup notice
 
