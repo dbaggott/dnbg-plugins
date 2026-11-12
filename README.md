@@ -79,12 +79,12 @@ Nothing reviews a PR until a reviewer is started: in a second session as above, 
 
 Runs on macOS or Linux, with GitHub as the forge ([details](docs/forge-support.md)).
 
-`/dnbg-workflow:setup` checks what’s still needed and walks you through only that:
+`/dnbg-workflow:setup` shows how your install is set up, after walking you through only what’s still needed:
 
 - **Your repos.** Which GitHub orgs or logins should use the workflow. None do, until you say.
 - **The reviewer bot.** A GitHub App you create in the browser and install on the repos you choose. Its key stays on your machine.
 
-It finishes by naming the optional extras, such as retrospectives and auto-update. Stop whenever you like, and run it again at any time to see what’s left or to change an answer.
+It finishes with one list of every setting, what it is now and how to change it, the optional ones such as retrospectives and auto-update included. Stop whenever you like, and run it again at any time to look at your setup or to change an answer.
 
 **Taking only part of it.** `dnbg-all` installs all four plugins. To take less, install any of `dnbg-workflow@dnbg`, `dnbg-practices@dnbg`, `dnbg-work-summary@dnbg` or `dnbg-agent-summaries@dnbg`; none requires another. Only `dnbg-workflow` has a setup step.
 
@@ -122,7 +122,7 @@ Hooks, all in `dnbg-workflow`:
 | `inject-rules.sh` | puts the always-on rules in context at session start |
 | `inject-rules-subagent.sh` | does the same for every subagent |
 | `role-fallback-notice.sh` | names any role that will post as you |
-| `setup-nudge.sh` | tells you, until you answer it, that setup is not finished |
+| `setup-nudge.sh` | tells you that setup is not finished, until it is or you turn the notice off |
 | `check-worktree.sh` | blocks edits to tracked files in a configured repo’s main checkout |
 | `check-issue-create.sh` | blocks `gh issue create` in a configured repo until `issue-workflow` is loaded |
 

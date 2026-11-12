@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Check what a dnbg-workflow install still needs and walk the user through only that — which repos the workflow applies to, the reviewer bot, a missing tool or `gh` login — then name the optional extras. Load when asked to set up dnbg or the dnbg plugins, check the dnbg setup, say what is left to set up, finish setup or finish configuration, or change which repos dnbg-workflow applies to. Run it again at any time; it re-reads the state and keeps no progress of its own. Skip for creating or repairing a role's GitHub App when that is all that was asked, which is `reviewer-setup`.
+description: Show how a dnbg-workflow install is set up, after walking the user through only what it still needs — which repos the workflow applies to, the reviewer bot, a missing tool or `gh` login. Load when asked to set up dnbg or the dnbg plugins, check or show the dnbg setup, say what is left to set up, finish setup or finish configuration, or change which repos dnbg-workflow applies to. Run it again at any time; it re-reads the state and keeps no progress of its own. Skip for creating or repairing a role's GitHub App when that is all that was asked, which is `reviewer-setup`.
 ---
 
 # Setup
@@ -15,7 +15,8 @@ reads as unset:
 
 ```bash
 "<skill-dir>/../../scripts/setup-check.sh" --owners='${user_config.owners}' \
-  --retrospectives='${user_config.retrospectives}' --version-stamp='${user_config.version_stamp}'
+  --retrospectives='${user_config.retrospectives}' --version-stamp='${user_config.version_stamp}' \
+  --setup-notice='${user_config.setup_notice}'
 ```
 
 It prints one `check=<name> state=<state> …` line per check, then
@@ -33,7 +34,7 @@ Otherwise, at `setup=complete`, ask nothing and go to step 3.
 Otherwise take the checks `open` names, in the order it lists them, one at a
 time. Go from one check's question straight to the next: no message in between
 confirming what was just done or introducing what comes next, since step 3's
-summary carries all of it. Each has one reference. Read a reference only when
+list carries all of it. Each has one reference. Read a reference only when
 its check is in `open`:
 
 | In `open` | Read |
@@ -44,84 +45,86 @@ its check is in `open`:
 
 The user may stop at any check. Go to step 3 with whatever is left.
 
-## 3. Close
+## 3. Show the setup
 
 If you walked any check, run step 1's command again and read `open` from the
 new result, with one correction: the command carries the `owners` this skill
-loaded with, so where it was set during this run, or the user answered none,
-count `owners` as closed, without telling the user about the correction.
+loaded with, so where the accounts were saved during this run, count `owners`
+as closed for a list and open for none, without telling the user about the
+correction.
 
-Then give the whole of it in one summary, so nothing said along the way is
-lost among the questions. Use this shape, a line each, leaving out a line that
-does not apply:
+Then show the whole setup in this shape, a line each, with nothing said about
+it before or between:
 
-> **dnbg-workflow setup**
+> **Your dnbg-workflow setup**
 >
-> - ✅ **Accounts:** `<account>` and `<account>`. *(or: ➖ none.)*
-> - ✅ **Reviewer bot:** set up. *(or: ❌ not set up, so no review can run.)*
-> - ✅ **Author bot:** set up. *(or: ➖ not set up; its work posts as you.)*
-> - ✅ **Orchestrator bot:** set up. *(or: ➖ not set up; its work posts as you.)*
-> - **Restart Claude Code** for the accounts to take effect. *(only when `owners`
->   was saved during this run and something is still open; otherwise the
->   welcome says it)*
-> - ❌ **Still open:** `<what is left, in plain words>`. *(or: ✅ **Setup is
->   complete.**)*
+> - ❌ **Tools:** `<tool>` and `<tool>` are missing. Install them, then run
+>   `/dnbg-workflow:setup` again.
+> - ❌ **gh login:** not logged in. Type `! gh auth login`, then run
+>   `/dnbg-workflow:setup` again.
+> - ❌ **Claude Code:** `<version>`, older than `<floor>`. Update it, then run
+>   `/dnbg-workflow:setup` again.
+> - ✅ **Accounts:** `<account>` and `<account>`. Change with
+>   `/dnbg-workflow:setup owners`. *(or: ❌ none, so the workflow applies to no
+>   repo. Set them with `/dnbg-workflow:setup owners`.)*
+> - ✅ **Reviewer bot:** set up. *(or: ❌ not set up, so no review can run. Say
+>   "create the reviewer bot".)*
+> - ✅ **Author bot:** set up. *(or: ➖ posts as you. Say "create the author
+>   bot" to give it its own identity.)*
+> - ✅ **Retrospectives:** on. Change with `/plugin configure dnbg-workflow`.
+>   *(or: ➖ off. On, every agent role writes a file on where the process slowed
+>   it down. Change with `/plugin configure dnbg-workflow`.)*
+> - ✅ **Version stamp:** on. Change with `/plugin configure dnbg-workflow`.
+>   *(or: ➖ off. On, PRs, reviews and issue claims carry a hidden comment
+>   naming the plugin version. Change with `/plugin configure dnbg-workflow`.)*
+> - ✅ **Summary files:** `<path>`. Change with
+>   `/plugin configure dnbg-agent-summaries`.
+> - ➖ **Auto-update:** recommended. Turn it on with `/plugin`, then
+>   **Marketplaces**, **dnbg**, **Enable auto-update**.
+> - ✅ **Incomplete setup notice:** on. Turn it off with
+>   `/plugin configure dnbg-workflow`. *(or: ➖ off. Turn it on with
+>   `/plugin configure dnbg-workflow`.)*
 >
-> Run `/dnbg-workflow:setup` at any time to pick up what is left, or
-> `/dnbg-workflow:setup owners` to change the accounts.
+> More settings and details:
+> https://github.com/dbaggott/dnbg-plugins/blob/main/docs/configuration.md
 
-Each line opens with a mark, which takes its wording with it: ✅ done, ❌ not
-done and still open, ➖ not done by the user's choice or optional. Accounts of
-none is ❌ only while `owners` is still open with a value waiting to be set.
-There is a bot line for every role on the `check=roles` line: set up when it is
-in `configured=`, and otherwise as its bracket says. **Accounts** is the list
-saved during this run, else `value=` on the `check=owners` line. **Still open**
-names each check left in `open`, with a missing tool by name.
+Every ❌ line comes first, then the rest, each group in the order above. Which
+lines there are, and what each says:
 
-A session-start notice repeats while `owners` is empty or a role in
-`unconfigured=` has no bot, each until the marker file on the `check=marker`
-line holds its word. When the user answered none for the accounts, append
-`owners`; when they declined a bot for a role in `unconfigured=`, append
-`roles`:
+- **Tools**, **gh login** and **Claude Code** each appear only while its check
+  is in `open`.
+- **Accounts** is the list saved during this run, else `value=` on the
+  `check=owners` line. Where `references/owners.md` left a value unsaved, the
+  line is the ❌ it gives.
+- **A bot line for every role** on the `check=roles` line: ✅ in `configured=`,
+  ❌ in `unconfigured=`, ➖ in `fallback=`, each worded as the reviewer's or the
+  author's line above. At `state=unknown` there is one line in their place,
+  "❌ **Bots:** can't be checked until `jq` is installed.", and at
+  `state=error` one "❌ **Bots:**" line saying what `references/roles.md` says
+  of its `reason=`.
+- **Retrospectives** and **Version stamp** take their state from their checks.
+- **Summary files** appears when the `check=summary-dir` line has a `value=`,
+  which is the path.
+- **Incomplete setup notice** appears only while `open` names a check, with its
+  state from the `check=setup-notice` line.
 
-```bash
-mkdir -p "$(dirname "<path>")" && echo <owners|roles> >> "<path>"
-```
+Name each by the words above, never by its option's key. Asked for a bot, read
+`references/roles.md` and ask its questions for the roles named.
 
-Tell them in one line that the notice is off for that, and that deleting the
-file brings it back.
+Two things can follow the list:
 
-After the summary, name the optional extras, once, a line each, under their own
-heading, and ask about none of them. When nothing is open and the accounts are
-not none, end on the welcome below the list:
+- **The welcome**, when step 1's first result read `setup=incomplete` and
+  nothing is open now:
 
-- **Auto-update (recommended)**: "gets you bug fixes and enhancements as they
-  ship. Turn it on with `/plugin`, then **Marketplaces**, **dnbg**, **Enable
-  auto-update**."
-- **Bots for the roles in `fallback=`** on the `check=roles` line, when it
-  names any, recommended: "`<role>` and `<role>` post as you. Say *create the
-  `<role>` and `<role>` bots* to give them their own identities." Asked for
-  them, read `references/roles.md` and ask its questions for those roles.
-- **Retrospectives**, with its state from the check: on, every agent role
-  writes a file on where the process slowed it when its work ends, for
-  `process-review` to find the patterns in. Set with
-  `/plugin configure dnbg-workflow`.
-- **Version stamp**, with its state from the check: on, PR descriptions,
-  reviews and issue claims carry a hidden comment naming the plugin version.
-  Set in the same place.
-- **Where summary files are written**, when `installed=` on the `check=plugins`
-  line names `dnbg-agent-summaries`: "`~/.claude/dnbg-agent-summaries` unless
-  you change it, with `/plugin configure dnbg-agent-summaries`."
+  > **Welcome to dnbg-workflow.** You're ready to go!
+  >
+  > Try it: open a session in one of your repos and ask for a change. You'll
+  > get a worktree, a draft PR and an offer to send it to review.
+  >
+  > For something bigger: *I want to plan out `<the work>`. File an issue for
+  > it.*
 
-Name each by the words above, never by its option's key.
-
-**The welcome** is the last thing said, in this shape. Its
-first line is "Restart Claude Code, then try it:" when `owners` was saved during
-this run:
-
-> **Welcome to dnbg-workflow.** You're ready to go.
->
-> Try it: open a session in one of your repos and ask for a change. You'll get
-> a worktree, a draft PR and an offer to send it to review.
->
-> For something bigger: *I want to plan out `<the work>`. File an issue for it.*
+- **The reload line**, when `owners` was saved during this run, as the last
+  thing said: "Run `/reload-plugins` for the new accounts to take effect."
+  After the welcome it reads "Run `/reload-plugins` first, for your accounts to
+  take effect."
