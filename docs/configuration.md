@@ -24,6 +24,7 @@ Edit with `/plugin configure dnbg-workflow`.
 | `retrospectives` | off | On: each agent writes a file on where the process slowed it when its work ends. Off: it reports only where a skill was wrong, in chat |
 | `retrospective_dir` | `~/.claude/dnbg-retrospectives` | Where those files go. Absolute or under `~/` |
 | `version_stamp` | off | On: PR descriptions, reviews and issue claim comments end with a hidden `<!-- dnbg-workflow <version> -->` |
+| `setup_notice` | on | On: each session opens with a one-line notice while `/dnbg-workflow:setup` still has something open, such as no accounts or no reviewer bot |
 
 ### `dnbg-agent-summaries`
 
@@ -56,14 +57,6 @@ Load `dnbg-workflow:velocity-tradeoff` when sizing a change or deciding
 whether to split a PR. This repo has opted in, and only the operator ends
 that.
 ```
-
-## The setup notice
-
-Each session opens with a one-line notice while `owners` is empty or the
-reviewer has no bot. In `/dnbg-workflow:setup`, answering none turns it off
-for `owners`, and declining the bot turns it off for the reviewer. Deleting
-`~/.config/dnbg/setup-acknowledged` (under `$XDG_CONFIG_HOME` when that is set)
-brings it back.
 
 ## Agent roles
 
