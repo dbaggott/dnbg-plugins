@@ -181,13 +181,15 @@ if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
       '.pluginConfigs[$id].options.summary_dir // empty' "$CONFIG_DIR/settings.json" 2>/dev/null || true)
     # The rule the plugin's own skill holds a value to before using it.
     case "${SUMMARY_DIR#\~}" in
-      /*) case "$SUMMARY_DIR" in "~"*"~"*|*[!A-Za-z0-9._/~-]*) SUMMARY_DIR="" ;; esac ;;
+      /*) case "${SUMMARY_DIR#\~}" in *[!A-Za-z0-9._/-]*) SUMMARY_DIR="" ;; esac ;;
       *) SUMMARY_DIR="" ;;
     esac
     if [ -z "$SUMMARY_DIR" ]; then
-      MANIFEST=$(jq -r --arg id "$SUMMARIES_ID" '.plugins[$id][0].installPath // empty' "$RECORD" 2>/dev/null || true)
-      SUMMARY_DIR=$(jq -r '.userConfig.summary_dir.default // empty' \
-        "$MANIFEST/.claude-plugin/plugin.json" 2>/dev/null || true)
+      while IFS= read -r MANIFEST; do
+        SUMMARY_DIR=$(jq -r '.userConfig.summary_dir.default // empty' \
+          "$MANIFEST/.claude-plugin/plugin.json" 2>/dev/null || true)
+        [ -z "$SUMMARY_DIR" ] || break
+      done < <(jq -r --arg id "$SUMMARIES_ID" '.plugins[$id][]?.installPath // empty' "$RECORD" 2>/dev/null || true)
     fi
     [ -n "$SUMMARY_DIR" ] && SUMMARY_DIR_LINE="check=summary-dir state=ok value=$SUMMARY_DIR"
   fi

@@ -49,9 +49,9 @@ The user may stop at any check. Go to step 3 with whatever is left.
 
 If you walked any check, run step 1's command again and read `open` from the
 new result, with one correction: the command carries the `owners` this skill
-loaded with, so where the accounts were saved during this run, count `owners`
-as closed for a list and open for none, without telling the user about the
-correction.
+loaded with, so where the accounts were set during this run, by this skill or
+by the user at its asking, count `owners` as closed for a list and open for
+none, without telling the user about the correction.
 
 Then show the whole setup in this shape, a line each, with nothing said about
 it before or between:
@@ -93,7 +93,7 @@ lines there are, and what each says:
 
 - **Tools**, **gh login** and **Claude Code** each appear only while its check
   is in `open`.
-- **Accounts** is the list saved during this run, else `value=` on the
+- **Accounts** is the list set during this run, else `value=` on the
   `check=owners` line. Where `references/owners.md` left a value unsaved, the
   line is the ❌ it gives.
 - **A bot line for every role** on the `check=roles` line: ✅ in `configured=`,
@@ -124,7 +124,7 @@ Two things can follow the list:
   > For something bigger: *I want to plan out `<the work>`. File an issue for
   > it.*
 
-- **The reload line**, when `owners` was saved during this run, as the last
+- **The reload line**, when the accounts were set during this run, as the last
   thing said: "Run `/reload-plugins` for the new accounts to take effect."
   After the welcome it reads "Run `/reload-plugins` first, for your accounts to
   take effect."

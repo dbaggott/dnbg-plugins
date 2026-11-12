@@ -73,8 +73,10 @@ NOTICE='NOTICE: Run /dnbg-workflow:setup to finish configuration.'
 @test "printed while a tool the check looks for is missing" {
   export CLAUDE_PLUGIN_OPTION_OWNERS=acme DNBG_REVIEWER_APP_ID=42
   local bin="$BATS_TEST_TMPDIR/noopenssl" b; mkdir -p "$bin"
-  for b in bash env dirname grep jq git python3 curl; do ln -sf "$(command -v "$b")" "$bin/$b"; done
+  for b in bash env dirname basename grep sed awk cat tr head sort jq git python3 curl; do ln -sf "$(command -v "$b")" "$bin/$b"; done
   ln -sf "$STUB/gh" "$bin/gh"; ln -sf "$STUB/claude" "$bin/claude"
+  run env PATH="$bin" "$TREE/scripts/setup-check.sh" --owners=acme
+  [[ "$output" == *"result=OK setup=incomplete open=tools" ]] || { echo "$output"; false; }
   run env PATH="$bin" "$NUDGE"
   [ "$(message)" = "$NOTICE" ]
 }

@@ -240,11 +240,21 @@ install_summaries() {  # [<summary_dir>]
   check
   has_line "check=summary-dir state=ok value=~/.claude/dnbg-agent-summaries"
   local v
-  for v in '' relative/path '/has space' '~other/notes' '/a;b'; do
+  for v in '' relative/path '/has space' '~other/notes' '/a;b' '/srv/a~b' '~/a/~'; do
     install_summaries "$v"
     check
     has_line "check=summary-dir state=ok value=~/.claude/dnbg-agent-summaries"
   done
+}
+
+@test "summary-dir's default is read from whichever recorded install still has a manifest" {
+  install_summaries
+  jq --arg gone "$BATS_TEST_TMPDIR/removed" \
+    '.plugins["dnbg-agent-summaries@dnbg"] |= [{scope: "project", installPath: $gone}] + .' \
+    "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json" > "$BATS_TEST_TMPDIR/record"
+  mv "$BATS_TEST_TMPDIR/record" "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json"
+  check
+  has_line "check=summary-dir state=ok value=~/.claude/dnbg-agent-summaries"
 }
 
 @test "summary-dir is unknown when the installed manifest cannot be read" {
