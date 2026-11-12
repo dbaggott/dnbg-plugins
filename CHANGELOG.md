@@ -10,6 +10,29 @@ tagged, and their versions used a two-component scheme that predates the current
 
 <!-- releases below -->
 
+## dnbg-workflow 2026.11.23 — 2026-11-12
+
+Retrospectives and findings entries now live under one directory,
+`~/.claude/dnbg/`, as `retrospectives/` and `findings/`, instead of
+`~/.claude/dnbg-retrospectives/` and `~/.claude/dnbg-findings/`. A new
+`data_dir` setting moves both at once; `retrospective_dir` and `findings_dir`
+still override either one.
+
+The old directories are no longer read. Move any entries in them to the new
+ones to keep them in `findings-review` and `process-review`. A
+`retrospective_dir` or `findings_dir` you set yourself is unaffected.
+
+
+## dnbg-agent-summaries 2026.11.3 — 2026-11-12
+
+Summary files now default to `~/.claude/dnbg/agent-summaries/` instead of
+`~/.claude/dnbg-agent-summaries/`, under a new `data_dir` setting shared in name
+and default with `dnbg-workflow`. A `summary_dir` you set yourself is unaffected.
+
+The old directory is no longer read. Move any files in it to the new one to keep
+them in `summary-review`.
+
+
 ## dnbg-workflow 2026.11.22 — 2026-11-12
 
 `/dnbg-workflow:setup` now checks whether auto-update is on for the marketplace
