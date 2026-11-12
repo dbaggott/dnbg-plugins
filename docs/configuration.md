@@ -4,7 +4,8 @@ Every value here is optional. Leave all of them alone and the plugin still
 works — it loads its skills and rules, advises, blocks nothing, and publishes
 nothing you didn't write.
 
-- [`/dnbg-workflow:setup`](#dnbg-workflowsetup--what-is-left-to-set-up) — checks what an install still needs and walks you through it
+- [`/dnbg-workflow:setup`](#dnbg-workflowsetup--your-setup-and-what-it-still-needs) — shows how an install is set up, after walking you through what it still needs
+- [`setup_notice`](#setup_notice--the-session-start-notice-while-setup-is-incomplete) — on by default; the one-line notice a session opens with while setup is incomplete
 - [Install scope](#install-scope) — which of two adoption modes you're in
 - [`owners`](#owners--which-repos-it-enforces-on) — **the only setting that turns the hooks on**
 - [`worktree_path`, `claim_label`, `retrospective_dir` and `findings_dir`](#the-mechanical-opinions) — names and paths you can change
@@ -15,25 +16,32 @@ nothing you didn't write.
 - [Agent roles](#agent-roles--whose-login-each-agent-posts-under) — each role's App, the resolver, and the fallback to your own account
 - [Role Apps' private keys](#role-apps-private-keys) — where each is read from
 
-## `/dnbg-workflow:setup` — what is left to set up
+## `/dnbg-workflow:setup` — your setup, and what it still needs
 
-The `setup` skill reads the state of the install and walks only what is open:
-`owners`, a role that needs an App, a missing tool, a `gh` with no login, a
-client older than the [floor](requirements.md). It keeps no progress of its own,
-so running it again is how you check a setup, and `/dnbg-workflow:setup owners`
-is how you change the accounts. Once you name the accounts for `owners` it saves
-the value for you, through `claude plugin configure`, without asking a second
-time; the bots it sets up through `reviewer-setup`, and anything else it tells
-you where to set.
+The `setup` skill reads the state of the install, walks only what is open, and
+then shows the whole setup as one list: each setting, what it is now, and how to
+change it. Open is `owners`, a role that needs an App, a missing tool, a `gh`
+with no login, or a client older than the [floor](requirements.md). It keeps no
+progress of its own, so running it again is how you look at a setup, and
+`/dnbg-workflow:setup owners` is how you change the accounts. Once you name the
+accounts for `owners` it saves the value for you, through `claude plugin
+configure`, without asking a second time; the bots it sets up through
+`reviewer-setup`, and anything else it tells you where to set.
 
-While `owners` is empty or the reviewer has no App, each new session opens with
-a one-line message saying setup is not finished. It is shown to you and is not
-part of what the agent reads. Empty `owners` is a legitimate place to stop, and
-so is going without the reviewer: answer none, or decline the bot, and the skill
-records that in `$XDG_CONFIG_HOME/dnbg/setup-acknowledged`
-(`~/.config/dnbg/setup-acknowledged` when that variable is unset), which turns
-the message off for that one and leaves it on for the other. Delete the file to
-get it back.
+A saved `owners` reaches the hooks of a session that is already running only
+after `/reload-plugins`, or in the next session. The skill says so when it saves
+one.
+
+## `setup_notice` — the session-start notice while setup is incomplete
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `setup_notice` | on | While anything `/dnbg-workflow:setup` counts as open is open, each new session opens with a one-line message saying setup is not finished |
+
+The message is shown to you and is not part of what the agent reads. Empty
+`owners` is a legitimate place to stop, and so is going without the reviewer:
+turn the notice off with `/plugin configure dnbg-workflow` and those sessions
+open quietly. Setup still shows what is open whenever you run it.
 
 ## Install scope
 

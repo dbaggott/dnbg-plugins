@@ -2,7 +2,8 @@
 #
 # Tests for the SessionStart setup nudge. Each runs a copy of the hooks and
 # scripts beside its own roles/ (role-tree.bash), where the shipped reviewer
-# role refuses to fall back and starts with no App.
+# role refuses to fall back and starts with no App. `claude` is a stub at a
+# supported version, so the client on the developer's PATH decides nothing.
 
 load role-tree
 
@@ -11,7 +12,10 @@ setup() {
   stub_forge
   add_role author operator
   NUDGE="$TREE/hooks/setup-nudge.sh"
-  unset CLAUDE_PLUGIN_OPTION_OWNERS CLAUDE_CODE_ENTRYPOINT NO_COLOR
+  printf '#!/usr/bin/env bash\necho "2.1.311 (Claude Code)"\n' > "$STUB/claude"
+  chmod +x "$STUB/claude"
+  export CLAUDE_CONFIG_DIR="$BATS_TEST_TMPDIR/claude"
+  unset CLAUDE_PLUGIN_OPTION_OWNERS CLAUDE_PLUGIN_OPTION_SETUP_NOTICE CLAUDE_CODE_ENTRYPOINT NO_COLOR
 }
 
 message() { jq -er '.systemMessage' <<<"$output"; }
@@ -22,7 +26,8 @@ NOTICE='NOTICE: Run /dnbg-workflow:setup to finish configuration.'
   [ "$status" -eq 0 ]
   [ "${#lines[@]}" -eq 1 ]
   [ "$(message)" = "$NOTICE" ]
-  [ ! -s "$NET_LOG" ]
+  # Reading the stored login is the one `gh` call, and it is local.
+  ! grep -v '^gh auth token ' "$NET_LOG"
 }
 
 @test "it goes to the user alone: the output carries nothing for the model's context" {
@@ -65,41 +70,31 @@ NOTICE='NOTICE: Run /dnbg-workflow:setup to finish configuration.'
   [ "$(message)" = "$NOTICE" ]
 }
 
-ack() {  # <owners|roles>...
-  mkdir -p "$XDG_CONFIG_HOME/dnbg"
-  printf '%s\n' "$@" > "$XDG_CONFIG_HOME/dnbg/setup-acknowledged"
+@test "printed while a tool the check looks for is missing" {
+  export CLAUDE_PLUGIN_OPTION_OWNERS=acme DNBG_REVIEWER_APP_ID=42
+  local bin="$BATS_TEST_TMPDIR/noopenssl" b; mkdir -p "$bin"
+  for b in bash env dirname basename grep sed awk cat tr head sort jq git python3 curl; do ln -sf "$(command -v "$b")" "$bin/$b"; done
+  ln -sf "$STUB/gh" "$bin/gh"; ln -sf "$STUB/claude" "$bin/claude"
+  run env PATH="$bin" "$TREE/scripts/setup-check.sh" --owners=acme
+  [[ "$output" == *"result=OK setup=incomplete open=tools" ]] || { echo "$output"; false; }
+  run env PATH="$bin" "$NUDGE"
+  [ "$(message)" = "$NOTICE" ]
 }
 
-@test "silent once both are acknowledged" {
-  ack owners roles
-  run "$NUDGE"
+@test "silent with the notice turned off, whatever is incomplete" {
+  CLAUDE_PLUGIN_OPTION_SETUP_NOTICE=false run "$NUDGE"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-}
-
-@test "acknowledging one leaves the other announced" {
-  ack owners
-  run "$NUDGE"
-  [ "$(message)" = "$NOTICE" ]
-  ack roles
-  run "$NUDGE"
-  [ "$(message)" = "$NOTICE" ]
-}
-
-@test "an acknowledgement silences its own condition alone" {
-  ack owners
-  DNBG_REVIEWER_APP_ID=42 run "$NUDGE"
-  [ -z "$output" ]
-  ack roles
-  CLAUDE_PLUGIN_OPTION_OWNERS=acme run "$NUDGE"
+  CLAUDE_PLUGIN_OPTION_SETUP_NOTICE=False run "$NUDGE"
   [ -z "$output" ]
 }
 
-@test "an empty marker acknowledges nothing" {
-  ack
-  : > "$XDG_CONFIG_HOME/dnbg/setup-acknowledged"
-  CLAUDE_PLUGIN_OPTION_OWNERS=acme run "$NUDGE"
-  [ "$(message)" = "$NOTICE" ]
+@test "the notice is on for any value but the negative" {
+  local v
+  for v in true '' yes; do
+    CLAUDE_PLUGIN_OPTION_SETUP_NOTICE="$v" run "$NUDGE"
+    [ "$(message)" = "$NOTICE" ]
+  done
 }
 
 @test "a role that falls back does not print it" {
@@ -110,20 +105,25 @@ ack() {  # <owners|roles>...
   [ "$output" = "result=OK roles=author" ]
 }
 
-@test "a resolver refusal leaves the roles to the fallback notice" {
+@test "printed on a resolver refusal, which leaves no role able to post" {
   export CLAUDE_PLUGIN_OPTION_OWNERS=acme DNBG_REVIEWER_APP_ID=42 DNBG_AUTHOR_APP_ID=42
   run "$NUDGE"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  [ "$(message)" = "$NOTICE" ]
 }
 
-@test "without jq, owners alone decides" {
+@test "printed without jq, whatever owners holds" {
   local bin="$BATS_TEST_TMPDIR/nojq" b; mkdir -p "$bin"
   for b in bash dirname tr; do ln -sf "$(command -v "$b")" "$bin/$b"; done
-  run env PATH="$bin" "$NUDGE"
+  run env PATH="$bin" CLAUDE_PLUGIN_OPTION_OWNERS=acme "$NUDGE"
   [ "$status" -eq 0 ]
   [ "$output" = "{\"systemMessage\":\"$NOTICE\"}" ]
-  run env PATH="$bin" CLAUDE_PLUGIN_OPTION_OWNERS=acme "$NUDGE"
+}
+
+@test "silent when the check gives no result" {
+  export CLAUDE_PLUGIN_OPTION_OWNERS=acme DNBG_REVIEWER_APP_ID=42
+  printf '#!/usr/bin/env bash\nexit 3\n' > "$TREE/scripts/setup-check.sh"
+  run "$NUDGE"
+  [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 
