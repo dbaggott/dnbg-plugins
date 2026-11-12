@@ -14,6 +14,7 @@
 #   check=version-stamp state=<on|off>
 #   check=setup-notice state=<on|off>
 #   check=plugins state=<ok|unknown> self=<plugin@marketplace|none> installed=<plugin,…|none>
+#   check=auto-update state=<on|off|unknown> [marketplace=<name>]
 #   check=summary-dir state=<ok|absent|unknown> [value=<path>]
 #   result=OK setup=<complete|incomplete> open=<check,…|none>
 #   result=ERROR reason=bad-args
@@ -23,8 +24,9 @@
 # or error. `unknown` is a check that could not be read, and is never open:
 # `gh-auth` without `gh`, `claude-code` without a `claude` on PATH that prints a
 # version, `roles` and `plugins` without `jq`, `plugins` without Claude Code's
-# record of installs. `retrospectives`, `version-stamp`, `setup-notice`,
-# `plugins` and `summary-dir` are never open.
+# record of installs, `auto-update` without `jq`, at `self=none` or with no
+# entry for the marketplace. `retrospectives`, `version-stamp`, `setup-notice`,
+# `plugins`, `auto-update` and `summary-dir` are never open.
 #
 # The four options are the plugin's own, which reach a hook as
 # CLAUDE_PLUGIN_OPTION_* and reach no script an agent runs, so the skill passes
@@ -43,10 +45,15 @@
 # running from, matched on its path, which `claude plugin configure` takes, and
 # `installed` lists which of its marketplace's other plugins are there. A copy
 # loaded with `--plugin-dir` is not a recorded install, so its `self` is `none`
-# whatever else is installed. `summary-dir` is where `dnbg-agent-summaries`
-# writes, `absent` when that plugin is not installed: its `summary_dir` option
-# from the user's `settings.json` where that holds a value its skill accepts,
-# else the default its installed manifest states.
+# whatever else is installed. `auto-update` is for the marketplace in `self`,
+# whose entry it reads from both places the setting is written:
+# `plugins/known_marketplaces.json` and `extraKnownMarketplaces` in the user's
+# `settings.json`. It is `on` when either entry has `autoUpdate` true, unless
+# `DISABLE_AUTOUPDATER` is set without `FORCE_AUTOUPDATE_PLUGINS=1`, which stops
+# plugin updates whatever the entries say. `summary-dir` is where
+# `dnbg-agent-summaries` writes, `absent` when that plugin is not installed: its
+# `summary_dir` option from the user's `settings.json` where that holds a value
+# its skill accepts, else the default its installed manifest states.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -159,6 +166,25 @@ echo "check=version-stamp state=$(on_or_off "$VERSION_STAMP")"
 echo "check=setup-notice state=$(on_unless_false "$SETUP_NOTICE")"
 
 CONFIG_DIR="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
+
+# Each entry reads `true` or `false` by its `autoUpdate`, and nothing when the
+# file holds no entry for the marketplace or cannot be read.
+auto_update_line() {  # <marketplace>
+  local known extra
+  known=$(jq -r --arg m "$1" '.[$m] | objects | .autoUpdate == true' \
+    "$CONFIG_DIR/plugins/known_marketplaces.json" 2>/dev/null || true)
+  extra=$(jq -r --arg m "$1" '.extraKnownMarketplaces[$m] | objects | .autoUpdate == true' \
+    "$CONFIG_DIR/settings.json" 2>/dev/null || true)
+  if [ -z "$known$extra" ]; then
+    echo "check=auto-update state=unknown marketplace=$1"
+  elif [ -n "${DISABLE_AUTOUPDATER:-}" ] && [ "${FORCE_AUTOUPDATE_PLUGINS:-}" != 1 ]; then
+    echo "check=auto-update state=off marketplace=$1"
+  elif [ "$known" = true ] || [ "$extra" = true ]; then
+    echo "check=auto-update state=on marketplace=$1"
+  else
+    echo "check=auto-update state=off marketplace=$1"
+  fi
+}
 RECORD="$CONFIG_DIR/plugins/installed_plugins.json"
 SUMMARY_DIR_LINE="check=summary-dir state=unknown"
 if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
@@ -172,6 +198,11 @@ if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
     case $'\n'"$KEYS" in *$'\n'"$plugin@"*) INSTALLED="${INSTALLED:+$INSTALLED,}$plugin" ;; esac
   done
   echo "check=plugins state=ok self=${SELF:-none} installed=${INSTALLED:-none}"
+  if [ -n "$SELF" ]; then
+    auto_update_line "${SELF#*@}"
+  else
+    echo "check=auto-update state=unknown"
+  fi
 
   SUMMARIES_ID=$(grep -m1 '^dnbg-agent-summaries@' <<<"$KEYS" || true)
   if [ -z "$SUMMARIES_ID" ]; then
@@ -195,6 +226,7 @@ if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
   fi
 else
   echo "check=plugins state=unknown self=none installed=none"
+  echo "check=auto-update state=unknown"
 fi
 echo "$SUMMARY_DIR_LINE"
 
