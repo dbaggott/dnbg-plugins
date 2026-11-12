@@ -82,8 +82,6 @@ It finishes with one list of every setting, what it is now and how to change it,
 
 **Taking only part of it.** `dnbg-all` installs all four plugins. To take less, install any of `dnbg-workflow@dnbg`, `dnbg-practices@dnbg`, `dnbg-work-summary@dnbg` or `dnbg-agent-summaries@dnbg`; none requires another. Only `dnbg-workflow` has a setup step.
 
-**Install scope.** The quick start installs at `user` scope, for one person across many repos. For one repo shared with a team, run both commands from that repo with `--scope project`.
-
 **Installed before the plugins moved to this repo?** Run `claude plugin marketplace remove dnbg`, then the quick start again.
 
 [`docs/configuration.md`](docs/configuration.md) lists every setting.
