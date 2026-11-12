@@ -41,14 +41,6 @@ Edit with `/plugin configure dnbg-work-summary`.
 | --- | --- | --- |
 | `owners` | empty | GitHub orgs and logins, comma-separated, whose repos a recap searches. Empty: it asks each time. Separate from `dnbg-workflow`'s `owners` |
 
-## Install scope
-
-| Scope | For | `owners` |
-| --- | --- | --- |
-| `--scope user` | You, in every repo on the machine | Set it |
-| `--scope project` | One repo, shared with a team through its committed `.claude/settings.json` | Leave empty |
-| `--scope local` | One repo, private to you | Leave empty |
-
 ## `velocity-tradeoff`
 
 Off by default. Enable it per repo by adding a section like this to the repo's
