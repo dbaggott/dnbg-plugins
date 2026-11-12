@@ -1,14 +1,16 @@
 # Configuration
 
 Settings are stored in `~/.claude/settings.json`, under
-`pluginConfigs.<plugin>@dnbg.options`. Edit them there or with
-`/plugin configure <plugin>`.
+`pluginConfigs.<plugin>@dnbg.options`. Edit them there or with the command
+given for each plugin.
 
 They apply to every repo. A repo's own `.claude/settings.json` is not read.
 
 ## Settings
 
 ### `dnbg-workflow`
+
+Edit with `/plugin configure dnbg-workflow`.
 
 | Setting | Default | Controls |
 | --- | --- | --- |
@@ -22,11 +24,15 @@ They apply to every repo. A repo's own `.claude/settings.json` is not read.
 
 ### `dnbg-agent-summaries`
 
+Edit with `/plugin configure dnbg-agent-summaries`.
+
 | Setting | Default | Controls |
 | --- | --- | --- |
 | `summary_dir` | `~/.claude/dnbg-agent-summaries` | Where agents write summary files |
 
 ### `dnbg-work-summary`
+
+Edit with `/plugin configure dnbg-work-summary`.
 
 | Setting | Default | Controls |
 | --- | --- | --- |
