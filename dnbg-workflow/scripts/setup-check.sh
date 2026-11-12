@@ -2,6 +2,7 @@
 # What a dnbg-workflow install still needs, for the `setup` skill. Read-only.
 #
 #   setup-check.sh [--owners=<value>] [--retrospectives=<value>] [--version-stamp=<value>]
+#                  [--setup-notice=<value>]
 #
 # One line per check, then exactly one result line, then exit 0:
 #   check=tools state=<ok|missing> missing=<tool,…|none>
@@ -11,8 +12,9 @@
 #   check=roles state=<ok|unconfigured|error|unknown> configured=<role,…|none> fallback=<role,…|none> unconfigured=<role,…|none> [reason=<reason>]
 #   check=retrospectives state=<on|off>
 #   check=version-stamp state=<on|off>
+#   check=setup-notice state=<on|off>
 #   check=plugins state=<ok|unknown> self=<plugin@marketplace|none> installed=<plugin,…|none>
-#   check=marker acknowledged=<owners,roles|owners|roles|none> path=<path>
+#   check=summary-dir state=<ok|absent|unknown> [value=<path>]
 #   result=OK setup=<complete|incomplete> open=<check,…|none>
 #   result=ERROR reason=bad-args
 #
@@ -21,14 +23,17 @@
 # or error. `unknown` is a check that could not be read, and is never open:
 # `gh-auth` without `gh`, `claude-code` without a `claude` on PATH that prints a
 # version, `roles` and `plugins` without `jq`, `plugins` without Claude Code's
-# record of installs. `retrospectives`, `version-stamp`, `plugins` and `marker`
-# are never open.
+# record of installs. `retrospectives`, `version-stamp`, `setup-notice`,
+# `plugins` and `summary-dir` are never open.
 #
-# The three options are the plugin's own, which reach a hook as
+# The four options are the plugin's own, which reach a hook as
 # CLAUDE_PLUGIN_OPTION_* and reach no script an agent runs, so the skill passes
 # each from `${user_config.<key>}` in its own text. An option nobody has set
 # substitutes nothing there, so a value that is still that placeholder is read
-# as unset, as an empty one and an absent flag are.
+# as unset, as an empty one and an absent flag are. Unset is off for
+# `retrospectives` and `version-stamp` and on for `setup-notice`, which is the
+# session-start notice `hooks/setup-nudge.sh` prints while this check's result
+# is `setup=incomplete`.
 #
 # `roles` is `as-role.sh --roles`, whose ERROR reason is passed through.
 # `gh-auth` asks `gh` for its stored login with no token in the environment, as
@@ -38,9 +43,10 @@
 # running from, matched on its path, which `claude plugin configure` takes, and
 # `installed` lists which of its marketplace's other plugins are there. A copy
 # loaded with `--plugin-dir` is not a recorded install, so its `self` is `none`
-# whatever else is installed. `marker` is the file the `setup` skill appends
-# `owners` or `roles` to when the user leaves that one unset on purpose, which
-# stops the session-start nudge for it; `acknowledged` is what it holds.
+# whatever else is installed. `summary-dir` is where `dnbg-agent-summaries`
+# writes, `absent` when that plugin is not installed: its `summary_dir` option
+# from the user's `settings.json` where that holds a value its skill accepts,
+# else the default its installed manifest states.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -50,12 +56,13 @@ SIBLING_PLUGINS="dnbg-practices dnbg-work-summary dnbg-agent-summaries"
 # The floor docs/requirements.md states; tests/coupling.bats holds the two equal.
 CLAUDE_CODE_FLOOR=2.1.207
 
-OWNERS=""; RETROSPECTIVES=""; VERSION_STAMP=""
+OWNERS=""; RETROSPECTIVES=""; VERSION_STAMP=""; SETUP_NOTICE=""
 for arg in "$@"; do
   case "$arg" in
     --owners=*) OWNERS="${arg#*=}" ;;
     --retrospectives=*) RETROSPECTIVES="${arg#*=}" ;;
     --version-stamp=*) VERSION_STAMP="${arg#*=}" ;;
+    --setup-notice=*) SETUP_NOTICE="${arg#*=}" ;;
     *) echo "result=ERROR reason=bad-args"; exit 0 ;;
   esac
 done
@@ -67,6 +74,10 @@ unset_if_placeholder() {  # <value>
 
 on_or_off() {  # <value>
   case "$(unset_if_placeholder "$1")" in [Tt][Rr][Uu][Ee]) echo on ;; *) echo off ;; esac
+}
+
+on_unless_false() {  # <value>
+  case "$(unset_if_placeholder "$1")" in [Ff][Aa][Ll][Ss][Ee]) echo off ;; *) echo on ;; esac
 }
 
 has() { command -v "$1" >/dev/null 2>&1; }
@@ -145,8 +156,11 @@ fi
 
 echo "check=retrospectives state=$(on_or_off "$RETROSPECTIVES")"
 echo "check=version-stamp state=$(on_or_off "$VERSION_STAMP")"
+echo "check=setup-notice state=$(on_unless_false "$SETUP_NOTICE")"
 
-RECORD="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/plugins/installed_plugins.json"
+CONFIG_DIR="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
+RECORD="$CONFIG_DIR/plugins/installed_plugins.json"
+SUMMARY_DIR_LINE="check=summary-dir state=unknown"
 if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
   ROOT=$(cd "$HERE/.." && pwd)
   SELF=$(jq -r --arg a "$ROOT" --arg b "$(cd "$ROOT" && pwd -P)" '
@@ -158,20 +172,31 @@ if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
     case $'\n'"$KEYS" in *$'\n'"$plugin@"*) INSTALLED="${INSTALLED:+$INSTALLED,}$plugin" ;; esac
   done
   echo "check=plugins state=ok self=${SELF:-none} installed=${INSTALLED:-none}"
+
+  SUMMARIES_ID=$(grep -m1 '^dnbg-agent-summaries@' <<<"$KEYS" || true)
+  if [ -z "$SUMMARIES_ID" ]; then
+    SUMMARY_DIR_LINE="check=summary-dir state=absent"
+  else
+    SUMMARY_DIR=$(jq -r --arg id "$SUMMARIES_ID" \
+      '.pluginConfigs[$id].options.summary_dir // empty' "$CONFIG_DIR/settings.json" 2>/dev/null || true)
+    # The rule the plugin's own skill holds a value to before using it.
+    case "${SUMMARY_DIR#\~}" in
+      /*) case "${SUMMARY_DIR#\~}" in *[!A-Za-z0-9._/-]*) SUMMARY_DIR="" ;; esac ;;
+      *) SUMMARY_DIR="" ;;
+    esac
+    if [ -z "$SUMMARY_DIR" ]; then
+      while IFS= read -r MANIFEST; do
+        SUMMARY_DIR=$(jq -r '.userConfig.summary_dir.default // empty' \
+          "$MANIFEST/.claude-plugin/plugin.json" 2>/dev/null || true)
+        [ -z "$SUMMARY_DIR" ] || break
+      done < <(jq -r --arg id "$SUMMARIES_ID" '.plugins[$id][]?.installPath // empty' "$RECORD" 2>/dev/null || true)
+    fi
+    [ -n "$SUMMARY_DIR" ] && SUMMARY_DIR_LINE="check=summary-dir state=ok value=$SUMMARY_DIR"
+  fi
 else
   echo "check=plugins state=unknown self=none installed=none"
 fi
-
-MARKER="${XDG_CONFIG_HOME:-${HOME:-}/.config}/dnbg/setup-acknowledged"
-ACKNOWLEDGED=""
-if [ -r "$MARKER" ]; then
-  while IFS= read -r line; do
-    case "$line" in owners|roles)
-      case ",$ACKNOWLEDGED," in *",$line,"*) ;; *) ACKNOWLEDGED="${ACKNOWLEDGED:+$ACKNOWLEDGED,}$line" ;; esac ;;
-    esac
-  done < "$MARKER"
-fi
-echo "check=marker acknowledged=${ACKNOWLEDGED:-none} path=$MARKER"
+echo "$SUMMARY_DIR_LINE"
 
 if [ -z "$OPEN" ]; then
   echo "result=OK setup=complete open=none"

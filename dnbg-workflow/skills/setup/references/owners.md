@@ -77,8 +77,8 @@ edits to tracked files in the main checkout, and `gh issue create` before
 
 ## 3. Save
 
-Say nothing after a save: the closing summary in `SKILL.md` step 3 names what
-was recorded and how to change it.
+Say nothing after a save: the list in `SKILL.md` step 3 names what was
+recorded and how to change it.
 
 **An answer of none**, with `owners` empty, saves nothing. An answer of none
 that replaces a list is saved as below, with an empty value.
@@ -105,7 +105,7 @@ Go on only once they answer.
 
 **At `self=none`** nothing is attempted, since this plugin was not loaded from
 a recorded install. Do not stop for it: go on, leave `owners` open, and have
-the closing summary's **Still open** line read:
+the **Accounts** line of `SKILL.md` step 3 read:
 
-> set your accounts: run `/plugin configure dnbg-workflow` and paste `<value>`
-> into **owners**.
+> ❌ **Accounts:** not saved. Run `/plugin configure dnbg-workflow` and paste
+> `<value>` into **owners**.

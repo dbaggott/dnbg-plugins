@@ -60,7 +60,7 @@ has_line() { grep -qxF -- "$1" <<<"$output" || { echo "no line: $1"; echo "$outp
 
 @test "a fresh install reads every check, and is open on owners and roles" {
   check --owners='${user_config.owners}' --retrospectives='${user_config.retrospectives}' \
-    --version-stamp='${user_config.version_stamp}'
+    --version-stamp='${user_config.version_stamp}' --setup-notice='${user_config.setup_notice}'
   has_line "check=tools state=ok missing=none"
   has_line "check=gh-auth state=ok"
   has_line "check=claude-code state=ok version=2.1.311 floor=2.1.207"
@@ -68,10 +68,11 @@ has_line() { grep -qxF -- "$1" <<<"$output" || { echo "no line: $1"; echo "$outp
   has_line "check=roles state=unconfigured configured=none fallback=author unconfigured=reviewer"
   has_line "check=retrospectives state=off"
   has_line "check=version-stamp state=off"
+  has_line "check=setup-notice state=on"
   has_line "check=plugins state=unknown self=none installed=none"
-  has_line "check=marker acknowledged=none path=$XDG_CONFIG_HOME/dnbg/setup-acknowledged"
+  has_line "check=summary-dir state=unknown"
   has_line "result=OK setup=incomplete open=owners,roles"
-  [ "${#lines[@]}" -eq 10 ]
+  [ "${#lines[@]}" -eq 11 ]
 }
 
 @test "owners set, the reviewer configured and the tools present is complete, whatever the optional settings" {
@@ -118,6 +119,7 @@ has_line() { grep -qxF -- "$1" <<<"$output" || { echo "no line: $1"; echo "$outp
   has_line "check=tools state=missing missing=jq"
   has_line "check=roles state=unknown configured=none fallback=none unconfigured=none"
   has_line "check=plugins state=unknown self=none installed=none"
+  has_line "check=summary-dir state=unknown"
   has_line "result=OK setup=incomplete open=tools"
 }
 
@@ -195,14 +197,71 @@ STUB
   has_line "check=plugins state=unknown self=none installed=none"
 }
 
-@test "the marker line names what the file acknowledges, and nothing it does not" {
-  local marker="$XDG_CONFIG_HOME/dnbg/setup-acknowledged"
-  mkdir -p "$XDG_CONFIG_HOME/dnbg"; : > "$marker"
+@test "the setup notice is off for the negative alone" {
+  check --setup-notice=FALSE
+  has_line "check=setup-notice state=off"
+  local v
+  for v in true no '' '${user_config.setup_notice}'; do
+    check --setup-notice="$v"
+    has_line "check=setup-notice state=on"
+  done
+}
+
+# The summaries plugin, recorded as installed from a directory holding its
+# manifest, with the user's settings.json holding <summary_dir> when given.
+install_summaries() {  # [<summary_dir>]
+  local at="$BATS_TEST_TMPDIR/summaries"
+  mkdir -p "$at/.claude-plugin"
+  echo '{"userConfig":{"summary_dir":{"default":"~/.claude/dnbg-agent-summaries"}}}' \
+    > "$at/.claude-plugin/plugin.json"
+  jq -n --arg at "$at" \
+    '{version: 2, plugins: {"dnbg-agent-summaries@dnbg": [{scope: "user", installPath: $at}]}}' \
+    > "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json"
+  rm -f "$CLAUDE_CONFIG_DIR/settings.json"
+  [ $# -eq 0 ] || jq -n --arg d "$1" \
+    '{pluginConfigs: {"dnbg-agent-summaries@dnbg": {options: {summary_dir: $d}}}}' \
+    > "$CLAUDE_CONFIG_DIR/settings.json"
+}
+
+@test "summary-dir is the directory the user set, and absent without the plugin" {
+  install_summaries '~/Obsidian/agent-summaries'
   check
-  has_line "check=marker acknowledged=none path=$marker"
-  printf '%s\n' roles junk owners roles > "$marker"
+  has_line "check=summary-dir state=ok value=~/Obsidian/agent-summaries"
+  install_summaries /srv/notes
   check
-  has_line "check=marker acknowledged=roles,owners path=$marker"
+  has_line "check=summary-dir state=ok value=/srv/notes"
+  record_installs dnbg-practices@dnbg
+  check
+  has_line "check=summary-dir state=absent"
+}
+
+@test "summary-dir is the manifest's default when unset, or set to a value the skill refuses" {
+  install_summaries
+  check
+  has_line "check=summary-dir state=ok value=~/.claude/dnbg-agent-summaries"
+  local v
+  for v in '' relative/path '/has space' '~other/notes' '/a;b' '/srv/a~b' '~/a/~'; do
+    install_summaries "$v"
+    check
+    has_line "check=summary-dir state=ok value=~/.claude/dnbg-agent-summaries"
+  done
+}
+
+@test "summary-dir's default is read from whichever recorded install still has a manifest" {
+  install_summaries
+  jq --arg gone "$BATS_TEST_TMPDIR/removed" \
+    '.plugins["dnbg-agent-summaries@dnbg"] |= [{scope: "project", installPath: $gone}] + .' \
+    "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json" > "$BATS_TEST_TMPDIR/record"
+  mv "$BATS_TEST_TMPDIR/record" "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json"
+  check
+  has_line "check=summary-dir state=ok value=~/.claude/dnbg-agent-summaries"
+}
+
+@test "summary-dir is unknown when the installed manifest cannot be read" {
+  install_summaries
+  rm "$BATS_TEST_TMPDIR/summaries/.claude-plugin/plugin.json"
+  check
+  has_line "check=summary-dir state=unknown"
 }
 
 @test "an argument it does not know is bad-args, and nothing else is printed" {

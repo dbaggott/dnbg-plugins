@@ -269,10 +269,15 @@ EOF
 # `retrospectives` earns its place on the same third ground: what it writes is a
 # file addressed to whoever maintains these prompts, which a user who is not that
 # person has no use for and should not be left carrying.
+#
+# `setup_notice` is on a fourth ground: it governs nothing the workflow does or
+# publishes, only whether the user is told at session start that setup is
+# incomplete, which is theirs to decline once incomplete is where they mean to
+# stay.
 @test "the plugin exposes exactly the intended configuration keys" {
   local keys
   keys=$(jq -r '.userConfig | keys_unsorted[]' "$ROOT/dnbg-workflow/.claude-plugin/plugin.json" | sort | tr '\n' ' ')
-  [ "$keys" = "claim_label findings_dir owners retrospective_dir retrospectives version_stamp worktree_path " ] || {
+  [ "$keys" = "claim_label findings_dir owners retrospective_dir retrospectives setup_notice version_stamp worktree_path " ] || {
     echo "userConfig keys are: $keys"
     echo "adding one is a deliberate decision, and it gets a row in docs/configuration.md"
     false
