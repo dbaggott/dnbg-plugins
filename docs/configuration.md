@@ -58,13 +58,8 @@ Off by default. Enable it per repo by adding a section like this to the repo's
 ## How to size a change here
 
 Load `dnbg-workflow:velocity-tradeoff` when sizing a change or deciding
-whether to split a PR. <Project> is on the velocity side of that skill's
-risk/benefit trade.
-
-Per that skill's own framing this is a ratio, not a fact about the project, so
-the inputs it weighs can move. **Say something when you notice one of them
-moving.** But this opt-in comes out when the operator decides it comes out —
-not on an agent's read of the inputs.
+whether to split a PR. This repo has opted in, and only the operator ends
+that.
 ```
 
 ## The setup notice

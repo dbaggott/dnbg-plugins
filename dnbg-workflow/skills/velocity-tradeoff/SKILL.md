@@ -11,23 +11,16 @@ before applying it: the project's `CLAUDE.md` (or the operator, directly) has to
 opt in. If neither does, stop — the ordinary defaults apply, and nothing below is
 in force.
 
-A repo opts in with a short section in its own `CLAUDE.md` — a section rather
-than a line, because the opt-in has to carry two things, and the second is the
-one people leave out:
+A repo opts in with a short section in its own `CLAUDE.md`:
 
 > ## How to size a change here
 >
 > Load `dnbg-workflow:velocity-tradeoff` when sizing a change or deciding
-> whether to split a PR. <Project> is on the velocity side of that skill's
-> risk/benefit trade.
->
-> Per that skill's own framing this is a ratio, not a fact about the project, so
-> the inputs it weighs can move. **Say something when you notice one of them
-> moving.** But this opt-in comes out when the operator decides it comes out —
-> not on an agent's read of the inputs.
+> whether to split a PR. This repo has opted in, and only the operator ends
+> that.
 
-The posture is the first thing; **who can unmake it** is the second. Write both.
-An opt-in that states only the posture reads as permanent, and nothing in the
+It carries two things, the posture and **who can end it**. Write both. An
+opt-in that states only the posture reads as permanent, and nothing in the
 repo tells the next agent whose call it is to end.
 
 Don't restate the rest of this skill in that section — point at it. A copy of the
