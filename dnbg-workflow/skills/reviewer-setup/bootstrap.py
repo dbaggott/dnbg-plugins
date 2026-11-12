@@ -1002,7 +1002,8 @@ def main() -> int:
     p.add_argument("--org", default=None,
                    help="organization login; required only with --owner-type org")
     p.add_argument("--name", help="App name, with one role (default agent-<role>-<your-login>; "
-                                  "must be globally unique, and at most 34 characters)")
+                                  f"must be globally unique, and at most {NAME_LIMIT} "
+                                  "characters)")
     p.add_argument("--port", type=int, default=8765, help="localhost callback port")
     p.add_argument("--timeout", type=int, default=600, help="seconds to wait for the browser")
     p.add_argument("--no-browser", action="store_true", help="don't auto-open the browser")
