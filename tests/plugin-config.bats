@@ -18,7 +18,7 @@ setup() {
   . "$LIB"
   unset CLAUDE_PLUGIN_OPTION_WORKTREE_PATH CLAUDE_PLUGIN_OPTION_CLAIM_LABEL \
     CLAUDE_PLUGIN_OPTION_RETROSPECTIVE_DIR CLAUDE_PLUGIN_OPTION_FINDINGS_DIR \
-    CLAUDE_PLUGIN_OPTION_VERSION_STAMP CLAUDE_PLUGIN_OPTION_RETROSPECTIVES
+    CLAUDE_PLUGIN_OPTION_DATA_DIR CLAUDE_PLUGIN_OPTION_VERSION_STAMP CLAUDE_PLUGIN_OPTION_RETROSPECTIVES
 }
 
 # Each resolve runs in a subshell with the option set, so a configured value can
@@ -42,6 +42,10 @@ with_findings_dir() {  # <value>
   ( export CLAUDE_PLUGIN_OPTION_FINDINGS_DIR="$1"; resolve_findings_dir )
 }
 
+with_data_dir() {  # <value> <resolver>
+  ( export CLAUDE_PLUGIN_OPTION_DATA_DIR="$1"; "$2" )
+}
+
 # Same subshell discipline, but the answer is an exit status rather than output,
 # so this prints one of two words for a `[ ... = ... ]` to compare. A bare
 # `with_version_stamp x` under `[ ... ]` would test the *string*, which is
@@ -63,8 +67,8 @@ with_retrospectives() {  # <value>
   # before the knobs existed.
   [ "$(resolve_worktree_path)" = ".worktrees" ]
   [ "$(resolve_claim_label)" = "assigned:agent-session" ]
-  [ "$(resolve_retrospective_dir)" = "~/.claude/dnbg-retrospectives" ]
-  [ "$(resolve_findings_dir)" = "~/.claude/dnbg-findings" ]
+  [ "$(resolve_retrospective_dir)" = "~/.claude/dnbg/retrospectives" ]
+  [ "$(resolve_findings_dir)" = "~/.claude/dnbg/findings" ]
 }
 
 @test "an empty value is the same as unset" {
@@ -72,8 +76,8 @@ with_retrospectives() {  # <value>
   # than removing the key, so this is a state a real install reaches.
   [ "$(with_worktree_path '')" = ".worktrees" ]
   [ "$(with_claim_label '')" = "assigned:agent-session" ]
-  [ "$(with_retrospective_dir '')" = "~/.claude/dnbg-retrospectives" ]
-  [ "$(with_findings_dir '')" = "~/.claude/dnbg-findings" ]
+  [ "$(with_retrospective_dir '')" = "~/.claude/dnbg/retrospectives" ]
+  [ "$(with_findings_dir '')" = "~/.claude/dnbg/findings" ]
 }
 
 @test "the claim label default is the one issue-workflow claims with" {
@@ -223,9 +227,9 @@ with_retrospectives() {  # <value>
   [ -n "$(outside_repo_dir_rejection './retros')" ]
   [ -n "$(outside_repo_dir_rejection '~')" ]
   [ -n "$(outside_repo_dir_rejection '~other/retros')" ]
-  [ "$(with_retrospective_dir 'retros')" = "~/.claude/dnbg-retrospectives" ]
-  [ "$(with_retrospective_dir '/')" = "~/.claude/dnbg-retrospectives" ]
-  [ "$(with_retrospective_dir '~/')" = "~/.claude/dnbg-retrospectives" ]
+  [ "$(with_retrospective_dir 'retros')" = "~/.claude/dnbg/retrospectives" ]
+  [ "$(with_retrospective_dir '/')" = "~/.claude/dnbg/retrospectives" ]
+  [ "$(with_retrospective_dir '~/')" = "~/.claude/dnbg/retrospectives" ]
   # Rejected as resolved, so the session-start note reports it instead of the
   # value falling back unannounced.
   [ -n "$(outside_repo_dir_rejection '~//')" ]
@@ -237,7 +241,7 @@ with_retrospectives() {  # <value>
   [ -n "$(outside_repo_dir_rejection '~/r;rm -rf x')" ]
   [ -n "$(outside_repo_dir_rejection '/r$(id)')" ]
   [ -n "$(outside_repo_dir_rejection '/a/~b')" ]
-  [ "$(with_retrospective_dir '/my retros')" = "~/.claude/dnbg-retrospectives" ]
+  [ "$(with_retrospective_dir '/my retros')" = "~/.claude/dnbg/retrospectives" ]
 }
 
 @test "the retrospective default passes its own rule" {
@@ -257,13 +261,76 @@ with_retrospectives() {  # <value>
 }
 
 @test "a rejected findings directory falls back to the findings default" {
-  [ "$(with_findings_dir 'findings')" = "~/.claude/dnbg-findings" ]
-  [ "$(with_findings_dir '~/')" = "~/.claude/dnbg-findings" ]
-  [ "$(with_findings_dir '/my findings')" = "~/.claude/dnbg-findings" ]
+  [ "$(with_findings_dir 'findings')" = "~/.claude/dnbg/findings" ]
+  [ "$(with_findings_dir '~/')" = "~/.claude/dnbg/findings" ]
+  [ "$(with_findings_dir '/my findings')" = "~/.claude/dnbg/findings" ]
 }
 
 @test "the findings default passes its own rule" {
   [ -z "$(outside_repo_dir_rejection "$DEFAULT_FINDINGS_DIR")" ]
+}
+
+# --- data directory ----------------------------------------------------------
+
+@test "a configured data directory moves both directories under it" {
+  [ "$(with_data_dir '/var/dnbg' resolve_data_dir)" = "/var/dnbg" ]
+  [ "$(with_data_dir '~/dnbg/' resolve_retrospective_dir)" = "~/dnbg/retrospectives" ]
+  [ "$(with_data_dir '~/dnbg' resolve_findings_dir)" = "~/dnbg/findings" ]
+}
+
+@test "a directory set on its own wins over the data directory" {
+  [ "$( export CLAUDE_PLUGIN_OPTION_RETROSPECTIVE_DIR='~/retros'
+        with_data_dir '~/dnbg' resolve_retrospective_dir )" = "~/retros" ]
+  [ "$( export CLAUDE_PLUGIN_OPTION_FINDINGS_DIR='~/findings'
+        with_data_dir '~/dnbg' resolve_findings_dir )" = "~/findings" ]
+}
+
+@test "a rejected directory falls back under the configured data directory" {
+  [ "$( export CLAUDE_PLUGIN_OPTION_RETROSPECTIVE_DIR='retros'
+        with_data_dir '~/dnbg' resolve_retrospective_dir )" = "~/dnbg/retrospectives" ]
+}
+
+@test "a rejected data directory falls back to the data default" {
+  [ "$(with_data_dir 'dnbg' resolve_data_dir)" = "~/.claude/dnbg" ]
+  [ "$(with_data_dir '/my dnbg' resolve_retrospective_dir)" = "~/.claude/dnbg/retrospectives" ]
+}
+
+@test "the data default passes its own rule" {
+  [ -z "$(outside_repo_dir_rejection "$DEFAULT_DATA_DIR")" ]
+}
+
+# --- moving a legacy directory -----------------------------------------------
+
+@test "a missing or empty legacy directory needs no move" {
+  [ -z "$(legacy_dir_move "$BATS_TEST_TMPDIR/old" "$BATS_TEST_TMPDIR/new")" ]
+  mkdir "$BATS_TEST_TMPDIR/old"
+  [ -z "$(legacy_dir_move "$BATS_TEST_TMPDIR/old" "$BATS_TEST_TMPDIR/new")" ]
+}
+
+@test "a legacy directory that is the resolved one needs no move" {
+  mkdir -p "$BATS_TEST_TMPDIR/old/acme"
+  [ -z "$(legacy_dir_move "$BATS_TEST_TMPDIR/old" "$BATS_TEST_TMPDIR/old")" ]
+}
+
+@test "a legacy directory with entries moves to a resolved directory that does not exist" {
+  local old="$BATS_TEST_TMPDIR/old" new="$BATS_TEST_TMPDIR/data/new"
+  mkdir -p "$old/acme"
+  eval "$(legacy_dir_move "$old" "$new")"
+  [ -d "$new/acme" ]
+  [ ! -e "$old" ]
+}
+
+@test "a legacy directory's entries move into a resolved directory that exists" {
+  local old="$BATS_TEST_TMPDIR/old" new="$BATS_TEST_TMPDIR/new"
+  mkdir -p "$old/acme" "$new/other"
+  eval "$(legacy_dir_move "$old" "$new")"
+  [ -d "$new/acme" ] && [ -d "$new/other" ]
+  [ ! -e "$old" ]
+}
+
+@test "a home-relative resolved directory is expanded in the move" {
+  mkdir -p "$BATS_TEST_TMPDIR/old/acme"
+  [[ "$( HOME=/home/u legacy_dir_move "$BATS_TEST_TMPDIR/old" '~/dnbg/findings' )" == *'"/home/u/dnbg/findings"'* ]]
 }
 
 # --- the version stamp -------------------------------------------------------

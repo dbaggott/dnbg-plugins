@@ -16,7 +16,7 @@ directory** announced when this skill loads.
 
 ## 1. Gather the batch
 
-The batch is every `*.md` file under `~/.claude/dnbg-findings/`, recursively,
+The batch is every `*.md` file under `~/.claude/dnbg/findings/`, recursively,
 whose frontmatter reads `disposition: open`. That root is the default, not a
 constant: if a `dnbg-workflow` note at session start names a different findings
 root, read that one. The operator may narrow the batch to one repo's

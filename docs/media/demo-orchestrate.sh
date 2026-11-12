@@ -65,7 +65,7 @@ beat 2.2
 
 say "${C_DIM}  ← author: pull/118 merged · cleaned up · retrospective written${C_OFF}"
 say "${C_DIM}  ← reviewer: review ended · retrospective written${C_OFF}"
-say "${C_TOOL}● Write${C_OFF}  ~/.claude/dnbg-retrospectives/acme/api/ ${C_DIM}— the orchestrator's own${C_OFF}"
+say "${C_TOOL}● Write${C_OFF}  ~/.claude/dnbg/retrospectives/acme/api/ ${C_DIM}— the orchestrator's own${C_OFF}"
 beat 1.4
 
 printf '\n'
@@ -73,7 +73,7 @@ say "${C_USER}Summary${C_OFF}"
 say "  pull/118 merged. One escalation: --help lists the flag (42-D2, you chose yes)."
 say "${C_USER}Observations${C_OFF}"
 say "  One question answered from the body (42-D1). Retrospectives, under"
-say "  ~/.claude/dnbg-retrospectives/acme/api/: author, reviewer, orchestrator."
+say "  ~/.claude/dnbg/retrospectives/acme/api/: author, reviewer, orchestrator."
 say "${C_USER}Actionable${C_OFF}"
 say "  Nothing outstanding."
 beat 5.0

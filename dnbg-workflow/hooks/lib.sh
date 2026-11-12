@@ -120,10 +120,15 @@ remote_is_covered() {
 DEFAULT_WORKTREE_PATH='.worktrees'
 DEFAULT_CLAIM_LABEL='assigned:agent-session'
 # Literal `~`s: they are printed to an agent, which expands them when it writes.
+# The per-kind directories sit under the data directory unless set on their own,
+# so this is the one literal path.
 # shellcheck disable=SC2088
-DEFAULT_RETROSPECTIVE_DIR='~/.claude/dnbg-retrospectives'
-# shellcheck disable=SC2088
-DEFAULT_FINDINGS_DIR='~/.claude/dnbg-findings'
+DEFAULT_DATA_DIR='~/.claude/dnbg'
+# Read by rules-payload.sh, which names them as what the skills spell out.
+# shellcheck disable=SC2034
+DEFAULT_RETROSPECTIVE_DIR="$DEFAULT_DATA_DIR/retrospectives"
+# shellcheck disable=SC2034
+DEFAULT_FINDINGS_DIR="$DEFAULT_DATA_DIR/findings"
 
 # The namespace every claim label has to sit in. `issue-workflow`'s in-progress
 # check matches this prefix rather than an enumerated list, deliberately, so that
@@ -259,12 +264,31 @@ resolve_outside_repo_dir() {  # <configured-value> <default>
   fi
 }
 
+resolve_data_dir() {
+  resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_DATA_DIR:-}" "$DEFAULT_DATA_DIR"
+}
+
 resolve_retrospective_dir() {
-  resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_RETROSPECTIVE_DIR:-}" "$DEFAULT_RETROSPECTIVE_DIR"
+  resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_RETROSPECTIVE_DIR:-}" "$(resolve_data_dir)/retrospectives"
 }
 
 resolve_findings_dir() {
-  resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_FINDINGS_DIR:-}" "$DEFAULT_FINDINGS_DIR"
+  resolve_outside_repo_dir "${CLAUDE_PLUGIN_OPTION_FINDINGS_DIR:-}" "$(resolve_data_dir)/findings"
+}
+
+# The command that moves a directory's entries to where this session reads them,
+# empty when there is nothing to move: the legacy directory is missing or empty,
+# or it is the resolved directory. `~` is expanded, since the operator pastes it.
+legacy_dir_move() {  # <legacy-dir> <resolved-dir>
+  local legacy="$1" target="${2/#\~/${HOME:-}}"
+  [ "$legacy" != "$target" ] || return 0
+  set -- "$legacy"/*
+  [ -e "$1" ] || return 0
+  if [ -e "$target" ]; then
+    printf 'mv "%s"/* "%s"/ && rmdir "%s"' "$legacy" "$target" "$legacy"
+  else
+    printf 'mkdir -p "%s" && mv "%s" "%s"' "${target%/*}" "$legacy" "$target"
+  fi
 }
 
 # Has the operator asked for the version stamp?

@@ -22,6 +22,11 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/setup-nudge.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/legacy-dirs-notice.sh",
+            "timeout": 10
           }
         ]
       }

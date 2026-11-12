@@ -189,17 +189,32 @@ EOF
     false
   }
 
-  from_manifest=$(jq -r '.userConfig.retrospective_dir.default' "$manifest")
-  [ "$from_manifest" = "$DEFAULT_RETROSPECTIVE_DIR" ] || {
-    echo "retrospective_dir default disagrees: manifest '$from_manifest', lib.sh '$DEFAULT_RETROSPECTIVE_DIR'"
+  from_manifest=$(jq -r '.userConfig.data_dir.default' "$manifest")
+  [ "$from_manifest" = "$DEFAULT_DATA_DIR" ] || {
+    echo "data_dir default disagrees: manifest '$from_manifest', lib.sh '$DEFAULT_DATA_DIR'"
     false
   }
 
-  from_manifest=$(jq -r '.userConfig.findings_dir.default' "$manifest")
-  [ "$from_manifest" = "$DEFAULT_FINDINGS_DIR" ] || {
-    echo "findings_dir default disagrees: manifest '$from_manifest', lib.sh '$DEFAULT_FINDINGS_DIR'"
-    false
-  }
+  # Empty, so a field cleared in the dialog follows the data directory rather
+  # than pinning the path under the default one.
+  local key
+  for key in retrospective_dir findings_dir; do
+    from_manifest=$(jq -r ".userConfig.$key.default" "$manifest")
+    [ -z "$from_manifest" ] || { echo "$key default is '$from_manifest', not empty"; false; }
+  done
+}
+
+# The summary skill states the same data directory default in prose, so moving it
+# is one decision across both plugins.
+@test "dnbg-agent-summaries' data directory default is dnbg-workflow's" {
+  local manifest="$ROOT/dnbg-agent-summaries/.claude-plugin/plugin.json"
+  local skill="$ROOT/dnbg-agent-summaries/skills/summary-review/SKILL.md"
+  # shellcheck source=../dnbg-workflow/hooks/lib.sh
+  . "$ROOT/dnbg-workflow/hooks/lib.sh"
+
+  [ "$(jq -r '.userConfig.data_dir.default' "$manifest")" = "$DEFAULT_DATA_DIR" ]
+  [ -z "$(jq -r '.userConfig.summary_dir.default' "$manifest")" ]
+  grep -qF "\`$DEFAULT_DATA_DIR\`" "$skill" || { echo "$skill does not state $DEFAULT_DATA_DIR"; false; }
 }
 
 # `version_stamp` is pinned separately rather than as another arm above, because
@@ -277,7 +292,7 @@ EOF
 @test "the plugin exposes exactly the intended configuration keys" {
   local keys
   keys=$(jq -r '.userConfig | keys_unsorted[]' "$ROOT/dnbg-workflow/.claude-plugin/plugin.json" | sort | tr '\n' ' ')
-  [ "$keys" = "claim_label findings_dir owners retrospective_dir retrospectives setup_notice version_stamp worktree_path " ] || {
+  [ "$keys" = "claim_label data_dir findings_dir owners retrospective_dir retrospectives setup_notice version_stamp worktree_path " ] || {
     echo "userConfig keys are: $keys"
     echo "adding one is a deliberate decision, and it gets a row in docs/configuration.md"
     false

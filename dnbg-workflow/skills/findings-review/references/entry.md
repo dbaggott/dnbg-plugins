@@ -52,11 +52,11 @@ other duplicate.
 
 ## Where it goes
 
-In `~/.claude/dnbg-findings/<owner>/<repo>/`, where `<owner>/<repo>` is the repo
+In `~/.claude/dnbg/findings/<owner>/<repo>/`, where `<owner>/<repo>` is the repo
 the work happened in, which is where a follow-up would be filed. Expand `~` to
 your home directory and create the directory if it is missing.
 
-**`~/.claude/dnbg-findings` is the default, not a constant.** If a
+**`~/.claude/dnbg/findings` is the default, not a constant.** If a
 `dnbg-workflow` note at session start names a different findings root, that
 root wins, and `<owner>/<repo>/` goes under it the same way.
 
