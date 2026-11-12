@@ -133,7 +133,9 @@ but a way to deliberately work around your own gate is working as designed.
 
 Each agent role that acts on GitHub under its own identity has a GitHub App,
 created under your account by `reviewer-setup`, with its private key saved on
-your machine. A role's key is that bot's entire credential: anyone holding it can
+your machine. Each further machine you connect gets a key of its own for the
+same App, so revoking one machine is deleting that machine's key in the App's
+settings, and the others keep working. A role's key is that bot's entire credential: anyone holding it can
 mint installation tokens for every account the App is installed on, without
 your GitHub session and without touching your account. The roles are the
 directories under `dnbg-workflow/roles/`; each one's `permissions.json` is the
@@ -255,9 +257,11 @@ Do these in order, for the exposed role's App, in its settings on GitHub
    forced: an App must always have at least one key, so the old one cannot be
    deleted until a new one exists. Deleting it invalidates it immediately.
    Only key *deletion* revokes — rotating the file on your disk does nothing.
-2. **Install the replacement.** Put the downloaded PEM wherever your setup
-   resolves the key from (by default `~/.config/dnbg/<role>/private-key.pem`,
-   mode `0600`), then confirm with `as-role.sh <role> <owner>/<repo> -- true`.
+2. **Install the replacement.** `bootstrap.py --adopt <role>=<slug>` takes the
+   downloaded PEM, checks with GitHub that it is that App's key, and saves it
+   where the default setup reads it (`~/.config/dnbg/<role>/private-key.pem`,
+   mode `0600`); with the key somewhere else, put it there yourself. Then
+   confirm with `as-role.sh <role> <owner>/<repo> -- true`.
 3. **Consider the tokens already minted.** An installation token
    [expires after 1 hour](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app),
    so anything minted before you rotated is good for up to that long. GitHub
@@ -269,11 +273,9 @@ Do these in order, for the exposed role's App, in its settings on GitHub
 If you would rather retire the App than rotate it, deleting it revokes
 everything in one step; re-run `bootstrap.py --roles <role>` to create a fresh
 one. Note that
-`bootstrap.py` cannot repair an existing App — GitHub returns an App's key
-exactly once, at creation (`convert_manifest` is the one-shot exchange that
-receives it), so re-running it always
-produces a *new* App with a new identity. Keeping the same bot means generating
-the replacement key in App settings, per step 1.
+`bootstrap.py` cannot generate a key for an existing App — GitHub has no API
+for it, and hands a new App's first key over exactly once, at creation. Keeping
+the same bot means generating the replacement key in App settings, per step 1.
 
 GitHub's docs carry the current click-path for each of these:
 [managing private keys](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/managing-private-keys-for-github-apps)

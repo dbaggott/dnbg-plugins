@@ -349,7 +349,8 @@ def prove_key(app_id: str, pem: str) -> dict:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as exc:
-        if exc.code == 401:
+        # 401 where the ID is another App's, 404 where it is no App's.
+        if exc.code in (401, 404):
             raise KeyRefused(f"GitHub did not accept that key for the App with ID {app_id}: "
                              "it was generated for another App, or has since been deleted.")
         raise KeyRefused(f"GitHub answered HTTP {exc.code} when the key was checked.")

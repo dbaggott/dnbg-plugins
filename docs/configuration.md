@@ -70,7 +70,8 @@ Edit with `/plugin configure dnbg-work-summary`.
 ## Agent roles
 
 Each role posts under its own GitHub App once `/dnbg-workflow:reviewer-setup`
-has created one.
+has created one. On every further machine the same skill connects to that App
+with a key of the machine's own.
 
 | Role | Posts | Without an App |
 | --- | --- | --- |
