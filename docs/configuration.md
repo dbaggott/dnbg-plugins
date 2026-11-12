@@ -86,13 +86,17 @@ or `ORCHESTRATOR`:
 
 ## Role Apps' private keys
 
-The first source that yields a key is used:
+`/dnbg-workflow:reviewer-setup` saves each bot's key to
+`~/.config/dnbg/<role>/private-key.pem`, plaintext, mode `0600`. Most installs
+need nothing more.
 
-| Order | Source | Notes |
+There are two alternatives. Either one, when set, is used ahead of the file:
+
+| To | Set | Notes |
 | --- | --- | --- |
-| 1 | `DNBG_<ROLE>_PRIVATE_KEY` | The PEM itself. Meant for CI, since every process you own can read it. With `DNBG_<ROLE>_APP_ID` set, no file is needed |
-| 2 | `DNBG_<ROLE>_PRIVATE_KEY_COMMAND`, or `private_key_command` in `config.json` | A command that prints the PEM, such as `op read` or `pass show`. Runs on every write, so one that prompts will prompt often |
-| 3 | `~/.config/dnbg/<role>/private-key.pem` | The default: plaintext, mode `0600` |
+| Keep the key in a secret manager | `DNBG_<ROLE>_PRIVATE_KEY_COMMAND`, or `private_key_command` in `config.json` | A command that prints the key, such as `op read` or `pass show`. Move the key into the manager yourself. The command runs on every write, so one that prompts will prompt often |
+| Run in CI | `DNBG_<ROLE>_PRIVATE_KEY`, with `DNBG_<ROLE>_APP_ID` | The key itself, so no file is needed. Every process you own can read it, so keep it off your own machine |
 
-A key from 1 or 2 is never written to disk. A config directory or key file that
-is group- or world-writable is refused.
+With both set, `DNBG_<ROLE>_PRIVATE_KEY` wins. A key from either alternative is
+never written to disk. A config directory or key file that is group- or
+world-writable is refused.
