@@ -106,15 +106,15 @@ FINDINGS_DIR_BAD=""
 [ -n "$CONFIGURED_FINDINGS_DIR" ] &&
   FINDINGS_DIR_BAD=$(outside_repo_dir_rejection "$CONFIGURED_FINDINGS_DIR")
 
-# Rejections first. A reader who sees only the override note below would take the
-# default it names as their configuration working, when in fact their value was
-# thrown away — so the reason has to arrive before, not after.
 WORKTREE_PATH=$(resolve_worktree_path)
 CLAIM_LABEL=$(resolve_claim_label)
 DATA_DIR=$(resolve_data_dir)
 RETROSPECTIVE_DIR=$(resolve_retrospective_dir)
 FINDINGS_DIR=$(resolve_findings_dir)
 
+# Rejections first. A reader who sees only the override note below would take the
+# default it names as their configuration working, when in fact their value was
+# thrown away — so the reason has to arrive before, not after.
 if [ -n "$WORKTREE_PATH_BAD" ] || [ -n "$CLAIM_LABEL_BAD" ] || [ -n "$DATA_DIR_BAD" ] ||
    [ -n "$RETROSPECTIVE_DIR_BAD" ] || [ -n "$FINDINGS_DIR_BAD" ]; then
   printf '\n## dnbg-workflow: INVALID configuration (ignored)\n\n'
