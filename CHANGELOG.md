@@ -10,6 +10,13 @@ tagged, and their versions used a two-component scheme that predates the current
 
 <!-- releases below -->
 
+## dnbg-workflow 2026.11.21 — 2026-11-12
+
+The section `velocity-tradeoff` tells a repo to add to its `CLAUDE.md` to opt in
+is now two sentences: load the skill when sizing a change, and only the operator
+ends the opt-in. A repo that opted in with the longer section needs no change.
+
+
 ## dnbg-workflow 2026.11.20 — 2026-11-12
 
 `/dnbg-workflow:setup` now ends on one list of your whole setup: each setting,
