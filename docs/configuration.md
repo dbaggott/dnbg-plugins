@@ -6,6 +6,8 @@ given for each plugin.
 
 They apply to every repo. A repo's own `.claude/settings.json` is not read.
 
+A change reaches a session that is already running after `/reload-plugins`.
+
 ## Settings
 
 An invalid value falls back to its default, and you are told. A path may use
