@@ -203,7 +203,22 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .note {{ font-size: .875rem; opacity: .7; }}
   .row {{ border-top: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
          padding: 1rem 0 .25rem; }}
-  .status {{ font-weight: 600; }}
+  /* A row's steps: the one to do now stands out, the ones done carry a tick and
+     recede, and the ones to come stay readable before the first is taken. */
+  .steps {{ list-style: none; padding: 0; margin: 0; counter-reset: step; }}
+  .steps li {{ counter-increment: step; position: relative; margin: 0;
+              padding: .15rem 0 1.1rem 2.75rem; }}
+  .steps li::before {{ content: counter(step); position: absolute; left: 0; top: 0;
+                      width: 2rem; height: 2rem; border-radius: 50%; box-sizing: border-box;
+                      display: grid; place-items: center; font-weight: 700;
+                      border: 2px solid currentColor; }}
+  .steps li.done {{ opacity: .6; }}
+  .saved li.done {{ opacity: 1; }}
+  .steps li.now {{ font-weight: 600; }}
+  .steps li.now::before {{ background: #1f883d; border-color: #1f883d; color: #fff; }}
+  .steps li.done::before {{ content: "\\2713"; border-color: #1f883d; color: #1f883d; }}
+  .steps .note {{ display: block; font-weight: 400; margin-top: .35rem; }}
+  .saved .steps .pick {{ display: none; }}
   /* The fallback for a redirect that did not happen: hidden while it should. */
   .late {{ visibility: hidden; animation: late 0s 3s forwards; }}
   @keyframes late {{ to {{ visibility: visible; }} }}
@@ -423,53 +438,80 @@ def downloaded_keys(slug: str, since: float) -> list[tuple[Path, float]]:
 
 
 CONNECT_SCRIPT = """
-const say = (role, text) => { document.getElementById('status-' + role).textContent = text; };
+// Which step of its row each role is at: 1 before its settings were opened from
+// here, 2 once they were, 3 once a key was offered, 4 once one is saved.
+const opened = new Set();
+function show(row) {
+  const step = row.state === 'saved' ? 4 : row.state === 'refused' ? 3
+    : opened.has(row.role) ? 2 : 1;
+  document.querySelectorAll('#row-' + row.role + ' li').forEach((li, i) => {
+    li.className = i + 1 < step ? 'done' : i + 1 === step ? 'now' : '';
+  });
+  document.getElementById('row-' + row.role).classList.toggle('saved', step === 4);
+  document.getElementById('status-' + row.role).textContent = row.text;
+}
+let rows = [];
+function render(status) {
+  rows = status.rows;
+  rows.forEach(show);
+  document.getElementById('end').textContent = status.end;
+  return status.done;
+}
 async function poll() {
   let status;
   try { status = await (await fetch('/status')).json(); } catch (e) { return; }
-  for (const row of status.rows) say(row.role, row.text);
-  document.getElementById('end').textContent = status.end;
-  if (!status.done) setTimeout(poll, 1000);
+  if (!render(status)) setTimeout(poll, 1000);
+}
+for (const link of document.querySelectorAll('a[data-role]')) {
+  link.addEventListener('click', () => { opened.add(link.dataset.role); rows.forEach(show); });
 }
 for (const input of document.querySelectorAll('input[type=file]')) {
   input.addEventListener('change', async () => {
     if (!input.files.length) return;
-    say(input.dataset.role, 'Checking the key\\u2026');
-    await fetch('/key/' + input.dataset.role + '?state=' + STATE,
-                {method: 'POST', body: await input.files[0].text()});
+    const answer = await fetch('/key/' + input.dataset.role + '?state=' + STATE,
+                               {method: 'POST', body: await input.files[0].text()});
     input.value = '';
+    if (answer.ok) render(await answer.json());
   });
 }
 poll();
 """
 
-WAITING = "Waiting for the key…"
-SAVED = "✓ Found, verified and saved."
+SAVED = "Found, verified and saved."
 
 
 def connect_page(targets: list[dict], state: str, watching: bool) -> str:
-    """The page for the roles being connected: a row each, with a button to the
-    App's settings and a status the page's script keeps current."""
-    rows = "\n".join(
-        f"""<section class="row">
-<h2>The {html.escape(t["role"])} bot: <code>{html.escape(t["slug"])}</code></h2>
-<p><a class="go" target="_blank" rel="noopener" href="{html.escape(t["settings_url"], quote=True)}">Open its settings</a></p>
-<p class="status" id="status-{html.escape(t["role"], quote=True)}">{WAITING}</p>
-<p class="note">{"Download not picked up? Choose the file:" if watching else "Choose the downloaded file:"}
-<input type="file" accept=".pem" data-role="{html.escape(t["role"], quote=True)}"></p>
-</section>""" for t in targets)
+    """The page for the roles being connected: a row each, laid out as the three
+    steps the operator takes, which the page's script marks as they are done."""
+    def row(t: dict) -> str:
+        role = html.escape(t["role"], quote=True)
+        return f"""<section class="row" id="row-{role}">
+<h2>The {role} bot: <code>{html.escape(t["slug"])}</code></h2>
+<ol class="steps">
+<li class="now"><a class="go" target="_blank" rel="noopener" data-role="{role}" href="{html.escape(t["settings_url"], quote=True)}">Open its settings on GitHub</a></li>
+<li>On that page, scroll down to <b>Private keys</b> and click <b>Generate a private key</b>.
+<span class="note">A <code>.pem</code> file downloads.</span></li>
+<li><span id="status-{role}">{html.escape(waiting_text(watching))}</span>
+<span class="note pick">{"Download not picked up? Choose the file:" if watching else "Choose the downloaded file:"}
+<input type="file" accept=".pem" data-role="{role}"></span></li>
+</ol>
+</section>"""
+
     one = len(targets) == 1
-    pickup = ("The key downloads, and this page picks it up from your Downloads folder."
-              if watching else
-              "The key downloads. This terminal cannot read your Downloads folder, so choose "
-              "the file here afterwards.")
     return f"""<h1>Connect this machine to your {"bot" if one else "bots"}</h1>
-<p>{"This bot already exists" if one else "These bots already exist"} on GitHub. This machine needs a private key of its own for {"it" if one else "each"}.</p>
-<p>{"Open" if one else "For each, open"} its settings, scroll to <b>Private keys</b> and click <b>Generate a private key</b>. {pickup}</p>
-{rows}
+<p>{"This bot already exists" if one else "These bots already exist"} on GitHub. This machine needs a private key of its own for {"it" if one else "each"}: three steps{"" if one else " per bot"}, the second of them on GitHub.</p>
+{chr(10).join(row(t) for t in targets)}
 <p id="end"></p>
 <noscript><p>This page needs JavaScript to show progress and to take a chosen file.</p></noscript>
 <script>const STATE = {json.dumps(state)};{CONNECT_SCRIPT}</script>"""
+
+
+def waiting_text(watching: bool) -> str:
+    """A row's third step while no key has been saved for it."""
+    if watching:
+        return "Come back to this tab. It picks the key up from your Downloads folder."
+    return ("Come back to this tab and choose the downloaded file. This terminal cannot "
+            "read your Downloads folder.")
 
 
 def run_connect(args: argparse.Namespace, targets: list[dict], next_role: str | None) -> dict:
@@ -479,18 +521,19 @@ def run_connect(args: argparse.Namespace, targets: list[dict], next_role: str | 
     # Guards the key upload as run_flow's guards its callback: only a page this
     # server served can post one.
     state = secrets.token_urlsafe(24)
-    rows = {t["role"]: {"target": t, "text": WAITING} for t in targets}
+    try:
+        os.listdir(downloads_dir())
+        watching = True
+    except OSError:
+        watching = False
+    rows = {t["role"]: {"target": t, "state": "waiting", "text": waiting_text(watching)}
+            for t in targets}
     saved: dict[str, dict] = {}
     lock = threading.Lock()
     all_saved = threading.Event()
     final_status_served = threading.Event()
     stop_watching = threading.Event()
     flow: dict = {"tabs": not args.no_browser, "served_at": None}
-    try:
-        os.listdir(downloads_dir())
-        watching = True
-    except OSError:
-        watching = False
 
     def offer(role: str, pem: str, download: Path | None = None) -> None:
         with lock:
@@ -499,8 +542,10 @@ def run_connect(args: argparse.Namespace, targets: list[dict], next_role: str | 
             try:
                 saved[role] = connect(rows[role]["target"], pem)
             except KeyRefused as exc:
-                rows[role]["text"] = f"{exc} Still waiting for this bot's key."
+                rows[role].update(state="refused",
+                                  text=f"{exc} Still waiting for this bot's key.")
                 return
+            rows[role]["state"] = "saved"
             if download is None:
                 rows[role]["text"] = f"{SAVED} The file you chose is still where it was, and is yours to delete."
                 print(f"The {role} bot's key came from a file chosen in the browser; that copy "
@@ -544,7 +589,8 @@ def run_connect(args: argparse.Namespace, targets: list[dict], next_role: str | 
             end = f"All connected. The {next_role} bot is created next, in a new tab."
         else:
             end = f"All connected. Reload this page to create the {next_role} bot."
-        return {"rows": [{"role": r, "text": row["text"]} for r, row in rows.items()],
+        return {"rows": [{"role": r, "state": row["state"], "text": row["text"]}
+                         for r, row in rows.items()],
                 "done": done, "end": end}
 
     class Handler(BaseHTTPRequestHandler):
