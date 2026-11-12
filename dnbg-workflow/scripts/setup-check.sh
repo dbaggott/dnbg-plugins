@@ -50,10 +50,10 @@
 # `plugins/known_marketplaces.json` and `extraKnownMarketplaces` in the user's
 # `settings.json`. It is `on` when either entry has `autoUpdate` true, unless
 # `DISABLE_AUTOUPDATER` is set without `FORCE_AUTOUPDATE_PLUGINS=1`, which stops
-# plugin updates whatever the entries say. `summary-dir` is where `dnbg-agent-summaries`
-# writes, `absent` when that plugin is not installed: its `summary_dir` option
-# from the user's `settings.json` where that holds a value its skill accepts,
-# else the default its installed manifest states.
+# plugin updates whatever the entries say. `summary-dir` is where
+# `dnbg-agent-summaries` writes, `absent` when that plugin is not installed: its
+# `summary_dir` option from the user's `settings.json` where that holds a value
+# its skill accepts, else the default its installed manifest states.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -169,11 +169,8 @@ CONFIG_DIR="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
 
 # Each entry reads `true` or `false` by its `autoUpdate`, and nothing when the
 # file holds no entry for the marketplace or cannot be read.
-auto_update_line() {  # <marketplace, empty when none>
+auto_update_line() {  # <marketplace>
   local known extra
-  if [ -z "$1" ]; then
-    echo "check=auto-update state=unknown"; return
-  fi
   known=$(jq -r --arg m "$1" '.[$m] | objects | .autoUpdate == true' \
     "$CONFIG_DIR/plugins/known_marketplaces.json" 2>/dev/null || true)
   extra=$(jq -r --arg m "$1" '.extraKnownMarketplaces[$m] | objects | .autoUpdate == true' \
@@ -201,7 +198,11 @@ if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
     case $'\n'"$KEYS" in *$'\n'"$plugin@"*) INSTALLED="${INSTALLED:+$INSTALLED,}$plugin" ;; esac
   done
   echo "check=plugins state=ok self=${SELF:-none} installed=${INSTALLED:-none}"
-  auto_update_line "${SELF#*@}"
+  if [ -n "$SELF" ]; then
+    auto_update_line "${SELF#*@}"
+  else
+    echo "check=auto-update state=unknown"
+  fi
 
   SUMMARIES_ID=$(grep -m1 '^dnbg-agent-summaries@' <<<"$KEYS" || true)
   if [ -z "$SUMMARIES_ID" ]; then
@@ -225,7 +226,7 @@ if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
   fi
 else
   echo "check=plugins state=unknown self=none installed=none"
-  auto_update_line ""
+  echo "check=auto-update state=unknown"
 fi
 echo "$SUMMARY_DIR_LINE"
 
