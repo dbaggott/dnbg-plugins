@@ -10,6 +10,16 @@ tagged, and their versions used a two-component scheme that predates the current
 
 <!-- releases below -->
 
+## dnbg-workflow 2026.11.22 — 2026-11-12
+
+`/dnbg-workflow:setup` now checks whether auto-update is on for the marketplace
+the plugin came from. Before, it told you to turn it on every time, even after
+you had. It shows ✅ when the `/plugin` toggle has it on, or
+`extraKnownMarketplaces.<marketplace>.autoUpdate` in `~/.claude/settings.json`
+does, and ➖ with the steps to turn it on otherwise. `DISABLE_AUTOUPDATER`
+without `FORCE_AUTOUPDATE_PLUGINS=1` counts as off.
+
+
 ## dnbg-workflow 2026.11.21 — 2026-11-12
 
 The section `velocity-tradeoff` tells a repo to add to its `CLAUDE.md` to opt in
