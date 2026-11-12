@@ -28,11 +28,13 @@ Edit with `/plugin configure dnbg-workflow`.
 
 #### `velocity-tradeoff`
 
-Has agents ship a whole capability in one PR, with no backwards-compatibility
-or migration shims, where they would otherwise split the work into safer steps.
+Off by default. When enabled, agents favor velocity over safety. For example,
+they ship a whole capability in one PR, with no backwards-compatibility or
+migration shims, where they would otherwise split the work into safer steps.
+Useful where a bad change is cheap to undo, such as a project that is not yet
+live or one that can tolerate brief disruption.
 
-Off by default. It is enabled per repo, not in `settings.json`, by adding a
-section like this to the repo's `CLAUDE.md`:
+Enable per repo by adding the following to the repo's `CLAUDE.md`:
 
 ```markdown
 ## How to size a change here
