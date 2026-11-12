@@ -1,10 +1,10 @@
 # Configuration
 
-Everything here is optional. Set a value with `/plugin configure <plugin>`, or
-run `/dnbg-workflow:setup` to be walked through what is unset.
+Settings are stored in `~/.claude/settings.json`, under
+`pluginConfigs.<plugin>@dnbg.options`. Edit them there or with
+`/plugin configure <plugin>`.
 
-Settings are stored in your user `settings.json` and apply to every repo. A
-repo cannot set them.
+They apply to every repo. A repo's own `.claude/settings.json` is not read.
 
 ## Settings
 
@@ -12,7 +12,7 @@ repo cannot set them.
 
 | Setting | Default | Controls |
 | --- | --- | --- |
-| `owners` | empty | GitHub orgs and logins, comma-separated, whose repos the hooks enforce on. Empty: nothing is ever blocked |
+| `owners` | empty | GitHub orgs and logins, comma-separated, whose repos the hooks enforce on. Empty: nothing is ever blocked. `/dnbg-workflow:setup` asks for it |
 | `worktree_path` | `.worktrees` | Directory worktrees are created in, relative to the repo |
 | `claim_label` | `assigned:agent-session` | Label that marks an issue as claimed. Must start with `assigned:` |
 | `findings_dir` | `~/.claude/dnbg-findings` | Where agents write what their reports found about the code |
