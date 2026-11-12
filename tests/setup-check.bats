@@ -14,6 +14,7 @@ setup() {
   echo '{"name":"dnbg-workflow"}' > "$TREE/.claude-plugin/plugin.json"
 
   export CLAUDE_CONFIG_DIR="$BATS_TEST_TMPDIR/claude"
+  unset DISABLE_AUTOUPDATER FORCE_AUTOUPDATE_PLUGINS
   mkdir -p "$CLAUDE_CONFIG_DIR/plugins"
   BIN="$BATS_TEST_TMPDIR/path"; mkdir -p "$BIN"
   # What the scripts themselves run, then the six tools the check looks for.
@@ -70,9 +71,10 @@ has_line() { grep -qxF -- "$1" <<<"$output" || { echo "no line: $1"; echo "$outp
   has_line "check=version-stamp state=off"
   has_line "check=setup-notice state=on"
   has_line "check=plugins state=unknown self=none installed=none"
+  has_line "check=auto-update state=unknown"
   has_line "check=summary-dir state=unknown"
   has_line "result=OK setup=incomplete open=owners,roles"
-  [ "${#lines[@]}" -eq 11 ]
+  [ "${#lines[@]}" -eq 12 ]
 }
 
 @test "owners set, the reviewer configured and the tools present is complete, whatever the optional settings" {
@@ -262,6 +264,93 @@ install_summaries() {  # [<summary_dir>]
   rm "$BATS_TEST_TMPDIR/summaries/.claude-plugin/plugin.json"
   check
   has_line "check=summary-dir state=unknown"
+}
+
+# The two files the auto-update setting is written to, each given as its JSON,
+# or `-` for no file.
+marketplaces() {  # <known_marketplaces.json> <settings.json>
+  rm -f "$CLAUDE_CONFIG_DIR/plugins/known_marketplaces.json" "$CLAUDE_CONFIG_DIR/settings.json"
+  [ "$1" = - ] || printf '%s\n' "$1" > "$CLAUDE_CONFIG_DIR/plugins/known_marketplaces.json"
+  [ "$2" = - ] || printf '%s\n' "$2" > "$CLAUDE_CONFIG_DIR/settings.json"
+}
+
+SOURCE='"source": {"source": "github", "repo": "dbaggott/dnbg-plugins"}'
+
+@test "auto-update is on when either file's entry for the marketplace has it on" {
+  record_installs dnbg-workflow@dnbg=here
+  marketplaces "{\"dnbg\": {$SOURCE, \"autoUpdate\": true}}" '{}'
+  check
+  has_line "check=auto-update state=on marketplace=dnbg"
+  marketplaces '{"other": {"autoUpdate": false}}' "{\"extraKnownMarketplaces\": {\"dnbg\": {$SOURCE, \"autoUpdate\": true}}}"
+  check
+  has_line "check=auto-update state=on marketplace=dnbg"
+  marketplaces - "{\"extraKnownMarketplaces\": {\"dnbg\": {$SOURCE, \"autoUpdate\": true}}}"
+  check
+  has_line "check=auto-update state=on marketplace=dnbg"
+  marketplaces "{\"dnbg\": {\"autoUpdate\": false}}" "{\"extraKnownMarketplaces\": {\"dnbg\": {\"autoUpdate\": true}}}"
+  check
+  has_line "check=auto-update state=on marketplace=dnbg"
+}
+
+@test "auto-update is off when an entry exists and none has it on" {
+  record_installs dnbg-workflow@dnbg=here
+  marketplaces "{\"dnbg\": {$SOURCE}}" -
+  check
+  has_line "check=auto-update state=off marketplace=dnbg"
+  marketplaces - "{\"extraKnownMarketplaces\": {\"dnbg\": {$SOURCE, \"autoUpdate\": false}}}"
+  check
+  has_line "check=auto-update state=off marketplace=dnbg"
+  marketplaces "{\"dnbg\": {\"autoUpdate\": \"true\"}}" "{\"extraKnownMarketplaces\": {\"dnbg\": {\"autoUpdate\": false}}}"
+  check
+  has_line "check=auto-update state=off marketplace=dnbg"
+}
+
+@test "DISABLE_AUTOUPDATER turns auto-update off, unless FORCE_AUTOUPDATE_PLUGINS=1 keeps plugin updates" {
+  record_installs dnbg-workflow@dnbg=here
+  marketplaces "{\"dnbg\": {\"autoUpdate\": true}}" "{\"extraKnownMarketplaces\": {\"dnbg\": {\"autoUpdate\": true}}}"
+  DISABLE_AUTOUPDATER=1 check
+  has_line "check=auto-update state=off marketplace=dnbg"
+  DISABLE_AUTOUPDATER=1 FORCE_AUTOUPDATE_PLUGINS=0 check
+  has_line "check=auto-update state=off marketplace=dnbg"
+  DISABLE_AUTOUPDATER=1 FORCE_AUTOUPDATE_PLUGINS=1 check
+  has_line "check=auto-update state=on marketplace=dnbg"
+  DISABLE_AUTOUPDATER= check
+  has_line "check=auto-update state=on marketplace=dnbg"
+}
+
+@test "auto-update is unknown when neither file has an entry for the marketplace" {
+  record_installs dnbg-workflow@dnbg=here
+  marketplaces - -
+  check
+  has_line "check=auto-update state=unknown marketplace=dnbg"
+  marketplaces '{"other": {"autoUpdate": true}}' '{"extraKnownMarketplaces": {"other": {"autoUpdate": true}}}'
+  check
+  has_line "check=auto-update state=unknown marketplace=dnbg"
+  marketplaces 'not json' '["dnbg"]'
+  check
+  has_line "check=auto-update state=unknown marketplace=dnbg"
+  DISABLE_AUTOUPDATER=1 check
+  has_line "check=auto-update state=unknown marketplace=dnbg"
+}
+
+@test "auto-update reads the marketplace the check's own install came from" {
+  record_installs dnbg-workflow@dnbg dnbg-workflow@mine=here
+  marketplaces '{"dnbg": {"autoUpdate": true}, "mine": {"autoUpdate": false}}' -
+  check
+  has_line "check=plugins state=ok self=dnbg-workflow@mine installed=none"
+  has_line "check=auto-update state=off marketplace=mine"
+}
+
+@test "auto-update is unknown without jq, and for a copy that is no recorded install" {
+  marketplaces '{"dnbg": {"autoUpdate": true}}' '{"extraKnownMarketplaces": {"dnbg": {"autoUpdate": true}}}'
+  record_installs dnbg-workflow@dnbg
+  check
+  has_line "check=plugins state=ok self=none installed=none"
+  has_line "check=auto-update state=unknown"
+  record_installs dnbg-workflow@dnbg=here
+  rm "$BIN/jq"
+  check
+  has_line "check=auto-update state=unknown"
 }
 
 @test "an argument it does not know is bad-args, and nothing else is printed" {

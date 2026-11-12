@@ -79,8 +79,8 @@ it before or between:
 >   naming the plugin version. Change with `/plugin configure dnbg-workflow`.)*
 > - ✅ **Summary files:** `<path>`. Change with
 >   `/plugin configure dnbg-agent-summaries`.
-> - ➖ **Auto-update:** recommended. Turn it on with `/plugin`, then
->   **Marketplaces**, **dnbg**, **Enable auto-update**.
+> - ✅ **Auto-update:** on. *(or: ➖ recommended. Turn it on with `/plugin`,
+>   then **Marketplaces**, **`<marketplace>`**, **Enable auto-update**.)*
 > - ✅ **Incomplete setup notice:** on. Turn it off with
 >   `/plugin configure dnbg-workflow`. *(or: ➖ off. Turn it on with
 >   `/plugin configure dnbg-workflow`.)*
@@ -103,6 +103,9 @@ lines there are, and what each says:
   `state=error` one "❌ **Bots:**" line saying what `references/roles.md` says
   of its `reason=`.
 - **Retrospectives** and **Version stamp** take their state from their checks.
+- **Auto-update** takes its state from the `check=auto-update` line: ✅ at
+  `on`, and the ➖ wording at `off` and `unknown`, where `<marketplace>` is the
+  line's `marketplace=`, else `dnbg`.
 - **Summary files** appears when the `check=summary-dir` line has a `value=`,
   which is the path.
 - **Incomplete setup notice** appears only while `open` names a check, with its
