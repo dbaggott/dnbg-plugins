@@ -6,21 +6,15 @@ I’ve spent over 25 years in software, including leading projects and teams and
 
 Honed over its first 7 months of real use across 35 repos, ~2k PRs, ~1k issues, 1.2M+ lines of code, and 10 languages. Still sharpening.
 
-**Quick start.** Run these one at a time in Claude Code:
+**Quick start.** Run these in a terminal:
 
 ```
-/plugin marketplace add dbaggott/dnbg-plugins
+claude plugin marketplace add dbaggott/dnbg-plugins
+claude plugin install dnbg-all@dnbg
+claude
 ```
 
-```
-/plugin install dnbg-all@dnbg
-```
-
-```
-/dnbg-workflow:setup
-```
-
-The last one guides you through the rest. Nothing is enforced until you choose which repos it applies to.
+Then run `/dnbg-workflow:setup` in the session. It guides you through the rest. Nothing is enforced until you choose which repos it applies to.
 
 ## Opinions
 
@@ -88,9 +82,9 @@ It finishes with one list of every setting, what it is now and how to change it,
 
 **Taking only part of it.** `dnbg-all` installs all four plugins. To take less, install any of `dnbg-workflow@dnbg`, `dnbg-practices@dnbg`, `dnbg-work-summary@dnbg` or `dnbg-agent-summaries@dnbg`; none requires another. Only `dnbg-workflow` has a setup step.
 
-**Install scope.** The install asks for one: `user` for one person across many repos, or `project` for one repo shared with a team.
+**Install scope.** The quick start installs at `user` scope, for one person across many repos. For one repo shared with a team, run both commands from that repo with `--scope project`.
 
-**Installed before the plugins moved to this repo?** Run `/plugin marketplace remove dnbg`, then the three commands again.
+**Installed before the plugins moved to this repo?** Run `claude plugin marketplace remove dnbg`, then the quick start again.
 
 [`docs/configuration.md`](docs/configuration.md) lists every setting.
 
