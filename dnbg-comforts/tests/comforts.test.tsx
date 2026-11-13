@@ -5,7 +5,7 @@ const BAND = {
   plugin: 'dnbg-comforts',
   component: 'AbovePrompt',
   surface: 'terminal',
-  props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
+  props: { hasSurvey: false, isWorking: false, isCollapsed: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
 } as const
 
 const HOME = '/home/u'
