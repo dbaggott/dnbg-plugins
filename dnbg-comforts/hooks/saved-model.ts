@@ -1,10 +1,12 @@
-import type { EngineInterface, On, PluginOptions } from 'claude-code'
+import { atom, read, update } from 'claude-code'
+import type { EngineInterface } from 'claude-code'
 
 import { isModel } from './models'
-import { standardModel } from './options'
 import { configDir, readJson } from './settings'
 
-const STORE_KEY = 'savedModel'
+// The saved model this session last saw. Session state: another session's
+// view of the settings file must not stand in for this one's.
+const lastSaved = atom({ plugin: 'dnbg-comforts', key: 'lastSaved' } as const, '')
 
 /** The `model` saved in user settings for future sessions; '' when none is. */
 async function savedModel($: EngineInterface): Promise<string> {
@@ -14,28 +16,25 @@ async function savedModel($: EngineInterface): Promise<string> {
 }
 
 export async function startSavedModel($: EngineInterface): Promise<void> {
-  await $.store.set(STORE_KEY, await savedModel($))
+  const saved = await savedModel($)
+  await update($, lastSaved, () => saved)
 }
 
-export function registerSavedModel(on: On, options: PluginOptions): void {
-  const standard = standardModel(options)
+/**
+ * Says so when the model saved for future sessions changed to a non-standard
+ * one. A switch for this session only leaves the saved model as it was, so
+ * comparing against the last one seen tells the two apart.
+ */
+export async function onSavedModelSwitch($: EngineInterface, standard: string): Promise<void> {
+  const saved = await savedModel($)
+  const previous = await read($, lastSaved)
+  await update($, lastSaved, () => saved)
 
-  // A switch for this session only leaves the saved model as it was, so
-  // comparing against the last one seen tells the two apart.
-  on('classic.PostModelSwitch', async ($, e, next) => {
-    const result = await next(e)
-    const saved = await savedModel($)
-    const previous = await $.store.get(STORE_KEY)
-    await $.store.set(STORE_KEY, saved)
-
-    if (saved !== previous && saved !== '' && !isModel(saved, standard)) {
-      const message = `FYI: you set your model to ${saved} for all future sessions.`
-      // The toast first: it shows in every session, the notification only
-      // where the terminal takes one.
-      $.ui.toast(message)
-      await $.ui.notify(message, { title: 'Claude Code' })
-    }
-
-    return result
-  })
+  if (saved !== previous && saved !== '' && !isModel(saved, standard)) {
+    const message = `FYI: you set your model to ${saved} for all future sessions.`
+    // The toast first: it shows in every session, the notification only
+    // where the terminal takes one.
+    $.ui.toast(message)
+    await $.ui.notify(message, { title: 'Claude Code' })
+  }
 }

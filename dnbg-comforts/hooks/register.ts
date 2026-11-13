@@ -1,23 +1,34 @@
 import type { Register } from 'claude-code'
 
-import { registerBand, startBand } from './band'
+import { onModelSwitch, registerBand, startBand } from './band'
 import { registerLater, startLater } from './later'
-import { registerSavedModel, startSavedModel } from './saved-model'
+import { standardModel } from './options'
+import { onSavedModelSwitch, startSavedModel } from './saved-model'
 import { registerTranscripts } from './transcripts'
 
 export const register: Register = (on, options) => {
-  // One session.start for the module: the engine takes one per event.
+  const standard = standardModel(options)
+
+  // One hook per event for the module: the engine takes no second.
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     await startLater($)
     await startSavedModel($)
-    await startBand($, options)
+    // Headless runs draw no band.
+    if (e.isInteractive) await startBand($, options)
 
     return started
   })
 
+  on('classic.PostModelSwitch', async ($, e, next) => {
+    const result = await next(e)
+    await onSavedModelSwitch($, standard)
+    await onModelSwitch($, e.cache_ttl, standard)
+
+    return result
+  })
+
   registerLater(on)
   registerBand(on, options)
-  registerSavedModel(on, options)
   registerTranscripts(on, options)
 }

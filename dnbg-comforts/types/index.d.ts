@@ -1,5 +1,5 @@
-/** A model other than the standard one, as the usage band flags it. */
-export type ModelFlag = { name: string; isPricier: boolean }
+/** A model other than the standard one, as the usage band flags it, by its family's price against the standard's. */
+export type ModelFlag = { name: string; cost: 'more' | 'same' | 'less' }
 
 /** The prompt cache's estimated state: minutes left while warm, null once cold. */
 export type CacheState = { minutesLeft: number | null }
@@ -13,6 +13,8 @@ declare module 'claude-code' {
       lastResponseAt: number | null
       compactThreshold: number | null
       pendingUpdates: string[]
+      cacheTtlMs: number | null
+      lastSaved: string
     }
   }
 }

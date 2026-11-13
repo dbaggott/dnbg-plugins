@@ -2,20 +2,21 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 
 import type { UsageLine } from '../types'
-import { displayName, isModel, priceRank } from './models'
+import { costAgainst, displayName, isModel } from './models'
 import { standardModel } from './options'
 import { findPending } from './updates'
 
-const usage = atom({ plugin: 'dnbg-comforts', key: 'usage' } as const, { model: null, figures: '', cache: null }, { shape: 'usage-2' })
+const usage = atom({ plugin: 'dnbg-comforts', key: 'usage' } as const, { model: null, figures: '', cache: null }, { shape: 'usage-3' })
 // When the last turn ended; kept in state so a reload keeps the cache countdown.
 const lastResponseAt = atom({ plugin: 'dnbg-comforts', key: 'lastResponseAt' } as const, null)
 const compactThreshold = atom({ plugin: 'dnbg-comforts', key: 'compactThreshold' } as const, null)
 const pendingUpdates = atom({ plugin: 'dnbg-comforts', key: 'pendingUpdates' } as const, [])
+// The cache lifetime a model switch reported; until one does, it is assumed.
+const cacheTtlMs = atom({ plugin: 'dnbg-comforts', key: 'cacheTtlMs' } as const, null)
 
 const REFRESH_MS = 15_000
-// Assumed rather than read: the figures a mod can read carry no cache
-// lifetime, and a subscription session gets an hour. Hence the `~`.
-const CACHE_TTL_MS = 60 * 60 * 1000
+const HOUR_MS = 60 * 60 * 1000
+const FIVE_MINUTES_MS = 5 * 60 * 1000
 const LIMIT_LABELS: Record<string, string> = { five_hour: 'session', seven_day: 'week' }
 
 function span(ms: number): string {
@@ -58,10 +59,13 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
 
   const flag = isModel(model, standard)
     ? null
-    : { name: displayName(model), isPricier: priceRank(model) > priceRank(standard) }
+    : { name: displayName(model), cost: costAgainst(model, standard) }
 
+  // Unreported, the lifetime is assumed from the plan: an hour on a subscription
+  // (usage windows reported), five minutes otherwise. Hence the `~`.
+  const ttl = (await read($, cacheTtlMs)) ?? (figures.rateLimits.length > 0 ? HOUR_MS : FIVE_MINUTES_MS)
   const respondedAt = await read($, lastResponseAt)
-  const left = respondedAt === null ? null : respondedAt + CACHE_TTL_MS - now
+  const left = respondedAt === null ? null : respondedAt + ttl - now
   const cache = left === null ? null : { minutesLeft: left > 0 ? Math.round(left / 60000) : null }
 
   return { model: flag, figures: parts.join(' · '), cache }
@@ -72,13 +76,27 @@ async function refresh($: EngineInterface, standard: string): Promise<void> {
   await update($, usage, () => line)
 }
 
-export async function startBand($: EngineInterface, options: PluginOptions): Promise<void> {
-  const standard = standardModel(options)
+async function checkUpdates($: EngineInterface): Promise<void> {
   const pending = await findPending($)
   await update($, pendingUpdates, () => pending)
+}
+
+/** A model switch forfeits the cache: the next request writes it afresh. */
+export async function onModelSwitch($: EngineInterface, ttl: '5m' | '1h', standard: string): Promise<void> {
+  await update($, cacheTtlMs, () => (ttl === '1h' ? HOUR_MS : FIVE_MINUTES_MS))
+  await update($, lastResponseAt, current => (current === null ? null : 0))
+  await refresh($, standard)
+}
+
+export async function startBand($: EngineInterface, options: PluginOptions): Promise<void> {
+  const standard = standardModel(options)
+  await checkUpdates($)
   await measureThreshold($)
   await refresh($, standard)
-  await $.clock.every(REFRESH_MS, () => void refresh($, standard))
+  // A failed refresh leaves the last figures up and is logged; the next one retries.
+  await $.clock.every(REFRESH_MS, () => {
+    refresh($, standard).catch(error => $.ui.log(`usage band refresh failed: ${String(error)}`))
+  })
 }
 
 export function registerBand(on: On, options: PluginOptions): void {
@@ -88,6 +106,8 @@ export function registerBand(on: On, options: PluginOptions): void {
     const done = await next(e)
     const now = await $.clock.now()
     await update($, lastResponseAt, () => now)
+    // Auto-update can land the marketplace copy after session start.
+    await checkUpdates($)
     await measureThreshold($)
     await refresh($, standard)
 
@@ -102,12 +122,9 @@ export function registerBand(on: On, options: PluginOptions): void {
 
     return (
       <Box marginTop={1}>
-        {line.model !== null &&
-          (line.model.isPricier ? (
-            <Text bold color="white" backgroundColor="red">{` ⚠ ${line.model.name} `}</Text>
-          ) : (
-            <Text bold color="white" backgroundColor="#5b8bd9">{` ${line.model.name} `}</Text>
-          ))}
+        {line.model?.cost === 'more' && <Text bold color="white" backgroundColor="red">{` ⚠ ${line.model.name} `}</Text>}
+        {line.model?.cost === 'less' && <Text bold color="white" backgroundColor="#5b8bd9">{` ${line.model.name} `}</Text>}
+        {line.model?.cost === 'same' && <Text bold>{line.model.name}</Text>}
         {line.model !== null && line.figures !== '' && <Text dimColor>{'  '}</Text>}
         <Text dimColor>{line.figures}</Text>
         {line.cache !== null && line.figures !== '' && <Text dimColor>{' · '}</Text>}

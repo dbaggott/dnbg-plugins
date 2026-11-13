@@ -2,7 +2,7 @@ import type { EngineInterface } from 'claude-code'
 
 import { configDir, readJson } from './settings'
 
-type Installed = { plugins?: Record<string, { version?: string }[]> }
+type Installed = { plugins?: Record<string, { scope?: string; version?: string }[]> }
 type Catalog = { plugins?: { name?: string; source?: unknown }[] }
 
 /**
@@ -17,7 +17,8 @@ export async function findPending($: EngineInterface): Promise<string[]> {
 
   for (const [id, installs] of Object.entries(installed?.plugins ?? {})) {
     const [name, marketplace] = id.split('@')
-    const version = installs[0]?.version
+    // The user-scope install is the one every session loads.
+    const version = (installs.find(install => install.scope === 'user') ?? installs[0])?.version
     if (!name || !marketplace || !version) continue
 
     const root = `${plugins}/marketplaces/${marketplace}`

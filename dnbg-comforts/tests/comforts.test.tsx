@@ -134,3 +134,80 @@ test('a new session shows no cost before its first response', async ($, on) => {
   expect((await ui.find({ type: 'Text', text: /\$/ }))?.text).toBeUndefined()
   await ui.unmount()
 })
+
+const SWITCH = { from_model: 'claude-opus-5-5', to_model: 'claude-sonnet-5-5', requested_model: 'sonnet', source: 'command', context_tokens: 0, prompt_cache_warm: true, cache_ttl: '1h', estimated_cache_write_usd: 0, pricing: 'catalog' } as const
+
+test('a dated or suffixed model id reads as its family and version', async ($, on) => {
+  world(on, 'claude-haiku-4-5-20251001[1m]')
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(BAND)
+  expect((await ui.find({ type: 'Text', text: /HAIKU/ }))?.text).toBe(' HAIKU 4.5 ')
+  await ui.unmount()
+})
+
+test('another model of the standard family is named without a cost colour', { options: { standard_model: 'claude-opus-5-5' } }, async ($, on) => {
+  world(on, 'claude-opus-4-1')
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount(BAND)
+  const name = await ui.find({ type: 'Text', text: /OPUS/ })
+  expect(name?.text).toBe('OPUS 4.1')
+  expect(name?.props.backgroundColor).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a model switch leaves the cache cold', async ($, on) => {
+  world(on, 'claude-opus-5-5')
+  on('turn.complete', () => ({ text: '' }))
+  on('classic.PostModelSwitch', () => ({}))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+  await $.classic.PostModelSwitch(SWITCH)
+
+  const ui = await $.ui.mount(BAND)
+  expect((await ui.find({ type: 'Text', text: /cache/ }))?.text).toBe(' cache ~cold ')
+  await ui.unmount()
+})
+
+test('saving the standard model by its alias is not news when the standard is a full id', { options: { standard_model: 'claude-opus-5-5' } }, async ($, on) => {
+  const files: Record<string, string> = { [SETTINGS]: '{"model":"sonnet"}' }
+  world(on, 'claude-opus-5-5', files)
+  const notes: string[] = []
+  on('ui.notify', (_, e) => (notes.push(e.text), { value: { isSent: true, channel: 'iterm2' } }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('classic.PostModelSwitch', () => ({}))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  files[SETTINGS] = '{"model":"opus"}'
+  await $.classic.PostModelSwitch(SWITCH)
+
+  expect(notes).toEqual([])
+})
+
+test('before compacting, the transcript is copied under the data directory', async ($, on) => {
+  world(on, 'claude-opus-5-5')
+  const runs: string[][] = []
+  on('process.run', (_, e) => (runs.push([...e.argv]), { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+  on('classic.PreCompact', () => ({}))
+
+  await $.classic.PreCompact({ trigger: 'auto', custom_instructions: null, session_id: 's1', transcript_path: '/t/s1.jsonl' })
+
+  expect(runs[0]).toEqual(['mkdir', '-p', `${HOME}/.claude/dnbg/transcripts/s1`])
+  expect(runs[1]?.slice(0, 2)).toEqual(['cp', '/t/s1.jsonl'])
+  expect(runs[1]?.[2]).toMatch(/^\/home\/u\/\.claude\/dnbg\/transcripts\/s1\/2026-01-01T00-00-00-000Z\.jsonl$/)
+})
+
+test('a copy that cannot run is reported, and the compaction goes ahead', async ($, on) => {
+  world(on, 'claude-opus-5-5')
+  const toasts: string[] = []
+  let compacted = false
+  on('process.run', () => {
+    throw new Error('spawn mkdir ENOENT')
+  })
+  on('ui.toast', (_, e) => (toasts.push(e.text), { value: undefined }))
+  on('classic.PreCompact', () => ((compacted = true), {}))
+
+  await $.classic.PreCompact({ trigger: 'auto', custom_instructions: null, session_id: 's1', transcript_path: '/t/s1.jsonl' })
+
+  expect(compacted).toBe(true)
+  expect(toasts[0]).toContain('Could not copy the transcript before compacting')
+})
