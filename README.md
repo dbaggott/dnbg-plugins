@@ -123,7 +123,7 @@ Hooks, all in `dnbg-workflow`:
 | `inject-rules.sh` | puts the always-on rules in context at session start |
 | `inject-rules-subagent.sh` | does the same for every subagent |
 | `role-fallback-notice.sh` | names any role that will post as you |
-| `setup-nudge.sh` | tells you that setup is not finished, until it is or you turn the notice off |
+| `setup-nudge.sh` | tells you to update Claude Code when it is older than the plugins support, and otherwise that setup is not finished, until it is or you turn the notice off |
 | `check-worktree.sh` | blocks edits to tracked files in a configured repo’s main checkout |
 | `check-issue-create.sh` | blocks `gh issue create` in a configured repo until `issue-workflow` is loaded |
 
