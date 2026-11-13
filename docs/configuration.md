@@ -27,7 +27,7 @@ Edit with `/plugin configure dnbg-workflow`.
 | `retrospectives` | off | On: each agent writes a file on where the process slowed it when its work ends. Off: it reports in chat only where a skill was wrong or had to be worked around |
 | `retrospective_dir` | `<data_dir>/retrospectives` | Where those files go. Absolute or under `~/` |
 | `version_stamp` | off | On: PR descriptions, reviews and issue claim comments end with a hidden `<!-- dnbg-workflow <version> -->` |
-| `setup_notice` | on | On: each session opens with a one-line notice while `/dnbg-workflow:setup` still has something open, such as no accounts or no reviewer bot |
+| `setup_notice` | on | On: each session opens with a one-line notice while `/dnbg-workflow:setup` still has something open, such as no accounts or no reviewer bot, or, when Claude Code is older than the plugins support, a notice to update it instead |
 
 #### `velocity-tradeoff`
 

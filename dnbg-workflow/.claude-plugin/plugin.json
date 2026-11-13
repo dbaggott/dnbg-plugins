@@ -3,6 +3,9 @@
   "name": "dnbg-workflow",
   "description": "Opinionated GitHub workflow: worktree + draft PR flow, self-documenting issues, and an independent PR reviewer bot.",
   "version": "2026.11.24",
+  "engines": {
+    "claude-code": ">=2.1.207"
+  },
   "author": {
     "name": "Dan Baggott",
     "url": "https://github.com/dbaggott"
@@ -62,7 +65,7 @@
     "setup_notice": {
       "type": "boolean",
       "title": "Show a notice at session start while setup is incomplete",
-      "description": "On, a new session opens with a one-line notice pointing at /dnbg-workflow:setup while that setup is incomplete: no accounts, no reviewer bot, a missing tool, no gh login, or a Claude Code older than the plugin supports. Only you see it. Turn it off when incomplete is where you mean to stay.",
+      "description": "On, a new session opens with a one-line notice while setup is incomplete: to update Claude Code when it is older than the plugins support, and otherwise pointing at /dnbg-workflow:setup for no accounts, no reviewer bot, a missing tool or no gh login. Only you see it. Turn it off when incomplete is where you mean to stay.",
       "default": true
     }
   }

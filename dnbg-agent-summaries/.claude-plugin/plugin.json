@@ -3,6 +3,9 @@
   "name": "dnbg-agent-summaries",
   "description": "Keep the summary files agents write (research, design proposals, issue drafts) in one directory with a status field, and sweep the stale ones into an archive. No hooks, no forge.",
   "version": "2026.11.3",
+  "engines": {
+    "claude-code": ">=2.1.207"
+  },
   "author": {
     "name": "Dan Baggott",
     "url": "https://github.com/dbaggott"

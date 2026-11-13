@@ -14,8 +14,6 @@ claude plugin install dnbg-all@dnbg
 claude
 ```
 
-It needs Claude Code v2.1.207 or newer, and v2.1.299 for `dnbg-comforts` ([requirements](docs/requirements.md)). Native and npm installs update themselves; Homebrew and other package-manager installs don't by default, so upgrade those first (`brew upgrade claude-code`, or `claude-code@latest` if that is the cask you installed).
-
 Then run `/dnbg-workflow:setup` in the session. It guides you through the rest. Nothing is enforced until you choose which repos it applies to.
 
 ## Opinions
@@ -125,7 +123,7 @@ Hooks, all in `dnbg-workflow`:
 | `inject-rules.sh` | puts the always-on rules in context at session start |
 | `inject-rules-subagent.sh` | does the same for every subagent |
 | `role-fallback-notice.sh` | names any role that will post as you |
-| `setup-nudge.sh` | tells you that setup is not finished, until it is or you turn the notice off |
+| `setup-nudge.sh` | tells you to update Claude Code when it is older than the plugins support, and otherwise that setup is not finished, until it is or you turn the notice off |
 | `check-worktree.sh` | blocks edits to tracked files in a configured repo’s main checkout |
 | `check-issue-create.sh` | blocks `gh issue create` in a configured repo until `issue-workflow` is loaded |
 
@@ -143,7 +141,7 @@ These hooks make no network calls, write no files and hold no credentials. They 
 
 ## History
 
-These plugins started at a startup I co-founded. We were building an AI product and took an AI-first stance: if AI couldn’t build our product, we weren’t confident a product built on AI could succeed. As a matter of discipline, we didn’t write or review any code ourselves. It quickly became clear that wasn’t viable without tooling around the agents. That tooling was the seed of this project.
+These plugins began at a startup I co-founded. We were building an AI product and took an AI-first stance: if AI couldn’t build our product, we weren’t confident a product built on AI could succeed. As a matter of discipline, we didn’t write or review any code ourselves. It quickly became clear that wasn’t viable without tooling around the agents. That tooling was the seed of this project.
 
 ## Contributing
 

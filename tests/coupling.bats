@@ -2384,15 +2384,25 @@ undeclared_placeholders() {  # <plugin-dir>
     || { echo "a manifest with no userConfig did not fail both placeholders: $output"; false; }
 }
 
-# The setup check compares the client against the floor the requirements page
-# states. The page is not shipped with the plugin, so the script carries its own
-# copy of the number.
-@test "setup-check.sh's Claude Code floor is the one docs/requirements.md states" {
-  local doc script
+# The requirements page states the floors. It is not shipped with the plugins,
+# so the setup check and each manifest's `engines` carry their own copies.
+@test "the Claude Code floors in setup-check.sh and every manifest are the ones docs/requirements.md states" {
+  local doc comforts script script_comforts p want got
   doc=$(sed -n 's/^\*\*Claude Code v\([0-9.]*[0-9]\) or newer\.\*\*.*/\1/p' "$ROOT/docs/requirements.md")
+  comforts=$(sed -n 's/^`dnbg-comforts` needs \*\*v\([0-9.]*[0-9]\) or newer\*\*.*/\1/p' "$ROOT/docs/requirements.md")
   script=$(sed -n 's/^CLAUDE_CODE_FLOOR=//p' "$ROOT/dnbg-workflow/scripts/setup-check.sh")
+  script_comforts=$(sed -n 's/^COMFORTS_FLOOR=//p' "$ROOT/dnbg-workflow/scripts/setup-check.sh")
   [ -n "$doc" ] || { echo "no floor parsed out of docs/requirements.md"; false; }
+  [ -n "$comforts" ] || { echo "no dnbg-comforts floor parsed out of docs/requirements.md"; false; }
   [ "$doc" = "$script" ] || { echo "docs say $doc, setup-check.sh says $script"; false; }
+  [ "$comforts" = "$script_comforts" ] || { echo "docs say $comforts for dnbg-comforts, setup-check.sh says $script_comforts"; false; }
+  for p in "$ROOT"/dnbg-*/.claude-plugin/plugin.json; do
+    want=">=$doc"
+    # dnbg-all installs dnbg-comforts, so it needs that plugin's floor too.
+    case "$(jq -r .name "$p")" in dnbg-comforts|dnbg-all) want=">=$comforts" ;; esac
+    got=$(jq -r '.engines["claude-code"] // "none"' "$p")
+    [ "$got" = "$want" ] || { echo "$p: engines says $got, docs say $want"; false; }
+  done
 }
 
 @test "setup-check.sh looks for the tools docs/requirements.md lists" {

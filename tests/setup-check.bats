@@ -14,7 +14,7 @@ setup() {
   echo '{"name":"dnbg-workflow"}' > "$TREE/.claude-plugin/plugin.json"
 
   export CLAUDE_CONFIG_DIR="$BATS_TEST_TMPDIR/claude"
-  unset DISABLE_AUTOUPDATER FORCE_AUTOUPDATE_PLUGINS
+  unset DISABLE_AUTOUPDATER FORCE_AUTOUPDATE_PLUGINS AI_AGENT
   mkdir -p "$CLAUDE_CONFIG_DIR/plugins"
   BIN="$BATS_TEST_TMPDIR/path"; mkdir -p "$BIN"
   # What the scripts themselves run, then the six tools the check looks for.
@@ -162,6 +162,42 @@ STUB
   claude_version "1.9.999"
   check --owners=acme
   has_line "check=claude-code state=below version=1.9.999 floor=2.1.207"
+}
+
+@test "the running client's own version wins over a claude on PATH" {
+  export DNBG_REVIEWER_APP_ID=42
+  claude_version "2.1.311 (Claude Code)"
+  AI_AGENT=claude-code_2-1-197_harness check --owners=acme
+  has_line "check=claude-code state=below version=2.1.197 floor=2.1.207"
+  AI_AGENT=claude-code_2-10-0_agent check --owners=acme
+  has_line "check=claude-code state=ok version=2.10.0 floor=2.1.207"
+  # Another tool's agent name says nothing about the client.
+  AI_AGENT=cursor_1-2-3_agent check --owners=acme
+  has_line "check=claude-code state=ok version=2.1.311 floor=2.1.207"
+}
+
+@test "dnbg-comforts installed raises the floor to its own" {
+  export DNBG_REVIEWER_APP_ID=42
+  record_installs dnbg-workflow@dnbg=here dnbg-comforts@dnbg
+  claude_version "2.1.298 (Claude Code)"
+  check --owners=acme
+  has_line "check=claude-code state=below version=2.1.298 floor=2.1.299"
+  has_line "result=OK setup=incomplete open=claude-code"
+  claude_version "2.1.299 (Claude Code)"
+  check --owners=acme
+  has_line "check=claude-code state=ok version=2.1.299 floor=2.1.299"
+  record_installs dnbg-workflow@dnbg=here
+  claude_version "2.1.298 (Claude Code)"
+  check --owners=acme
+  has_line "check=claude-code state=ok version=2.1.298 floor=2.1.207"
+  # Installed only for another project: it never loads here.
+  jq '.plugins["dnbg-comforts@dnbg"] = [{scope: "project", projectPath: "/elsewhere", installPath: "/x"}]' \
+    "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json" > "$BATS_TEST_TMPDIR/record"
+  mv "$BATS_TEST_TMPDIR/record" "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json"
+  CLAUDE_PROJECT_DIR=/here check --owners=acme
+  has_line "check=claude-code state=ok version=2.1.298 floor=2.1.207"
+  CLAUDE_PROJECT_DIR=/elsewhere check --owners=acme
+  has_line "check=claude-code state=below version=2.1.298 floor=2.1.299"
 }
 
 @test "a client version that cannot be read is unknown, and not open" {

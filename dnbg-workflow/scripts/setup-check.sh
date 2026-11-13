@@ -22,11 +22,16 @@
 # `open` names the checks that leave setup incomplete: `tools` missing,
 # `gh-auth` none, `claude-code` below, `owners` empty, and `roles` unconfigured
 # or error. `unknown` is a check that could not be read, and is never open:
-# `gh-auth` without `gh`, `claude-code` without a `claude` on PATH that prints a
-# version, `roles` and `plugins` without `jq`, `plugins` without Claude Code's
-# record of installs, `auto-update` without `jq`, at `self=none` or with no
-# entry for the marketplace. `retrospectives`, `version-stamp`, `setup-notice`,
-# `plugins`, `auto-update` and `summary-dir` are never open.
+# `gh-auth` without `gh`, `claude-code` with no version in `AI_AGENT` and no
+# `claude` on PATH that prints one, `roles` and `plugins` without `jq`,
+# `plugins` without Claude Code's record of installs, `auto-update` without
+# `jq`, at `self=none` or with no entry for the marketplace. `retrospectives`,
+# `version-stamp`, `setup-notice`, `plugins`, `auto-update` and `summary-dir`
+# are never open.
+#
+# The `claude-code` floor is `dnbg-comforts`' higher one while that plugin is
+# installed for the user or for this project, which is `CLAUDE_PROJECT_DIR` or
+# else the working directory.
 #
 # The four options are the plugin's own, which reach a hook as
 # CLAUDE_PLUGIN_OPTION_* and reach no script an agent runs, so the skill passes
@@ -63,8 +68,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 TOOLS="jq git gh python3 openssl curl"
 SIBLING_PLUGINS="dnbg-practices dnbg-work-summary dnbg-agent-summaries"
-# The floor docs/requirements.md states; tests/coupling.bats holds the two equal.
+# The floors docs/requirements.md states; tests/coupling.bats holds them equal.
 CLAUDE_CODE_FLOOR=2.1.207
+COMFORTS_FLOOR=2.1.299
 
 OWNERS=""; RETROSPECTIVES=""; VERSION_STAMP=""; SETUP_NOTICE=""
 for arg in "$@"; do
@@ -124,17 +130,32 @@ version_at_least() {  # <a> <b>
   return 0
 }
 
+CONFIG_DIR="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
+RECORD="$CONFIG_DIR/plugins/installed_plugins.json"
+
+# The client running this names its own version in `AI_AGENT`, as
+# `claude-code_2-1-311_<kind>` (read from v2.1.197's bundle, observed in a hook
+# on v2.1.311). A `claude` on PATH can be a different install, so it is only the
+# fallback.
 VERSION=""
-if has claude; then
+if [[ "${AI_AGENT:-}" =~ ^claude-code_([0-9]+)-([0-9]+)-([0-9]+)_ ]]; then
+  VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+elif has claude; then
   RAW=$(claude --version 2>/dev/null </dev/null || true)
   [[ "$RAW" =~ ^([0-9]+\.[0-9]+\.[0-9]+) ]] && VERSION="${BASH_REMATCH[1]}"
 fi
+FLOOR=$CLAUDE_CODE_FLOOR
+if has jq && jq -e --arg p "${CLAUDE_PROJECT_DIR:-$PWD}" '
+    any(.plugins | to_entries[] | select(.key | startswith("dnbg-comforts@")) | .value[]?;
+        .scope == "user" or .projectPath == $p)' "$RECORD" >/dev/null 2>&1; then
+  FLOOR=$COMFORTS_FLOOR
+fi
 if [ -z "$VERSION" ]; then
-  echo "check=claude-code state=unknown version=unknown floor=$CLAUDE_CODE_FLOOR"
-elif version_at_least "$VERSION" "$CLAUDE_CODE_FLOOR"; then
-  echo "check=claude-code state=ok version=$VERSION floor=$CLAUDE_CODE_FLOOR"
+  echo "check=claude-code state=unknown version=unknown floor=$FLOOR"
+elif version_at_least "$VERSION" "$FLOOR"; then
+  echo "check=claude-code state=ok version=$VERSION floor=$FLOOR"
 else
-  echo "check=claude-code state=below version=$VERSION floor=$CLAUDE_CODE_FLOOR"; open claude-code
+  echo "check=claude-code state=below version=$VERSION floor=$FLOOR"; open claude-code
 fi
 
 # Set means it names an owner: the hooks strip whitespace before matching, and
@@ -168,8 +189,6 @@ echo "check=retrospectives state=$(on_or_off "$RETROSPECTIVES")"
 echo "check=version-stamp state=$(on_or_off "$VERSION_STAMP")"
 echo "check=setup-notice state=$(on_unless_false "$SETUP_NOTICE")"
 
-CONFIG_DIR="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
-
 # Each entry reads `true` or `false` by its `autoUpdate`, and nothing when the
 # file holds no entry for the marketplace or cannot be read.
 auto_update_line() {  # <marketplace>
@@ -188,7 +207,6 @@ auto_update_line() {  # <marketplace>
     echo "check=auto-update state=off marketplace=$1"
   fi
 }
-RECORD="$CONFIG_DIR/plugins/installed_plugins.json"
 SUMMARY_DIR_LINE="check=summary-dir state=unknown"
 if has jq && KEYS=$(jq -r '.plugins | keys[]' "$RECORD" 2>/dev/null); then
   ROOT=$(cd "$HERE/.." && pwd)

@@ -3,6 +3,9 @@
   "name": "dnbg-work-summary",
   "description": "Turn your merged and open GitHub PRs into an audience-shaped recap — shipped work over a window, or what's in flight.",
   "version": "2026.11.2",
+  "engines": {
+    "claude-code": ">=2.1.207"
+  },
   "author": {
     "name": "Dan Baggott",
     "url": "https://github.com/dbaggott"
