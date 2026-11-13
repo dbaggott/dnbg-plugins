@@ -84,8 +84,28 @@
       ]
     },
     {
+      "name": "dnbg-comforts",
+      "description": "Small conveniences for the session itself: /later notes that wait for Claude's next turn, a quiet usage band above the prompt, a heads-up when your saved model changes, and a copy of the transcript before each compaction. No forge, no workflow opinions.",
+      "source": "./dnbg-comforts",
+      "author": {
+        "name": "Dan Baggott",
+        "url": "https://github.com/dbaggott"
+      },
+      "homepage": "https://github.com/dbaggott/dnbg-plugins",
+      "repository": "https://github.com/dbaggott/dnbg-plugins",
+      "license": "LicenseRef-PolyForm-Internal-Use-1.0.0 OR LicenseRef-PolyForm-Strict-1.0.0",
+      "category": "productivity",
+      "keywords": [
+        "status",
+        "usage",
+        "notes",
+        "model",
+        "transcript"
+      ]
+    },
+    {
       "name": "dnbg-all",
-      "description": "Everything: the workflow plugin, the coding practices, work summaries and agent summary files. Installs the other four.",
+      "description": "Everything: the workflow plugin, the coding practices, work summaries, agent summary files and session comforts. Installs the other five.",
       "source": "./dnbg-all",
       "author": {
         "name": "Dan Baggott",

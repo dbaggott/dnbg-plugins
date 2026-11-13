@@ -80,7 +80,7 @@ Runs on macOS or Linux, with GitHub as the forge ([details](docs/forge-support.m
 
 It finishes with one list of every setting, what it is now and how to change it, the optional ones such as retrospectives and auto-update included. Stop whenever you like, and run it again at any time to look at your setup or to change an answer.
 
-**Taking only part of it.** `dnbg-all` installs all four plugins. To take less, install any of `dnbg-workflow@dnbg`, `dnbg-practices@dnbg`, `dnbg-work-summary@dnbg` or `dnbg-agent-summaries@dnbg`; none requires another. Only `dnbg-workflow` has a setup step.
+**Taking only part of it.** `dnbg-all` installs all five plugins. To take less, install any of `dnbg-workflow@dnbg`, `dnbg-practices@dnbg`, `dnbg-work-summary@dnbg`, `dnbg-agent-summaries@dnbg` or `dnbg-comforts@dnbg`; none requires another. Only `dnbg-workflow` has a setup step.
 
 [`docs/configuration.md`](docs/configuration.md) lists every setting.
 
@@ -103,7 +103,18 @@ It finishes with one list of every setting, what it is now and how to change it,
 | `work-summary` | `dnbg-work-summary` | GitHub only | Turning your merged and open PRs into an audience-shaped recap |
 | `summary-review` | `dnbg-agent-summaries` | **Any** | Writing agent summary files with a status, and sweeping the stale ones into an archive |
 
-`dnbg-all` installs all four plugins.
+Session comforts, in `dnbg-comforts`, which runs on any forge and needs Claude Code v2.1.311:
+
+| Comfort | Does |
+| --- | --- |
+| `/later <note>` | leaves Claude a note it reads on its next turn, without starting one |
+| Usage band | a dim line above the prompt: context fill and where auto-compact runs, your plan's usage windows with their resets, an estimate of how long the prompt cache stays warm (yellow once cold), and the session's cost when you are not on a subscription |
+| Model badge | in the band, any model other than your standard one: red when it costs more, blue when it costs less |
+| Saved-model notice | tells you when the model saved for future sessions changes to one other than your standard |
+| Update notice | in the band, plugins whose new version is downloaded and waits for a restart |
+| Transcript copy | copies the transcript aside before each compaction, to `~/.claude/dnbg/transcripts/<session id>/`; the copies are kept until you delete them |
+
+`dnbg-all` installs all five plugins.
 
 Hooks, all in `dnbg-workflow`:
 
@@ -116,7 +127,7 @@ Hooks, all in `dnbg-workflow`:
 | `check-worktree.sh` | blocks edits to tracked files in a configured repo’s main checkout |
 | `check-issue-create.sh` | blocks `gh issue create` in a configured repo until `issue-workflow` is loaded |
 
-The hooks make no network calls, write no files and hold no credentials. They fail open: if a tool they need is missing, they stop protecting rather than stop you.
+These hooks make no network calls, write no files and hold no credentials. They fail open: if a tool they need is missing, they stop protecting rather than stop you.
 
 ## Documentation
 

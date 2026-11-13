@@ -217,6 +217,21 @@ EOF
   grep -qF "\`$DEFAULT_DATA_DIR\`" "$skill" || { echo "$skill does not state $DEFAULT_DATA_DIR"; false; }
 }
 
+# dnbg-comforts' hooks module resolves its own defaults, since an unset option
+# reaches it as the manifest default only when the manifest declares one.
+@test "dnbg-comforts' option defaults are the ones its hooks module falls back to" {
+  local manifest="$ROOT/dnbg-comforts/.claude-plugin/plugin.json"
+  local options="$ROOT/dnbg-comforts/hooks/options.ts"
+  # shellcheck source=../dnbg-workflow/hooks/lib.sh
+  . "$ROOT/dnbg-workflow/hooks/lib.sh"
+
+  [ "$(jq -r '.userConfig.data_dir.default' "$manifest")" = "$DEFAULT_DATA_DIR" ]
+  grep -qF "const DEFAULT_DATA_DIR = '$DEFAULT_DATA_DIR'" "$options" || { echo "$options does not default to $DEFAULT_DATA_DIR"; false; }
+  local model
+  model=$(jq -r '.userConfig.standard_model.default' "$manifest")
+  grep -qF "const DEFAULT_STANDARD_MODEL = '$model'" "$options" || { echo "$options does not default to $model"; false; }
+}
+
 # `version_stamp` is pinned separately rather than as another arm above, because
 # it has no lib.sh constant to compare against: it is a gate, and what an
 # unconfigured session does is decided by how `version_stamp_enabled` reads an
