@@ -14,6 +14,8 @@ claude plugin install dnbg-all@dnbg
 claude
 ```
 
+It needs Claude Code v2.1.207 or newer, and v2.1.299 for `dnbg-comforts` ([requirements](docs/requirements.md)). Native and npm installs update themselves; Homebrew and other package-manager installs don't, so run `brew upgrade --cask claude-code` or your package manager's equivalent first.
+
 Then run `/dnbg-workflow:setup` in the session. It guides you through the rest. Nothing is enforced until you choose which repos it applies to.
 
 ## Opinions
@@ -103,7 +105,7 @@ It finishes with one list of every setting, what it is now and how to change it,
 | `work-summary` | `dnbg-work-summary` | GitHub only | Turning your merged and open PRs into an audience-shaped recap |
 | `summary-review` | `dnbg-agent-summaries` | **Any** | Writing agent summary files with a status, and sweeping the stale ones into an archive |
 
-Session comforts, in `dnbg-comforts`, which runs on any forge and needs Claude Code v2.1.311:
+Session comforts, in `dnbg-comforts`, which runs on any forge and needs Claude Code v2.1.299:
 
 | Comfort | Does |
 | --- | --- |
