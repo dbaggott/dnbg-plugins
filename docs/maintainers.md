@@ -38,8 +38,13 @@ which is the arrangement that settled at v2.1.207 when `${user_config.*}`
 stopped substituting into shell-form fields, and `dnbg-all` resolves its
 `dependencies`, which arrived at v2.1.143.
 
-Both need re-deriving whenever the client moves under us, which is why they live
-here rather than in front of a reader deciding whether to install.
+`dnbg-comforts`' v2.1.299 is a tested boundary. On v2.1.296, the release
+before it, the client refuses the hooks module (`claude plugin validate` fails,
+and `claude plugin test` cannot load it); on v2.1.299 both pass. It was not
+exercised in a live session there.
+
+All of these need re-deriving whenever the client moves under us, which is why
+they live here rather than in front of a reader deciding whether to install.
 
 ## Where new content goes: skill vs always-on vs project CLAUDE.md
 
