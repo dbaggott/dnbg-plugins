@@ -6,7 +6,7 @@ import { displayName, isModel, priceRank } from './models'
 import { standardModel } from './options'
 import { findPending } from './updates'
 
-const usage = atom({ plugin: 'dnbg-comforts', key: 'usage' } as const, { model: null, figures: '' }, { shape: 'usage-1' })
+const usage = atom({ plugin: 'dnbg-comforts', key: 'usage' } as const, { model: null, figures: '', cache: null }, { shape: 'usage-2' })
 // When the last turn ended; kept in state so a reload keeps the cache countdown.
 const lastResponseAt = atom({ plugin: 'dnbg-comforts', key: 'lastResponseAt' } as const, null)
 const compactThreshold = atom({ plugin: 'dnbg-comforts', key: 'compactThreshold' } as const, null)
@@ -52,11 +52,6 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
   }
   // Usage windows are reported only on a subscription, where cost is moot.
   if (figures.rateLimits.length === 0 && figures.cost) parts.push(`$${figures.cost.usd.toFixed(2)}`)
-  const respondedAt = await read($, lastResponseAt)
-  if (respondedAt !== null) {
-    const left = respondedAt + CACHE_TTL_MS - now
-    parts.push(left > 0 ? `cache ~warm ${span(left)}` : 'cache ~cold')
-  }
   const updates = await read($, pendingUpdates)
   if (updates.length > 0) parts.push(`restart to update ${updates.join(', ')}`)
 
@@ -64,7 +59,11 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
     ? null
     : { name: displayName(model), isPricier: priceRank(model) > priceRank(standard) }
 
-  return { model: flag, figures: parts.join(' · ') }
+  const respondedAt = await read($, lastResponseAt)
+  const left = respondedAt === null ? null : respondedAt + CACHE_TTL_MS - now
+  const cache = left === null ? null : { minutesLeft: left > 0 ? Math.round(left / 60000) : null }
+
+  return { model: flag, figures: parts.join(' · '), cache }
 }
 
 async function refresh($: EngineInterface, standard: string): Promise<void> {
@@ -96,7 +95,7 @@ export function registerBand(on: On, options: PluginOptions): void {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const line = await read($, usage)
-    if (e.props.hasSurvey || (line.model === null && line.figures === '')) return next(e)
+    if (e.props.hasSurvey || (line.model === null && line.figures === '' && line.cache === null)) return next(e)
 
     const { Box, Text } = $.ui.resolve(e)
 
@@ -110,6 +109,14 @@ export function registerBand(on: On, options: PluginOptions): void {
           ))}
         {line.model !== null && line.figures !== '' && <Text dimColor>{'  '}</Text>}
         <Text dimColor>{line.figures}</Text>
+        {line.cache !== null && line.figures !== '' && <Text dimColor>{' · '}</Text>}
+        {line.cache !== null &&
+          (line.cache.minutesLeft === null ? (
+            // Cold: the next request re-sends the whole context uncached.
+            <Text color="black" backgroundColor="yellow">{' cache ~cold '}</Text>
+          ) : (
+            <Text dimColor>{`cache ~warm ${span(line.cache.minutesLeft * 60000)}`}</Text>
+          ))}
       </Box>
     )
   })
