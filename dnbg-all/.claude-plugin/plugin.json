@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "dnbg-all",
   "description": "Everything: the workflow plugin, the coding practices, work summaries, agent summary files and session comforts. Installs the other five.",
-  "version": "2026.11.1",
+  "version": "2026.11.2",
   "author": {
     "name": "Dan Baggott",
     "url": "https://github.com/dbaggott"
