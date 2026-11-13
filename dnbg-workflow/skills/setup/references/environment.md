@@ -31,5 +31,7 @@ is interactive: ask the user to type `! gh auth login`.
 ## `claude-code`
 
 `state=below` means the client's `version=` is older than `floor=`, the oldest
-version the plugin is known to work on. Nothing stops an older client loading
-it, and what breaks is not announced. Ask the user to update Claude Code.
+version the installed plugins are known to work on. Nothing stops an older
+client loading them, and what breaks is not announced. Ask the user to run
+`claude update` in a terminal, which names the package manager's command on an
+install it does not update itself.

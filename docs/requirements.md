@@ -1,9 +1,10 @@
 # Requirements
 
-**Claude Code v2.1.207 or newer.** The manifest format has no field for a
-minimum version, so this is documented rather than enforced — nothing stops an
-older client installing the plugin and misbehaving quietly. Verified working on
-v2.1.226. ([Where the floor comes
+**Claude Code v2.1.207 or newer.** Each plugin states its floor in its
+manifest's `engines`, which Claude Code enforces from v2.1.323. An older client
+ignores that field and installs anyway, so `dnbg-workflow` reads the running
+version at session start and, below the floor, tells you to run `claude update`.
+Verified working on v2.1.226. ([Where the floor comes
 from](maintainers.md#where-the-version-floor-comes-from), if you need it.)
 
 `dnbg-comforts` needs **v2.1.299 or newer**: it runs as a hooks module, and an

@@ -3,6 +3,9 @@
   "name": "dnbg-practices",
   "description": "Coding practices that apply on any host: design and clarity over expediency, security first, comment discipline, logging, and verifying what you don't know. No hooks, no forge.",
   "version": "2026.11.2",
+  "engines": {
+    "claude-code": ">=2.1.207"
+  },
   "author": {
     "name": "Dan Baggott",
     "url": "https://github.com/dbaggott"

@@ -3,6 +3,9 @@
   "name": "dnbg-all",
   "description": "Everything: the workflow plugin, the coding practices, work summaries, agent summary files and session comforts. Installs the other five.",
   "version": "2026.11.2",
+  "engines": {
+    "claude-code": ">=2.1.207"
+  },
   "author": {
     "name": "Dan Baggott",
     "url": "https://github.com/dbaggott"

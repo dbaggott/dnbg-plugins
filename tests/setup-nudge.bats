@@ -15,7 +15,7 @@ setup() {
   printf '#!/usr/bin/env bash\necho "2.1.311 (Claude Code)"\n' > "$STUB/claude"
   chmod +x "$STUB/claude"
   export CLAUDE_CONFIG_DIR="$BATS_TEST_TMPDIR/claude"
-  unset CLAUDE_PLUGIN_OPTION_OWNERS CLAUDE_PLUGIN_OPTION_SETUP_NOTICE CLAUDE_CODE_ENTRYPOINT NO_COLOR
+  unset CLAUDE_PLUGIN_OPTION_OWNERS CLAUDE_PLUGIN_OPTION_SETUP_NOTICE CLAUDE_CODE_ENTRYPOINT NO_COLOR AI_AGENT
 }
 
 message() { jq -er '.systemMessage' <<<"$output"; }
@@ -55,6 +55,17 @@ NOTICE='NOTICE: Run /dnbg-workflow:setup to finish configuration.'
   [ "$(message)" = "$NOTICE" ]
   CLAUDE_CODE_ENTRYPOINT=sdk-ts run "$NUDGE"
   [ "$(message)" = "$NOTICE" ]
+}
+
+@test "a client below the floor is told to update, in place of the setup command" {
+  AI_AGENT=claude-code_2-1-197_harness run "$NUDGE"
+  [ "$status" -eq 0 ]
+  [ "$(message)" = 'NOTICE: dnbg needs Claude Code 2.1.207 or newer, and this is 2.1.197. Run `claude update` in a terminal.' ]
+  export CLAUDE_PLUGIN_OPTION_OWNERS=acme DNBG_REVIEWER_APP_ID=42
+  AI_AGENT=claude-code_2-1-197_harness run "$NUDGE"
+  [[ "$(message)" == 'NOTICE: dnbg needs Claude Code 2.1.207 '* ]]
+  AI_AGENT=claude-code_2-1-197_harness CLAUDE_PLUGIN_OPTION_SETUP_NOTICE=false run "$NUDGE"
+  [ -z "$output" ]
 }
 
 @test "silent when owners is set and the reviewer configured" {

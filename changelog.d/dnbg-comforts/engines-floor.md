@@ -1,0 +1,1 @@
+The plugin now states its minimum Claude Code version, v2.1.299, in its manifest. Claude Code v2.1.323 and later will not install or load it on an older client, and `dnbg-workflow` tells you at session start when the client is too old for it.
