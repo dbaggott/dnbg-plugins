@@ -2398,7 +2398,8 @@ undeclared_placeholders() {  # <plugin-dir>
   [ "$comforts" = "$script_comforts" ] || { echo "docs say $comforts for dnbg-comforts, setup-check.sh says $script_comforts"; false; }
   for p in "$ROOT"/dnbg-*/.claude-plugin/plugin.json; do
     want=">=$doc"
-    [ "$(jq -r .name "$p")" = dnbg-comforts ] && want=">=$comforts"
+    # dnbg-all installs dnbg-comforts, so it needs that plugin's floor too.
+    case "$(jq -r .name "$p")" in dnbg-comforts|dnbg-all) want=">=$comforts" ;; esac
     got=$(jq -r '.engines["claude-code"] // "none"' "$p")
     [ "$got" = "$want" ] || { echo "$p: engines says $got, docs say $want"; false; }
   done

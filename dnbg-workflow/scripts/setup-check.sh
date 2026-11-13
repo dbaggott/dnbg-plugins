@@ -30,7 +30,8 @@
 # are never open.
 #
 # The `claude-code` floor is `dnbg-comforts`' higher one while that plugin is
-# installed at any scope.
+# installed for the user or for this project, which is `CLAUDE_PROJECT_DIR` or
+# else the working directory.
 #
 # The four options are the plugin's own, which reach a hook as
 # CLAUDE_PLUGIN_OPTION_* and reach no script an agent runs, so the skill passes
@@ -133,8 +134,9 @@ CONFIG_DIR="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
 RECORD="$CONFIG_DIR/plugins/installed_plugins.json"
 
 # The client running this names its own version in `AI_AGENT`, as
-# `claude-code_2-1-311_<kind>` (observed from v2.1.197 to v2.1.311). A `claude`
-# on PATH can be a different install, so it is only the fallback.
+# `claude-code_2-1-311_<kind>` (read from v2.1.197's bundle, observed in a hook
+# on v2.1.311). A `claude` on PATH can be a different install, so it is only the
+# fallback.
 VERSION=""
 if [[ "${AI_AGENT:-}" =~ ^claude-code_([0-9]+)-([0-9]+)-([0-9]+)_ ]]; then
   VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
@@ -143,7 +145,9 @@ elif has claude; then
   [[ "$RAW" =~ ^([0-9]+\.[0-9]+\.[0-9]+) ]] && VERSION="${BASH_REMATCH[1]}"
 fi
 FLOOR=$CLAUDE_CODE_FLOOR
-if has jq && jq -e '.plugins | keys | any(startswith("dnbg-comforts@"))' "$RECORD" >/dev/null 2>&1; then
+if has jq && jq -e --arg p "${CLAUDE_PROJECT_DIR:-$PWD}" '
+    any(.plugins | to_entries[] | select(.key | startswith("dnbg-comforts@")) | .value[]?;
+        .scope == "user" or .projectPath == $p)' "$RECORD" >/dev/null 2>&1; then
   FLOOR=$COMFORTS_FLOOR
 fi
 if [ -z "$VERSION" ]; then

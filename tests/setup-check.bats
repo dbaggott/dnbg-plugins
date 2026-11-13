@@ -190,6 +190,14 @@ STUB
   claude_version "2.1.298 (Claude Code)"
   check --owners=acme
   has_line "check=claude-code state=ok version=2.1.298 floor=2.1.207"
+  # Installed only for another project: it never loads here.
+  jq '.plugins["dnbg-comforts@dnbg"] = [{scope: "project", projectPath: "/elsewhere", installPath: "/x"}]' \
+    "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json" > "$BATS_TEST_TMPDIR/record"
+  mv "$BATS_TEST_TMPDIR/record" "$CLAUDE_CONFIG_DIR/plugins/installed_plugins.json"
+  CLAUDE_PROJECT_DIR=/here check --owners=acme
+  has_line "check=claude-code state=ok version=2.1.298 floor=2.1.207"
+  CLAUDE_PROJECT_DIR=/elsewhere check --owners=acme
+  has_line "check=claude-code state=below version=2.1.298 floor=2.1.299"
 }
 
 @test "a client version that cannot be read is unknown, and not open" {
