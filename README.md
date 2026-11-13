@@ -14,7 +14,7 @@ claude plugin install dnbg-all@dnbg
 claude
 ```
 
-It needs Claude Code v2.1.207 or newer, and v2.1.299 for `dnbg-comforts` ([requirements](docs/requirements.md)). Native and npm installs update themselves; Homebrew and other package-manager installs don't, so run `brew upgrade --cask claude-code` or your package manager's equivalent first.
+It needs Claude Code v2.1.207 or newer, and v2.1.299 for `dnbg-comforts` ([requirements](docs/requirements.md)). Native and npm installs update themselves; Homebrew and other package-manager installs don't by default, so upgrade those first (`brew upgrade claude-code`, or `claude-code@latest` if that is the cask you installed).
 
 Then run `/dnbg-workflow:setup` in the session. It guides you through the rest. Nothing is enforced until you choose which repos it applies to.
 
