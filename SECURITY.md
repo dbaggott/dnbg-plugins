@@ -257,9 +257,9 @@ Do these in order, for the exposed role's App, in its settings on GitHub
    forced: an App must always have at least one key, so the old one cannot be
    deleted until a new one exists. Deleting it invalidates it immediately.
    Only key *deletion* revokes — rotating the file on your disk does nothing.
-2. **Install the replacement.** `bootstrap.py --adopt <role>=<slug>` takes the
-   downloaded PEM, checks with GitHub that it is that App's key, and saves it
-   where the default setup reads it (`~/.config/dnbg/<role>/private-key.pem`,
+2. **Install the replacement.** `bootstrap.py --adopt <role>=<slug> --key
+   <role>=<path to the downloaded PEM>` checks with GitHub that it is that
+   App's key and saves it where the default setup reads it (`~/.config/dnbg/<role>/private-key.pem`,
    mode `0600`); with the key somewhere else, put it there yourself. Then
    confirm with `as-role.sh <role> <owner>/<repo> -- true`.
 3. **Consider the tokens already minted.** An installation token

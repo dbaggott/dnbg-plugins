@@ -244,6 +244,42 @@ PY
   [ "$(jq -r .slug "$REVIEWER_DIR/config.json")" = agent-reviewer-tester ]
 }
 
+@test "a role set up on this machine is not created over, and is pointed at --adopt" {
+  mkdir -p "$REVIEWER_DIR"; echo '{"slug":"existing"}' > "$REVIEWER_DIR/config.json"
+  bootstrap --roles reviewer
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--adopt reviewer=existing"* ]]
+  [ "$(jq -r .slug "$REVIEWER_DIR/config.json")" = existing ]
+  [ ! -e "$MANIFESTS.opened" ]
+}
+
+@test "a refused --key stops the run and names every role it did not reach" {
+  github '{"apps":{"agent-reviewer-tester":{"id":7,"owner":"tester"},"agent-author-tester":{"id":8,"owner":"tester"}},
+    "keys":{"KEY-8":"agent-author-tester"}}'
+  echo KEY-OTHER > "$BATS_TEST_TMPDIR/other.pem"; echo KEY-8 > "$BATS_TEST_TMPDIR/author.pem"
+  bootstrap --adopt reviewer=agent-reviewer-tester --adopt author=agent-author-tester \
+    --key "reviewer=$BATS_TEST_TMPDIR/other.pem" --key "author=$BATS_TEST_TMPDIR/author.pem"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Stopped before: author."* ]]
+  [ ! -e "$XDG_CONFIG_HOME/dnbg/author" ]
+}
+
+@test "--adopt is refused for a role whose key comes from its variables" {
+  github "{$YOURS}"
+  export DNBG_REVIEWER_PRIVATE_KEY_COMMAND='op read x'
+  bootstrap --adopt reviewer=agent-reviewer-tester
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"DNBG_REVIEWER_PRIVATE_KEY_COMMAND"* ]]
+  [ ! -e "$MANIFESTS.opened" ]
+}
+
+@test "--name with a role that is in --adopt is refused" {
+  github "{$YOURS}"
+  bootstrap --roles reviewer --name mine --adopt reviewer=agent-reviewer-tester
+  [ "$status" -eq 2 ]
+  [ ! -e "$MANIFESTS.opened" ]
+}
+
 @test "the Downloads watch ignores a matching file from before the page was served" {
   github "{$YOURS}"
   old="$HOME/Downloads/agent-reviewer-tester.2026-01-02.private-key.pem"

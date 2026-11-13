@@ -44,6 +44,7 @@ import math
 import os
 import re
 import secrets
+import shutil
 import stat
 import subprocess
 import sys
@@ -63,9 +64,9 @@ ROLES_DIR = Path(__file__).resolve().parent.parent.parent / "roles"
 NAME_LIMIT = 34
 # Where detect_role's walk over candidate names gives up.
 CANDIDATE_LIMIT = 20
-# Above any RSA private key's PEM, and below a pipe's buffer, which app_jwt
-# relies on.
-PEM_LIMIT = 16384
+# In bytes: above any RSA private key's PEM, and below the smallest pipe
+# buffer, which app_jwt relies on to hand openssl the key.
+PEM_LIMIT = 8192
 
 
 # The names lib-role.sh's role_valid accepts, so setup never creates an App for a
@@ -107,6 +108,15 @@ def is_configured(role: str) -> bool:
         role_env(role, f) for f in ("APP_ID", "PRIVATE_KEY", "PRIVATE_KEY_COMMAND"))
 
 
+def configured_slug(role: str) -> str:
+    """The slug of the App the role is set up with on this machine, if it says."""
+    try:
+        config = json.loads((default_config_dir(role) / "config.json").read_text())
+    except (OSError, ValueError):
+        config = {}
+    return role_env(role, "SLUG") or str(config.get("slug") or "")
+
+
 def gh_login() -> str:
     """Current `gh`-authenticated user login, for a unique default App name."""
     try:
@@ -144,8 +154,15 @@ def lookup_app(slug: str) -> dict | None:
             return None
         raise SystemExit(f"could not look up the App '{slug}': {out.stderr.strip()}")
     app = json.loads(out.stdout)
-    return {"slug": app["slug"], "app_id": str(app["id"]), "owner": app["owner"]["login"],
+    return {"slug": app["slug"], "app_id": str(app["id"]), "owner": owner_login_of(app),
             "owner_type": owner_type_of(app)}
+
+
+def owner_login_of(app: dict) -> str:
+    """The owning account's name, from an App as the API describes it. An
+    enterprise, which has no login, is named by its slug."""
+    owner = app.get("owner") or {}
+    return owner.get("login") or owner.get("slug") or ""
 
 
 def owner_type_of(app: dict) -> str:
@@ -245,9 +262,13 @@ def build_manifest(role: str, name: str, redirect_url: str, public: bool) -> dic
     }
 
 
+def role_data(role: str) -> dict:
+    return json.loads((ROLES_DIR / role / "permissions.json").read_text())
+
+
 def role_permissions(role: str) -> dict:
     """The role's App permission set, shared with mint-token.sh's runtime audit."""
-    return json.loads((ROLES_DIR / role / "permissions.json").read_text())["required"]
+    return role_data(role)["required"]
 
 
 def convert_manifest(code: str) -> dict:
@@ -319,12 +340,17 @@ class KeyRefused(Exception):
     """A key that was not saved. The message is worded for the operator."""
 
 
+class KeyUnchecked(KeyRefused):
+    """A key GitHub gave no verdict on, so offering it again may succeed."""
+
+
 def app_jwt(app_id: str, pem: str) -> str:
     """An App JWT signed with the key, as mint-token.sh signs one."""
     def b64url(raw: bytes) -> str:
         return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
-    if len(pem) > PEM_LIMIT:
+    key = pem.encode()
+    if len(key) > PEM_LIMIT:
         raise KeyRefused("That file is too large to be an App private key.")
     now = int(time.time())
     claims = {"iat": now - 60, "exp": now + 540, "iss": app_id}
@@ -334,13 +360,15 @@ def app_jwt(app_id: str, pem: str) -> str:
     # yet written anywhere.
     key_out, key_in = os.pipe()
     try:
-        os.write(key_in, pem.encode())
-        os.close(key_in)
+        try:
+            os.write(key_in, key)
+        finally:
+            os.close(key_in)
         signed = subprocess.run(
             ["openssl", "dgst", "-sha256", "-sign", f"/dev/fd/{key_out}", "-binary"],
             input=unsigned.encode(), capture_output=True, pass_fds=(key_out,))
-    except FileNotFoundError:
-        raise SystemExit("openssl is required to check a private key, and is not installed.")
+    except OSError as exc:
+        raise KeyUnchecked(f"The key could not be handed to openssl ({exc}).")
     finally:
         os.close(key_out)
     if signed.returncode != 0 or not signed.stdout:
@@ -367,15 +395,15 @@ def prove_key(app_id: str, pem: str) -> dict:
         if exc.code in (401, 404):
             raise KeyRefused(f"GitHub did not accept that key for the App with ID {app_id}: "
                              "it was generated for another App, or has since been deleted.")
-        raise KeyRefused(f"GitHub answered HTTP {exc.code} when the key was checked.")
-    except urllib.error.URLError as exc:
-        raise KeyRefused(f"GitHub could not be reached to check the key ({exc.reason}).")
+        raise KeyUnchecked(f"GitHub answered HTTP {exc.code} when the key was checked.")
+    except (OSError, ValueError) as exc:
+        raise KeyUnchecked(f"GitHub could not be asked about the key ({exc}).")
 
 
 def permission_shortfall(role: str, granted: dict) -> str:
     """Each permission the role needs that the App lacks, with its consequence,
     in mint-token.sh's wording; empty when none."""
-    spec = json.loads((ROLES_DIR / role / "permissions.json").read_text())
+    spec = role_data(role)
     rank = {"read": 1, "write": 2, "admin": 3}
     lines = []
     for perm, need in spec["required"].items():
@@ -403,8 +431,8 @@ def connect(target: dict, pem: str) -> dict:
               "  \"Repair / rotate\", \"A permission is missing\", in reviewer-setup's SKILL.md.",
               file=sys.stderr)
     try:
-        save_credentials(target["config_dir"], owner_type_of(app),
-                         app.get("owner", {}).get("login", ""), {**app, "pem": pem})
+        save_credentials(target["config_dir"], owner_type_of(app), owner_login_of(app),
+                         {**app, "pem": pem})
     except OSError as exc:
         raise KeyRefused(f"The key is the right one, but saving it to {target['config_dir']} "
                          f"failed ({exc}).")
@@ -471,6 +499,8 @@ for (const input of document.querySelectorAll('input[type=file]')) {
                                {method: 'POST', body: await input.files[0].text()});
     input.value = '';
     if (answer.ok) render(await answer.json());
+    else document.getElementById('status-' + input.dataset.role).textContent =
+      'That file was not taken: it is empty, or too large to be a private key.';
   });
 }
 poll();
@@ -534,16 +564,17 @@ def run_connect(args: argparse.Namespace, targets: list[dict], next_role: str | 
     stop_watching = threading.Event()
     flow: dict = {"tabs": not args.no_browser, "served_at": None}
 
-    def offer(role: str, pem: str, download: Path | None = None) -> None:
+    def offer(role: str, pem: str, download: Path | None = None) -> bool:
+        """Whether GitHub gave a verdict on the key, saved or refused."""
         with lock:
             if role in saved:
-                return
+                return True
             try:
                 saved[role] = connect(rows[role]["target"], pem)
             except KeyRefused as exc:
                 rows[role].update(state="refused",
                                   text=f"{exc} Still waiting for this bot's key.")
-                return
+                return not isinstance(exc, KeyUnchecked)
             rows[role]["state"] = "saved"
             if download is None:
                 rows[role]["text"] = f"{SAVED} The file you chose is still where it was, and is yours to delete."
@@ -559,24 +590,30 @@ def run_connect(args: argparse.Namespace, targets: list[dict], next_role: str | 
                           file=sys.stderr)
             if len(saved) == len(rows):
                 all_saved.set()
+            return True
 
     def watch() -> None:
         refused: set[tuple[Path, float]] = set()
+        retry_at: dict[Path, float] = {}
         while not stop_watching.wait(0.5):
             since = flow["served_at"]
             if since is None:
                 continue
             for role, row in rows.items():
                 for path, modified in downloaded_keys(row["target"]["slug"], since):
-                    if role in saved or (path, modified) in refused:
+                    if (role in saved or (path, modified) in refused
+                            or time.monotonic() < retry_at.get(path, 0)):
                         continue
                     try:
                         pem = path.read_text()
                     except (OSError, UnicodeDecodeError):
                         continue
-                    if pem.strip():
-                        offer(role, pem, path)
+                    if not pem.strip():
+                        continue
+                    if offer(role, pem, path):
                         refused.add((path, modified))
+                    else:
+                        retry_at[path] = time.monotonic() + 5
 
     def status() -> dict:
         done = all_saved.is_set()
@@ -930,6 +967,22 @@ def run(args: argparse.Namespace) -> int:
     # With --adopt alone, the run is the roles it names; --roles adds roles to create.
     roles = choose_roles(args.roles) if args.roles or not adopt else []
     creates = [r for r in roles if r not in adopt]
+    if args.name and not creates:
+        print("--name is for a role being created; the role named is in --adopt.",
+              file=sys.stderr)
+        return 2
+    for role in adopt:
+        elsewhere = [role_env_name(role, f) for f in ("APP_ID", "PRIVATE_KEY", "PRIVATE_KEY_COMMAND")
+                     if role_env(role, f)]
+        if elsewhere:
+            print(f"The {role} role takes its App from {', '.join(elsewhere)}, ahead of the "
+                  "files --adopt writes, so a key saved here would not be the one used. Unset "
+                  "it, or put the new key where that setting reads it.", file=sys.stderr)
+            return 2
+    if adopt and not shutil.which("openssl"):
+        print("openssl is required to check a private key, and is not installed.",
+              file=sys.stderr)
+        return 2
     if not creates and not adopt:
         print("Every role is already set up on this machine. To give it a new key for a "
               "role's App, pass --adopt <role>=<slug>.", file=sys.stderr)
@@ -966,6 +1019,12 @@ def run(args: argparse.Namespace) -> int:
             if args.name:
                 names[role] = args.name
                 continue
+            if is_configured(role):
+                slug = configured_slug(role) or "<slug>"
+                print(f"The {role} role is already set up on this machine. To give it a new "
+                      f"key for the same App, pass --adopt {role}={slug}; to create a second "
+                      "App in its place, pass --name.", file=sys.stderr)
+                return 2
             found = detect_role(role, login, owners)
             if found["state"] == "yours":
                 print(f"Your {role} bot already exists: '{found['slug']}'. Connect this machine "
@@ -984,7 +1043,9 @@ def run(args: argparse.Namespace) -> int:
 
     done: list[dict] = []
 
-    def stop(unreached: list[str]) -> int:
+    def stop(failed: str | None = None) -> int:
+        reached = {summary["role"] for summary in done} | {failed}
+        unreached = [r for r in list(adopt) + creates if r not in reached]
         if unreached:
             print(f"Stopped before: {', '.join(unreached)}.", file=sys.stderr)
         print(json.dumps(done, indent=2))
@@ -998,7 +1059,7 @@ def run(args: argparse.Namespace) -> int:
             done.append(connect(target, keys[role]))
         except KeyRefused as exc:
             print(f"--key {role}={key_paths[role]}: {exc}", file=sys.stderr)
-            return stop([t["role"] for t in targets if t["role"] not in keys] + creates)
+            return stop(role)
         print(f"{key_paths[role]} is saved as the {role} bot's key; that copy is the "
               "operator's to delete.", file=sys.stderr)
     on_page = [t for t in targets if t["role"] not in keys]
@@ -1008,14 +1069,14 @@ def run(args: argparse.Namespace) -> int:
         missed = [t["role"] for t in on_page if t["role"] not in saved]
         if missed:
             print(f"Not connected: {', '.join(missed)}.", file=sys.stderr)
-            return stop(creates)
+            return stop()
 
     created: list[dict] = []
     for role in creates:
         left = creates[creates.index(role) + 1:]
         summary = run_flow(args, role, names[role], config_dirs[role], created, left)
         if summary is None:
-            return stop(left)
+            return stop(role)
         created.append(summary)
         done.append(summary)
     print(json.dumps(done, indent=2))

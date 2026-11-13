@@ -41,9 +41,9 @@ and must work.
   helpers need them).
 - A role whose credentials already exist (default
   `~/.config/dnbg/<role>/config.json`) is set up; the bootstrap skips it unless
-  you name it. Naming it connects this machine to the same App again, replacing
-  its key here. A second App for a role takes `--name`; only do that
-  deliberately.
+  you name it. Naming it in `--roles` is refused: `--adopt <role>=<slug>`
+  connects this machine to the same App again, replacing its key here, and a
+  second App for the role takes `--name`; only do that deliberately.
 
 ## Ownership model
 
@@ -132,8 +132,9 @@ settings from its row, finds its credentials there and generates a new
 the downloaded key up from `~/Downloads`, checks with GitHub that it is that
 App's key, saves it, and removes the download. Each row also takes the file
 through a file picker, for a download saved elsewhere or a browser on another
-machine. An operator who already has the key file skips the page for that role
-with `--key <role>=<path>`. Nothing is installed: the App's installations are
+machine. A key downloaded before the page opened is not picked up: an operator
+who already has the key file skips the page for that role with
+`--key <role>=<path>`. Nothing is installed: the App's installations are
 already in place.
 
 **Creating** follows, a role at a time: the browser opens a local page that
