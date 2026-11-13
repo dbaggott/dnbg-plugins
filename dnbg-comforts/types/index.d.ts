@@ -1,5 +1,5 @@
 /** A model other than the standard one, as the usage band flags it, by its family's price against the standard's. */
-export type ModelFlag = { name: string; cost: 'more' | 'same' | 'less' }
+export type ModelFlag = { name: string; cost: 'more' | 'same' | 'less'; isJustSaved?: boolean }
 
 /** The prompt cache's estimated state: none before the first turn, then warm with minutes left, or cold. */
 export type CacheState = { kind: 'none' } | { kind: 'warm'; minutesLeft: number } | { kind: 'cold' }
@@ -8,7 +8,7 @@ export type CacheState = { kind: 'none' } | { kind: 'warm'; minutesLeft: number 
 export type UsageLine = { model: ModelFlag | null; saved: ModelFlag | null; context: string; cache: CacheState; rest: string }
 
 /** A model just saved for future sessions, shown in the band until `until`. */
-export type SavedNotice = ModelFlag & { until: number }
+export type SavedNotice = ModelFlag & { model: string; until: number }
 
 declare module 'claude-code' {
   interface PluginState {

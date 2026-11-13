@@ -111,14 +111,14 @@ test('saving a non-standard model for future sessions says so once, in a toast a
 
   expect(toasts).toEqual([{ text: 'FYI: you set your model to fable for all future sessions.', timeoutMs: 12_000 }])
   const ui = await $.ui.mount(BAND)
-  const block = await ui.find({ type: 'Text', text: /saved:/ })
+  const block = await ui.find({ type: 'Text', text: /saved/ })
   expect(block?.text).toBe(' saved: FABLE ')
   expect(block?.props.backgroundColor).toBe('red')
   await ui.unmount()
 
-  await clock.advance(61_000)
+  await clock.advance(31_000)
   const later = await $.ui.mount(BAND)
-  expect(await later.find({ type: 'Text', text: /saved:/ })).toBeUndefined()
+  expect(await later.find({ type: 'Text', text: /saved/ })).toBeUndefined()
   await later.unmount()
 })
 
@@ -222,6 +222,22 @@ test('a copy that cannot run is reported, and the compaction goes ahead', async 
 
   expect(compacted).toBe(true)
   expect(toasts[0]).toContain('Could not copy the transcript before compacting')
+})
+
+test('saving the model the session runs on marks its badge instead of repeating it', async ($, on) => {
+  const files: Record<string, string> = { [SETTINGS]: '{"model":"opus"}' }
+  world(on, 'claude-fable-5-2', files)
+  on('ui.toast', () => ({ value: undefined }))
+  on('classic.PostModelSwitch', () => ({}))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  files[SETTINGS] = '{"model":"fable"}'
+  await $.classic.PostModelSwitch({ ...SWITCH, to_model: 'claude-fable-5-2', requested_model: 'fable' })
+
+  const ui = await $.ui.mount(BAND)
+  const blocks = (await ui.findAll({ type: 'Text', text: /FABLE/ })).map(text => text.text)
+  expect(blocks).toEqual([' ⚠ FABLE 5.2 · saved '])
+  await ui.unmount()
 })
 
 test('a new session shows context 0% and no cache yet, so the band keeps its shape', async ($, on) => {

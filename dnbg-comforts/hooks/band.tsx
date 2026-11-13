@@ -14,7 +14,7 @@ const pendingUpdates = atom({ plugin: 'dnbg-comforts', key: 'pendingUpdates' } a
 // Set once the band starts; a headless session never starts it.
 const isBandOn = atom({ plugin: 'dnbg-comforts', key: 'isBandOn' } as const, false)
 const savedNotice = atom({ plugin: 'dnbg-comforts', key: 'savedNotice' } as const, null)
-const SAVED_NOTICE_MS = 60_000
+const SAVED_NOTICE_MS = 30_000
 // The cache lifetime a model switch reported; until one does, it is assumed.
 const cacheTtlMs = atom({ plugin: 'dnbg-comforts', key: 'cacheTtlMs' } as const, null)
 
@@ -73,7 +73,12 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
     left === null ? { kind: 'none' } : left > 0 ? { kind: 'warm', minutesLeft: Math.round(left / 60000) } : { kind: 'cold' }
 
   const notice = await read($, savedNotice)
-  const saved: ModelFlag | null = notice !== null && now < notice.until ? { name: notice.name, cost: notice.cost } : null
+  const isNoticeUp = notice !== null && now < notice.until
+  // The model just saved is usually the one running: one block says both.
+  if (isNoticeUp && flag !== null && isModel(model, notice.model)) {
+    return { model: { ...flag, isJustSaved: true }, saved: null, context, cache, rest: parts.join(' · ') }
+  }
+  const saved: ModelFlag | null = isNoticeUp ? { name: notice.name, cost: notice.cost } : null
 
   return { model: flag, saved, context, cache, rest: parts.join(' · ') }
 }
@@ -93,7 +98,7 @@ export async function onModelSwitch($: EngineInterface, ttl: '5m' | '1h', standa
   if (!(await read($, isBandOn))) return
   if (saved !== null) {
     const until = (await $.clock.now()) + SAVED_NOTICE_MS
-    await update($, savedNotice, () => ({ name: displayName(saved), cost: costAgainst(saved, standard), until }))
+    await update($, savedNotice, () => ({ model: saved, name: displayName(saved), cost: costAgainst(saved, standard), until }))
   }
   await update($, cacheTtlMs, () => (ttl === '1h' ? HOUR_MS : FIVE_MINUTES_MS))
   await update($, lastResponseAt, current => (current === null ? null : 0))
@@ -141,9 +146,9 @@ export function registerBand(on: On, options: PluginOptions): void {
 
     return (
       <Box marginTop={1}>
-        {line.model?.cost === 'more' && <Text bold color="white" backgroundColor="red">{` ⚠ ${line.model.name} `}</Text>}
-        {line.model?.cost === 'less' && <Text bold color="white" backgroundColor="#5b8bd9">{` ${line.model.name} `}</Text>}
-        {line.model?.cost === 'same' && <Text bold>{line.model.name}</Text>}
+        {line.model?.cost === 'more' && <Text bold color="white" backgroundColor="red">{` ⚠ ${line.model.name}${line.model.isJustSaved ? ' · saved' : ''} `}</Text>}
+        {line.model?.cost === 'less' && <Text bold color="white" backgroundColor="#5b8bd9">{` ${line.model.name}${line.model.isJustSaved ? ' · saved' : ''} `}</Text>}
+        {line.model?.cost === 'same' && <Text bold>{`${line.model.name}${line.model.isJustSaved ? ' · saved' : ''}`}</Text>}
         {line.model !== null && line.saved !== null && <Text>{' '}</Text>}
         {line.saved?.cost === 'more' && <Text bold color="white" backgroundColor="red">{` saved: ${line.saved.name} `}</Text>}
         {line.saved?.cost === 'less' && <Text bold color="white" backgroundColor="#5b8bd9">{` saved: ${line.saved.name} `}</Text>}
