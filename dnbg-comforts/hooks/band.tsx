@@ -15,6 +15,7 @@ const pendingUpdates = atom({ plugin: 'dnbg-comforts', key: 'pendingUpdates' } a
 const isBandOn = atom({ plugin: 'dnbg-comforts', key: 'isBandOn' } as const, false)
 const savedNotice = atom({ plugin: 'dnbg-comforts', key: 'savedNotice' } as const, null)
 const SAVED_NOTICE_MS = 30_000
+const SAVED_LABEL = ' · all future sessions!'
 // The cache lifetime a model switch reported; until one does, it is assumed.
 const cacheTtlMs = atom({ plugin: 'dnbg-comforts', key: 'cacheTtlMs' } as const, null)
 
@@ -150,13 +151,13 @@ export function registerBand(on: On, options: PluginOptions): void {
 
     return (
       <Box marginTop={1}>
-        {line.model?.cost === 'more' && <Text bold color="white" backgroundColor="red">{` ⚠ ${line.model.name}${line.model.isJustSaved ? ' · saved' : ''} `}</Text>}
-        {line.model?.cost === 'less' && <Text bold color="white" backgroundColor="#5b8bd9">{` ${line.model.name}${line.model.isJustSaved ? ' · saved' : ''} `}</Text>}
-        {line.model?.cost === 'same' && <Text bold>{`${line.model.name}${line.model.isJustSaved ? ' · saved' : ''}`}</Text>}
+        {line.model?.cost === 'more' && <Text bold color="white" backgroundColor="red">{` ⚠ ${line.model.name}${line.model.isJustSaved ? SAVED_LABEL : ''} `}</Text>}
+        {line.model?.cost === 'less' && <Text bold color="white" backgroundColor="#5b8bd9">{` ${line.model.name}${line.model.isJustSaved ? SAVED_LABEL : ''} `}</Text>}
+        {line.model?.cost === 'same' && <Text bold>{`${line.model.name}${line.model.isJustSaved ? SAVED_LABEL : ''}`}</Text>}
         {line.model !== null && line.saved !== null && <Text>{' '}</Text>}
-        {line.saved?.cost === 'more' && <Text bold color="white" backgroundColor="red">{` saved: ${line.saved.name} `}</Text>}
-        {line.saved?.cost === 'less' && <Text bold color="white" backgroundColor="#5b8bd9">{` saved: ${line.saved.name} `}</Text>}
-        {line.saved?.cost === 'same' && <Text bold>{`saved: ${line.saved.name}`}</Text>}
+        {line.saved?.cost === 'more' && <Text bold color="white" backgroundColor="red">{` ${line.saved.name}${SAVED_LABEL} `}</Text>}
+        {line.saved?.cost === 'less' && <Text bold color="white" backgroundColor="#5b8bd9">{` ${line.saved.name}${SAVED_LABEL} `}</Text>}
+        {line.saved?.cost === 'same' && <Text bold>{`${line.saved.name}${SAVED_LABEL}`}</Text>}
         {(line.model !== null || line.saved !== null) && <Text dimColor>{'  '}</Text>}
         <Text dimColor>{`${line.context} · `}</Text>
         {line.cache.kind === 'none' && <Text dimColor>cache none</Text>}

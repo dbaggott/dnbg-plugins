@@ -119,14 +119,14 @@ test('saving a non-standard model for future sessions says so once, in a toast a
 
   expect(toasts).toEqual([{ text: 'FYI: you set your model to fable for all future sessions.', timeoutMs: 12_000 }])
   const ui = await $.ui.mount(BAND)
-  const block = await ui.find({ type: 'Text', text: /saved/ })
-  expect(block?.text).toBe(' saved: FABLE ')
+  const block = await ui.find({ type: 'Text', text: /future sessions/ })
+  expect(block?.text).toBe(' FABLE · all future sessions! ')
   expect(block?.props.backgroundColor).toBe('red')
   await ui.unmount()
 
   await clock.advance(30_000)
   const later = await $.ui.mount(BAND)
-  expect(await later.find({ type: 'Text', text: /saved/ })).toBeUndefined()
+  expect(await later.find({ type: 'Text', text: /future sessions/ })).toBeUndefined()
   await later.unmount()
 })
 
@@ -244,7 +244,7 @@ test('saving the model the session runs on marks its badge instead of repeating 
 
   const ui = await $.ui.mount(BAND)
   const blocks = (await ui.findAll({ type: 'Text', text: /FABLE/ })).map(text => text.text)
-  expect(blocks).toEqual([' ⚠ FABLE 5.2 · saved '])
+  expect(blocks).toEqual([' ⚠ FABLE 5.2 · all future sessions! '])
   await ui.unmount()
 })
 
