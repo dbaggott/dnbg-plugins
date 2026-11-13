@@ -43,7 +43,8 @@ and must work.
   `~/.config/dnbg/<role>/config.json`) is set up; the bootstrap skips it unless
   you name it. Naming it in `--roles` is refused: `--adopt <role>=<slug>`
   connects this machine to the same App again, replacing its key here, and a
-  second App for the role takes `--name`; only do that deliberately.
+  new App for the role, after deleting the old one or beside it, takes
+  `--name`; only do that deliberately.
 
 ## Ownership model
 
@@ -272,7 +273,8 @@ it wherever you want and set the command.
   is also how one machine is revoked. GitHub keeps an App's last key until
   another exists, so where it is the only one, connect first. To give this
   machine a new key, connect again with `--adopt <role>=<slug>`. Where you
-  deleted the App instead, `--roles <role>` creates a new one. `SECURITY.md`
+  deleted the App instead, `--roles <role> --name <name>` creates a new one:
+  the role is still set up on this machine, so the create needs the name. `SECURITY.md`
   has the order.
 - **Re-install on more repos**: just adjust the installation's repo access in
   GitHub; no re-bootstrap needed.

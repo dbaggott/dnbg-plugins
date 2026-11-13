@@ -271,8 +271,9 @@ Do these in order, for the exposed role's App, in its settings on GitHub
    are scoped to, and reinstall afterwards.
 
 If you would rather retire the App than rotate it, deleting it revokes
-everything in one step; re-run `bootstrap.py --roles <role>` to create a fresh
-one. Note that
+everything in one step; re-run `bootstrap.py --roles <role> --name <name>` to create a
+fresh one (the role is still set up on your machine, so the create needs the
+name). Note that
 `bootstrap.py` cannot generate a key for an existing App — GitHub has no API
 for it, and hands a new App's first key over exactly once, at creation. Keeping
 the same bot means generating the replacement key in App settings, per step 1.

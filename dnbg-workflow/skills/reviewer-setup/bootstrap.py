@@ -1021,9 +1021,10 @@ def run(args: argparse.Namespace) -> int:
                 continue
             if is_configured(role):
                 slug = configured_slug(role) or "<slug>"
-                print(f"The {role} role is already set up on this machine. To give it a new "
-                      f"key for the same App, pass --adopt {role}={slug}; to create a second "
-                      "App in its place, pass --name.", file=sys.stderr)
+                print(f"The {role} role is already set up on this machine. If its App still "
+                      f"exists, give this machine a new key for it with --adopt {role}={slug}. "
+                      "If you deleted that App, or want another in its place, pass --name "
+                      "<name> to create one.", file=sys.stderr)
                 return 2
             found = detect_role(role, login, owners)
             if found["state"] == "yours":

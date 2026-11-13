@@ -253,6 +253,15 @@ PY
   [ ! -e "$MANIFESTS.opened" ]
 }
 
+@test "a role whose App was deleted is created again with --name, as the refusal says" {
+  mkdir -p "$REVIEWER_DIR"; echo '{"slug":"deleted-app"}' > "$REVIEWER_DIR/config.json"
+  bootstrap --roles reviewer
+  [[ "$output" == *"If you deleted that App"*"--name"* ]]
+  bootstrap --roles reviewer --name fresh-reviewer
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .slug "$REVIEWER_DIR/config.json")" = fresh-reviewer ]
+}
+
 @test "a refused --key stops the run and names every role it did not reach" {
   github '{"apps":{"agent-reviewer-tester":{"id":7,"owner":"tester"},"agent-author-tester":{"id":8,"owner":"tester"}},
     "keys":{"KEY-8":"agent-author-tester"}}'
