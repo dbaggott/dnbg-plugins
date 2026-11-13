@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "dnbg-comforts",
   "description": "Small conveniences for the session itself: /later notes that wait for Claude's next turn, a quiet usage band above the prompt, a heads-up when your saved model changes, and a copy of the transcript before each compaction. No forge, no workflow opinions.",
-  "version": "2026.11.1",
+  "version": "2026.11.2",
   "engines": {
     "claude-code": ">=2.1.299"
   },

@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "dnbg-workflow",
   "description": "Opinionated GitHub workflow: worktree + draft PR flow, self-documenting issues, and an independent PR reviewer bot.",
-  "version": "2026.11.24",
+  "version": "2026.11.25",
   "engines": {
     "claude-code": ">=2.1.207"
   },

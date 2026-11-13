@@ -1,1 +1,0 @@
-The plugin now states its minimum Claude Code version, v2.1.207, in its manifest. Claude Code enforces that field from v2.1.323, which is already above the floor, so nothing is blocked today; it will be when a later release raises the floor past v2.1.323.

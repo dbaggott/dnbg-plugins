@@ -1,1 +1,0 @@
-The plugin now states its minimum Claude Code version, v2.1.299, in its manifest. Claude Code enforces that field from v2.1.323, which is already above the floor, so nothing is blocked today. On an older client, `dnbg-workflow` now tells you at session start to update.
