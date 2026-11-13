@@ -1,4 +1,4 @@
-import type { CommandRunInput, On, SessionContextBreakdown } from 'claude-code'
+import type { CommandRunInput, On, SessionContextBreakdown, SessionUsage } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
 const BAND = {
@@ -19,7 +19,14 @@ function later(args: string): CommandRunInput {
 const NOW = Date.parse('2026-01-01T00:00:00Z')
 
 // The engine beneath the plugin: a subscription session on `model`.
-function world(on: On, model: string, files: Record<string, string> = {}) {
+const SUBSCRIPTION: SessionUsage = {
+  startedAt: 0,
+  context: { tokens: 50_000, window: 200_000, percent: 25, breakdown: { autoCompactThreshold: 190_000 } as SessionContextBreakdown },
+  rateLimits: [{ kind: 'seven_day', percentUsed: 21, resetsAt: '2026-01-05T00:00:00Z' }],
+  cost: { usd: 4.2 },
+}
+
+function world(on: On, model: string, files: Record<string, string> = {}, usage: SessionUsage = SUBSCRIPTION) {
   const clock = mock.clock(on, { now: NOW })
   mock.store(on)
   mock.env(on, { HOME })
@@ -27,14 +34,7 @@ function world(on: On, model: string, files: Record<string, string> = {}) {
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('fs.read', (_, e) => (e.path in files ? { value: files[e.path] as string } : { deny: 'missing' }))
   on('session.model', () => ({ value: model }))
-  on('session.usage', () => ({
-    value: {
-      startedAt: 0,
-      context: { tokens: 50_000, window: 200_000, percent: 25, breakdown: { autoCompactThreshold: 190_000 } as SessionContextBreakdown },
-      rateLimits: [{ kind: 'seven_day', percentUsed: 21, resetsAt: '2026-01-05T00:00:00Z' }],
-      cost: { usd: 4.2 },
-    },
-  }))
+  on('session.usage', () => ({ value: usage }))
   // Stands for the engine's own empty band.
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
@@ -124,4 +124,13 @@ test('the cache counts down after a turn and turns yellow once cold', async ($, 
   expect(badge?.text).toBe(' cache ~cold ')
   expect(badge?.props.backgroundColor).toBe('yellow')
   await cold.unmount()
+})
+
+test('a new session shows no cost before its first response', async ($, on) => {
+  world(on, 'claude-opus-5-5', {}, { startedAt: 0, context: { window: 200_000 }, rateLimits: [], cost: { usd: 0 } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const ui = await $.ui.mount(BAND)
+  expect((await ui.find({ type: 'Text', text: /\$/ }))?.text).toBeUndefined()
+  await ui.unmount()
 })

@@ -50,8 +50,9 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
     const reset = limit.resetsAt ? ` ↻${span(Date.parse(limit.resetsAt) - now)}` : ''
     parts.push(`${label} ${Math.round(limit.percentUsed)}%${reset}`)
   }
-  // Usage windows are reported only on a subscription, where cost is moot.
-  if (figures.rateLimits.length === 0 && figures.cost) parts.push(`$${figures.cost.usd.toFixed(2)}`)
+  // Usage windows are reported only on a subscription, where cost is moot. Before
+  // the first response neither has a reading, so a zero cost says nothing.
+  if (figures.rateLimits.length === 0 && figures.cost && figures.cost.usd > 0) parts.push(`$${figures.cost.usd.toFixed(2)}`)
   const updates = await read($, pendingUpdates)
   if (updates.length > 0) parts.push(`restart to update ${updates.join(', ')}`)
 
