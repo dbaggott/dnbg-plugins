@@ -30,8 +30,10 @@ export function registerSavedModel(on: On, options: PluginOptions): void {
 
     if (saved !== previous && saved !== '' && !isModel(saved, standard)) {
       const message = `FYI: you set your model to ${saved} for all future sessions.`
-      await $.ui.notify(message, { title: 'Claude Code' })
+      // The toast first: it shows in every session, the notification only
+      // where the terminal takes one.
       $.ui.toast(message)
+      await $.ui.notify(message, { title: 'Claude Code' })
     }
 
     return result
