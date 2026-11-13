@@ -27,7 +27,7 @@ export async function startSavedModel($: EngineInterface): Promise<void> {
  * one, and returns that model; null when there is nothing to say. A switch for this session only leaves the saved model as it was, so
  * comparing against the last one seen tells the two apart.
  */
-export async function onSavedModelSwitch($: EngineInterface, standard: string): Promise<string | null> {
+export async function checkSavedModel($: EngineInterface, standard: string): Promise<string | null> {
   const saved = await savedModel($)
   const previous = await read($, lastSaved)
   await update($, lastSaved, () => saved)

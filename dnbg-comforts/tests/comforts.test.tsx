@@ -1,5 +1,6 @@
 import type { CommandRunInput, On, SessionContextBreakdown, SessionUsage } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
+import type { MockClock, TestBody } from 'claude-code/testing'
 
 const BAND = {
   plugin: 'dnbg-comforts',
@@ -17,6 +18,13 @@ function later(args: string): CommandRunInput {
 }
 
 const SWITCH = { from_model: 'claude-opus-5-5', to_model: 'claude-sonnet-5-5', requested_model: 'sonnet', source: 'command', context_tokens: 0, prompt_cache_warm: true, cache_ttl: '1h', estimated_cache_write_usd: 0, pricing: 'catalog' } as const
+
+// A model switch, with the clock moved past the plugin's second look at settings.
+async function switchModel($: Parameters<TestBody>[0], clock: MockClock, input: typeof SWITCH | (Omit<typeof SWITCH, 'to_model' | 'requested_model'> & { to_model: string; requested_model: string })) {
+  const switched = $.classic.PostModelSwitch(input)
+  await clock.advance(600)
+  await switched
+}
 
 const NOW = Date.parse('2026-01-01T00:00:00Z')
 
@@ -106,8 +114,8 @@ test('saving a non-standard model for future sessions says so once, in a toast a
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
 
   files[SETTINGS] = '{"model":"fable"}'
-  await $.classic.PostModelSwitch({ ...SWITCH, to_model: 'claude-fable-5-2', requested_model: 'fable' })
-  await $.classic.PostModelSwitch(SWITCH)
+  await switchModel($, clock, { ...SWITCH, to_model: 'claude-fable-5-2', requested_model: 'fable' })
+  await switchModel($, clock, SWITCH)
 
   expect(toasts).toEqual([{ text: 'FYI: you set your model to fable for all future sessions.', timeoutMs: 12_000 }])
   const ui = await $.ui.mount(BAND)
@@ -116,7 +124,7 @@ test('saving a non-standard model for future sessions says so once, in a toast a
   expect(block?.props.backgroundColor).toBe('red')
   await ui.unmount()
 
-  await clock.advance(31_000)
+  await clock.advance(30_000)
   const later = await $.ui.mount(BAND)
   expect(await later.find({ type: 'Text', text: /saved/ })).toBeUndefined()
   await later.unmount()
@@ -169,12 +177,12 @@ test('another model of the standard family is named without a cost colour', { op
 })
 
 test('a model switch leaves the cache cold', async ($, on) => {
-  world(on, 'claude-opus-5-5')
+  const clock = world(on, 'claude-opus-5-5')
   on('turn.complete', () => ({ text: '' }))
   on('classic.PostModelSwitch', () => ({}))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
-  await $.classic.PostModelSwitch(SWITCH)
+  await switchModel($, clock, SWITCH)
 
   const ui = await $.ui.mount(BAND)
   expect((await ui.find({ type: 'Text', text: /cache/ }))?.text).toBe(' cache ~cold ')
@@ -183,14 +191,14 @@ test('a model switch leaves the cache cold', async ($, on) => {
 
 test('saving the standard model by its alias is not news when the standard is a full id', { options: { standard_model: 'claude-opus-5-5' } }, async ($, on) => {
   const files: Record<string, string> = { [SETTINGS]: '{"model":"sonnet"}' }
-  world(on, 'claude-opus-5-5', files)
+  const clock = world(on, 'claude-opus-5-5', files)
   const notes: string[] = []
   on('ui.toast', (_, e) => (notes.push(e.text), { value: undefined }))
   on('classic.PostModelSwitch', () => ({}))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
 
   files[SETTINGS] = '{"model":"opus"}'
-  await $.classic.PostModelSwitch(SWITCH)
+  await switchModel($, clock, SWITCH)
 
   expect(notes).toEqual([])
 })
@@ -226,13 +234,13 @@ test('a copy that cannot run is reported, and the compaction goes ahead', async 
 
 test('saving the model the session runs on marks its badge instead of repeating it', async ($, on) => {
   const files: Record<string, string> = { [SETTINGS]: '{"model":"opus"}' }
-  world(on, 'claude-fable-5-2', files)
+  const clock = world(on, 'claude-fable-5-2', files)
   on('ui.toast', () => ({ value: undefined }))
   on('classic.PostModelSwitch', () => ({}))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
 
   files[SETTINGS] = '{"model":"fable"}'
-  await $.classic.PostModelSwitch({ ...SWITCH, to_model: 'claude-fable-5-2', requested_model: 'fable' })
+  await switchModel($, clock, { ...SWITCH, to_model: 'claude-fable-5-2', requested_model: 'fable' })
 
   const ui = await $.ui.mount(BAND)
   const blocks = (await ui.findAll({ type: 'Text', text: /FABLE/ })).map(text => text.text)
@@ -262,4 +270,36 @@ test('a headless session does no band work after a turn', async ($, on) => {
   await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
 
   expect(reads.usage).toBe(0)
+})
+
+test('a save written to settings just after the switch is still announced', async ($, on) => {
+  const files: Record<string, string> = { [SETTINGS]: '{"model":"opus"}' }
+  const clock = world(on, 'claude-opus-5-5', files)
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => (toasts.push(e.text), { value: undefined }))
+  on('classic.PostModelSwitch', () => ({}))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const switched = $.classic.PostModelSwitch({ ...SWITCH, to_model: 'claude-fable-5-2', requested_model: 'fable' })
+  files[SETTINGS] = '{"model":"claude-fable-5-2"}'
+  await clock.advance(600)
+  await switched
+
+  expect(toasts).toEqual(['FYI: you set your model to claude-fable-5-2 for all future sessions.'])
+})
+
+test('a save seen as a user-settings change is announced once', async ($, on) => {
+  const files: Record<string, string> = { [SETTINGS]: '{"model":"opus"}' }
+  const clock = world(on, 'claude-opus-5-5', files)
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => (toasts.push(e.text), { value: undefined }))
+  on('classic.PostModelSwitch', () => ({}))
+  on('classic.ConfigChange', () => ({}))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  files[SETTINGS] = '{"model":"fable"}'
+  await $.classic.ConfigChange({ source: 'user_settings', file_path: SETTINGS })
+  await switchModel($, clock, { ...SWITCH, to_model: 'claude-fable-5-2', requested_model: 'fable' })
+
+  expect(toasts).toEqual(['FYI: you set your model to fable for all future sessions.'])
 })

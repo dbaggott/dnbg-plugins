@@ -93,13 +93,17 @@ async function checkUpdates($: EngineInterface): Promise<void> {
   await update($, pendingUpdates, () => pending)
 }
 
-/** A model switch forfeits the cache: the next request writes it afresh. */
-export async function onModelSwitch($: EngineInterface, ttl: '5m' | '1h', standard: string, saved: string | null): Promise<void> {
+/** Marks `saved` as just saved for future sessions, in the band, for a while. */
+export async function showSaved($: EngineInterface, saved: string, standard: string): Promise<void> {
   if (!(await read($, isBandOn))) return
-  if (saved !== null) {
-    const until = (await $.clock.now()) + SAVED_NOTICE_MS
-    await update($, savedNotice, () => ({ model: saved, name: displayName(saved), cost: costAgainst(saved, standard), until }))
-  }
+  const until = (await $.clock.now()) + SAVED_NOTICE_MS
+  await update($, savedNotice, () => ({ model: saved, name: displayName(saved), cost: costAgainst(saved, standard), until }))
+  await refresh($, standard)
+}
+
+/** A model switch forfeits the cache: the next request writes it afresh. */
+export async function onModelSwitch($: EngineInterface, ttl: '5m' | '1h', standard: string): Promise<void> {
+  if (!(await read($, isBandOn))) return
   await update($, cacheTtlMs, () => (ttl === '1h' ? HOUR_MS : FIVE_MINUTES_MS))
   await update($, lastResponseAt, current => (current === null ? null : 0))
   await refresh($, standard)

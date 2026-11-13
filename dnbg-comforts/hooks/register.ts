@@ -1,10 +1,21 @@
-import type { Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
-import { onModelSwitch, registerBand, startBand } from './band'
+import { onModelSwitch, registerBand, showSaved, startBand } from './band'
 import { registerLater, startLater } from './later'
 import { standardModel } from './options'
-import { onSavedModelSwitch, startSavedModel } from './saved-model'
+import { checkSavedModel, startSavedModel } from './saved-model'
 import { registerTranscripts } from './transcripts'
+
+// How long after a model switch to look at the settings file again, in case
+// the saved model is written after the switch is reported.
+const SETTLE_MS = 500
+
+/** Announces a newly saved non-standard model; whether there was one. */
+async function announceSaved($: EngineInterface, standard: string): Promise<boolean> {
+  const saved = await checkSavedModel($, standard)
+  if (saved !== null) await showSaved($, saved, standard)
+  return saved !== null
+}
 
 export const register: Register = (on, options) => {
   const standard = standardModel(options)
@@ -22,8 +33,20 @@ export const register: Register = (on, options) => {
 
   on('classic.PostModelSwitch', async ($, e, next) => {
     const result = await next(e)
-    const saved = await onSavedModelSwitch($, standard)
-    await onModelSwitch($, e.cache_ttl, standard, saved)
+    await onModelSwitch($, e.cache_ttl, standard)
+    if (!(await announceSaved($, standard))) {
+      await $.clock.sleep(SETTLE_MS)
+      await announceSaved($, standard)
+    }
+
+    return result
+  })
+
+  // A save of the default model writes user settings; this catches it whatever
+  // the order of the write and the switch.
+  on('classic.ConfigChange', async ($, e, next) => {
+    const result = await next(e)
+    if (e.source === 'user_settings') await announceSaved($, standard)
 
     return result
   })
