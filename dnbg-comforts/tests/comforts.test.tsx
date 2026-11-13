@@ -16,6 +16,8 @@ function later(args: string): CommandRunInput {
   return { command: 'later', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } }
 }
 
+const SWITCH = { from_model: 'claude-opus-5-5', to_model: 'claude-sonnet-5-5', requested_model: 'sonnet', source: 'command', context_tokens: 0, prompt_cache_warm: true, cache_ttl: '1h', estimated_cache_write_usd: 0, pricing: 'catalog' } as const
+
 const NOW = Date.parse('2026-01-01T00:00:00Z')
 
 // The engine beneath the plugin: a subscription session on `model`.
@@ -95,20 +97,29 @@ test('a cheaper model is named without the warning', async ($, on) => {
   await ui.unmount()
 })
 
-test('saving a non-standard model for future sessions says so once', async ($, on) => {
+test('saving a non-standard model for future sessions says so once, in a toast and the band', async ($, on) => {
   const files: Record<string, string> = { [SETTINGS]: '{"model":"opus"}' }
-  world(on, 'claude-opus-5-5', files)
-  const notes: string[] = []
-  on('ui.notify', (_, e) => (notes.push(e.text), { value: { isSent: true, channel: 'iterm2' } }))
-  on('ui.toast', () => ({ value: undefined }))
+  const clock = world(on, 'claude-opus-5-5', files)
+  const toasts: { text: string; timeoutMs?: number }[] = []
+  on('ui.toast', (_, e) => (toasts.push({ text: e.text, timeoutMs: e.timeoutMs }), { value: undefined }))
   on('classic.PostModelSwitch', () => ({}))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
 
   files[SETTINGS] = '{"model":"fable"}'
-  await $.classic.PostModelSwitch({ from_model: 'claude-opus-5-5', to_model: 'claude-fable-5-2', requested_model: 'fable', source: 'command', context_tokens: 0, prompt_cache_warm: true, cache_ttl: '1h', estimated_cache_write_usd: 0, pricing: 'catalog' })
-  await $.classic.PostModelSwitch({ from_model: 'claude-fable-5-2', to_model: 'claude-sonnet-5-5', requested_model: 'sonnet', source: 'command', context_tokens: 0, prompt_cache_warm: true, cache_ttl: '1h', estimated_cache_write_usd: 0, pricing: 'catalog' })
+  await $.classic.PostModelSwitch({ ...SWITCH, to_model: 'claude-fable-5-2', requested_model: 'fable' })
+  await $.classic.PostModelSwitch(SWITCH)
 
-  expect(notes).toEqual(['FYI: you set your model to fable for all future sessions.'])
+  expect(toasts).toEqual([{ text: 'FYI: you set your model to fable for all future sessions.', timeoutMs: 12_000 }])
+  const ui = await $.ui.mount(BAND)
+  const block = await ui.find({ type: 'Text', text: /saved:/ })
+  expect(block?.text).toBe(' saved: FABLE ')
+  expect(block?.props.backgroundColor).toBe('red')
+  await ui.unmount()
+
+  await clock.advance(61_000)
+  const later = await $.ui.mount(BAND)
+  expect(await later.find({ type: 'Text', text: /saved:/ })).toBeUndefined()
+  await later.unmount()
 })
 
 test('the cache counts down after a turn and turns yellow once cold', async ($, on) => {
@@ -138,7 +149,6 @@ test('a new session shows no cost before its first response', async ($, on) => {
   await ui.unmount()
 })
 
-const SWITCH = { from_model: 'claude-opus-5-5', to_model: 'claude-sonnet-5-5', requested_model: 'sonnet', source: 'command', context_tokens: 0, prompt_cache_warm: true, cache_ttl: '1h', estimated_cache_write_usd: 0, pricing: 'catalog' } as const
 
 test('a dated or suffixed model id reads as its family and version', async ($, on) => {
   world(on, 'claude-haiku-4-5-20251001[1m]')
@@ -175,8 +185,7 @@ test('saving the standard model by its alias is not news when the standard is a 
   const files: Record<string, string> = { [SETTINGS]: '{"model":"sonnet"}' }
   world(on, 'claude-opus-5-5', files)
   const notes: string[] = []
-  on('ui.notify', (_, e) => (notes.push(e.text), { value: { isSent: true, channel: 'iterm2' } }))
-  on('ui.toast', () => ({ value: undefined }))
+  on('ui.toast', (_, e) => (notes.push(e.text), { value: undefined }))
   on('classic.PostModelSwitch', () => ({}))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
 
@@ -220,7 +229,11 @@ test('a new session shows context 0% and no cache yet, so the band keeps its sha
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
 
   const ui = await $.ui.mount(BAND)
-  const texts = (await ui.findAll({ type: 'Text' })).map(text => text.text).join('')
+  // Newer engines also hand back the stand-in's own text; the band's is the rest.
+  const texts = (await ui.findAll({ type: 'Text' }))
+    .map(text => text.text)
+    .filter(text => text !== 'engine')
+    .join('')
   expect(texts).toBe('context 0% · cache none')
   await ui.unmount()
 })

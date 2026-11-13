@@ -110,7 +110,7 @@ Session comforts, in `dnbg-comforts`, which runs on any forge and needs Claude C
 | `/later <note>` | leaves Claude a note it reads on its next turn, without starting one |
 | Usage band | a dim line above the prompt: context fill and where auto-compact runs, your plan's usage windows with their resets, an estimate of how long the prompt cache stays warm (`none` before the first turn, yellow once cold), and the session's cost when you are not on a subscription |
 | Model badge | in the band, any model other than your standard one: red when its family costs more, blue when it costs less, plain for another version of the same family |
-| Saved-model notice | tells you when the model saved for future sessions changes to one other than your standard |
+| Saved-model notice | when the model saved for future sessions changes to one other than your standard, says so in a toast and, for a minute, in the band |
 | Update notice | in the band, plugins whose new version is downloaded and waits for a restart |
 | Transcript copy | copies the transcript aside before each compaction, to `~/.claude/dnbg/transcripts/<session id>/`; the copies are kept until you delete them |
 

@@ -1,18 +1,20 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 
-import type { CacheState, UsageLine } from '../types'
+import type { CacheState, ModelFlag, UsageLine } from '../types'
 import { costAgainst, displayName, isModel } from './models'
 import { standardModel } from './options'
 import { findPending } from './updates'
 
-const usage = atom({ plugin: 'dnbg-comforts', key: 'usage' } as const, { model: null, context: 'context 0%', cache: { kind: 'none' }, rest: '' }, { shape: 'usage-5' })
+const usage = atom({ plugin: 'dnbg-comforts', key: 'usage' } as const, { model: null, saved: null, context: 'context 0%', cache: { kind: 'none' }, rest: '' }, { shape: 'usage-6' })
 // When the last turn ended; kept in state so a reload keeps the cache countdown.
 const lastResponseAt = atom({ plugin: 'dnbg-comforts', key: 'lastResponseAt' } as const, null)
 const compactThreshold = atom({ plugin: 'dnbg-comforts', key: 'compactThreshold' } as const, null)
 const pendingUpdates = atom({ plugin: 'dnbg-comforts', key: 'pendingUpdates' } as const, [])
 // Set once the band starts; a headless session never starts it.
 const isBandOn = atom({ plugin: 'dnbg-comforts', key: 'isBandOn' } as const, false)
+const savedNotice = atom({ plugin: 'dnbg-comforts', key: 'savedNotice' } as const, null)
+const SAVED_NOTICE_MS = 60_000
 // The cache lifetime a model switch reported; until one does, it is assumed.
 const cacheTtlMs = atom({ plugin: 'dnbg-comforts', key: 'cacheTtlMs' } as const, null)
 
@@ -70,7 +72,10 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
   const cache: CacheState =
     left === null ? { kind: 'none' } : left > 0 ? { kind: 'warm', minutesLeft: Math.round(left / 60000) } : { kind: 'cold' }
 
-  return { model: flag, context, cache, rest: parts.join(' · ') }
+  const notice = await read($, savedNotice)
+  const saved: ModelFlag | null = notice !== null && now < notice.until ? { name: notice.name, cost: notice.cost } : null
+
+  return { model: flag, saved, context, cache, rest: parts.join(' · ') }
 }
 
 async function refresh($: EngineInterface, standard: string): Promise<void> {
@@ -84,8 +89,12 @@ async function checkUpdates($: EngineInterface): Promise<void> {
 }
 
 /** A model switch forfeits the cache: the next request writes it afresh. */
-export async function onModelSwitch($: EngineInterface, ttl: '5m' | '1h', standard: string): Promise<void> {
+export async function onModelSwitch($: EngineInterface, ttl: '5m' | '1h', standard: string, saved: string | null): Promise<void> {
   if (!(await read($, isBandOn))) return
+  if (saved !== null) {
+    const until = (await $.clock.now()) + SAVED_NOTICE_MS
+    await update($, savedNotice, () => ({ name: displayName(saved), cost: costAgainst(saved, standard), until }))
+  }
   await update($, cacheTtlMs, () => (ttl === '1h' ? HOUR_MS : FIVE_MINUTES_MS))
   await update($, lastResponseAt, current => (current === null ? null : 0))
   await refresh($, standard)
@@ -135,7 +144,11 @@ export function registerBand(on: On, options: PluginOptions): void {
         {line.model?.cost === 'more' && <Text bold color="white" backgroundColor="red">{` ⚠ ${line.model.name} `}</Text>}
         {line.model?.cost === 'less' && <Text bold color="white" backgroundColor="#5b8bd9">{` ${line.model.name} `}</Text>}
         {line.model?.cost === 'same' && <Text bold>{line.model.name}</Text>}
-        {line.model !== null && <Text dimColor>{'  '}</Text>}
+        {line.model !== null && line.saved !== null && <Text>{' '}</Text>}
+        {line.saved?.cost === 'more' && <Text bold color="white" backgroundColor="red">{` saved: ${line.saved.name} `}</Text>}
+        {line.saved?.cost === 'less' && <Text bold color="white" backgroundColor="#5b8bd9">{` saved: ${line.saved.name} `}</Text>}
+        {line.saved?.cost === 'same' && <Text bold>{`saved: ${line.saved.name}`}</Text>}
+        {(line.model !== null || line.saved !== null) && <Text dimColor>{'  '}</Text>}
         <Text dimColor>{`${line.context} · `}</Text>
         {line.cache.kind === 'none' && <Text dimColor>cache none</Text>}
         {line.cache.kind === 'warm' && <Text dimColor>{`cache ~warm ${span(line.cache.minutesLeft * 60000)}`}</Text>}

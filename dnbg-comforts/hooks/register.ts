@@ -22,8 +22,8 @@ export const register: Register = (on, options) => {
 
   on('classic.PostModelSwitch', async ($, e, next) => {
     const result = await next(e)
-    await onSavedModelSwitch($, standard)
-    await onModelSwitch($, e.cache_ttl, standard)
+    const saved = await onSavedModelSwitch($, standard)
+    await onModelSwitch($, e.cache_ttl, standard, saved)
 
     return result
   })
