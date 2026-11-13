@@ -26,7 +26,7 @@ const SUBSCRIPTION: SessionUsage = {
   cost: { usd: 4.2 },
 }
 
-function world(on: On, model: string, files: Record<string, string> = {}, usage: SessionUsage = SUBSCRIPTION) {
+function world(on: On, model: string, files: Record<string, string> = {}, usage: SessionUsage = SUBSCRIPTION, reads = { usage: 0 }) {
   const clock = mock.clock(on, { now: NOW })
   mock.store(on)
   mock.env(on, { HOME })
@@ -34,7 +34,7 @@ function world(on: On, model: string, files: Record<string, string> = {}, usage:
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('fs.read', (_, e) => (e.path in files ? { value: files[e.path] as string } : { deny: 'missing' }))
   on('session.model', () => ({ value: model }))
-  on('session.usage', () => ({ value: usage }))
+  on('session.usage', () => (reads.usage++, { value: usage }))
   // Stands for the engine's own empty band.
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
@@ -210,4 +210,25 @@ test('a copy that cannot run is reported, and the compaction goes ahead', async 
 
   expect(compacted).toBe(true)
   expect(toasts[0]).toContain('Could not copy the transcript before compacting')
+})
+
+test('a new session shows context 0% and no cache yet, so the band keeps its shape', async ($, on) => {
+  world(on, 'claude-opus-5-5', {}, { startedAt: 0, context: { window: 200_000 }, rateLimits: [], cost: { usd: 0 } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+  const ui = await $.ui.mount(BAND)
+  const texts = (await ui.findAll({ type: 'Text' })).map(text => text.text)
+  expect(texts).toContain('context 0%')
+  expect(texts).toContain('cache none')
+  await ui.unmount()
+})
+
+test('a headless session does no band work after a turn', async ($, on) => {
+  const reads = { usage: 0 }
+  world(on, 'claude-opus-5-5', {}, SUBSCRIPTION, reads)
+  on('turn.complete', () => ({ text: '' }))
+  await $.session.start({ cwd: '/', surface: null, isInteractive: false })
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+
+  expect(reads.usage).toBe(0)
 })

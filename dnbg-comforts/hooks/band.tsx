@@ -1,16 +1,18 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 
-import type { UsageLine } from '../types'
+import type { CacheState, UsageLine } from '../types'
 import { costAgainst, displayName, isModel } from './models'
 import { standardModel } from './options'
 import { findPending } from './updates'
 
-const usage = atom({ plugin: 'dnbg-comforts', key: 'usage' } as const, { model: null, figures: '', cache: null }, { shape: 'usage-3' })
+const usage = atom({ plugin: 'dnbg-comforts', key: 'usage' } as const, { model: null, figures: '', cache: { kind: 'none' } }, { shape: 'usage-4' })
 // When the last turn ended; kept in state so a reload keeps the cache countdown.
 const lastResponseAt = atom({ plugin: 'dnbg-comforts', key: 'lastResponseAt' } as const, null)
 const compactThreshold = atom({ plugin: 'dnbg-comforts', key: 'compactThreshold' } as const, null)
 const pendingUpdates = atom({ plugin: 'dnbg-comforts', key: 'pendingUpdates' } as const, [])
+// Set once the band starts; a headless session never starts it.
+const isBandOn = atom({ plugin: 'dnbg-comforts', key: 'isBandOn' } as const, false)
 // The cache lifetime a model switch reported; until one does, it is assumed.
 const cacheTtlMs = atom({ plugin: 'dnbg-comforts', key: 'cacheTtlMs' } as const, null)
 
@@ -40,12 +42,11 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
   const model = await $.session.model()
   const parts: string[] = []
 
-  const { percent, window } = figures.context
-  if (percent !== undefined) {
-    const threshold = await read($, compactThreshold)
-    const compactsAt = threshold === null ? '' : ` (compacts at ${Math.round((threshold / window) * 100)}%)`
-    parts.push(`context ${Math.round(percent)}%${compactsAt}`)
-  }
+  // Before the first response nothing has been sent, so 0% is the true reading.
+  const { percent = 0, window } = figures.context
+  const threshold = await read($, compactThreshold)
+  const compactsAt = threshold === null ? '' : ` (compacts at ${Math.round((threshold / window) * 100)}%)`
+  parts.push(`context ${Math.round(percent)}%${compactsAt}`)
   for (const limit of figures.rateLimits) {
     const label = LIMIT_LABELS[limit.kind] ?? limit.kind
     const reset = limit.resetsAt ? ` ↻${span(Date.parse(limit.resetsAt) - now)}` : ''
@@ -66,7 +67,8 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
   const ttl = (await read($, cacheTtlMs)) ?? (figures.rateLimits.length > 0 ? HOUR_MS : FIVE_MINUTES_MS)
   const respondedAt = await read($, lastResponseAt)
   const left = respondedAt === null ? null : respondedAt + ttl - now
-  const cache = left === null ? null : { minutesLeft: left > 0 ? Math.round(left / 60000) : null }
+  const cache: CacheState =
+    left === null ? { kind: 'none' } : left > 0 ? { kind: 'warm', minutesLeft: Math.round(left / 60000) } : { kind: 'cold' }
 
   return { model: flag, figures: parts.join(' · '), cache }
 }
@@ -83,6 +85,7 @@ async function checkUpdates($: EngineInterface): Promise<void> {
 
 /** A model switch forfeits the cache: the next request writes it afresh. */
 export async function onModelSwitch($: EngineInterface, ttl: '5m' | '1h', standard: string): Promise<void> {
+  if (!(await read($, isBandOn))) return
   await update($, cacheTtlMs, () => (ttl === '1h' ? HOUR_MS : FIVE_MINUTES_MS))
   await update($, lastResponseAt, current => (current === null ? null : 0))
   await refresh($, standard)
@@ -90,6 +93,7 @@ export async function onModelSwitch($: EngineInterface, ttl: '5m' | '1h', standa
 
 export async function startBand($: EngineInterface, options: PluginOptions): Promise<void> {
   const standard = standardModel(options)
+  await update($, isBandOn, () => true)
   await checkUpdates($)
   await measureThreshold($)
   await refresh($, standard)
@@ -104,19 +108,25 @@ export function registerBand(on: On, options: PluginOptions): void {
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
-    const now = await $.clock.now()
-    await update($, lastResponseAt, () => now)
-    // Auto-update can land the marketplace copy after session start.
-    await checkUpdates($)
-    await measureThreshold($)
-    await refresh($, standard)
+    if (!(await read($, isBandOn))) return done
+
+    try {
+      const now = await $.clock.now()
+      await update($, lastResponseAt, () => now)
+      // Auto-update can land the marketplace copy after session start.
+      await checkUpdates($)
+      await measureThreshold($)
+      await refresh($, standard)
+    } catch (error) {
+      $.ui.log(`usage band refresh failed: ${String(error)}`)
+    }
 
     return done
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const line = await read($, usage)
-    if (e.props.hasSurvey || (line.model === null && line.figures === '' && line.cache === null)) return next(e)
+    if (e.props.hasSurvey) return next(e)
 
     const { Box, Text } = $.ui.resolve(e)
 
@@ -127,14 +137,11 @@ export function registerBand(on: On, options: PluginOptions): void {
         {line.model?.cost === 'same' && <Text bold>{line.model.name}</Text>}
         {line.model !== null && line.figures !== '' && <Text dimColor>{'  '}</Text>}
         <Text dimColor>{line.figures}</Text>
-        {line.cache !== null && line.figures !== '' && <Text dimColor>{' · '}</Text>}
-        {line.cache !== null &&
-          (line.cache.minutesLeft === null ? (
-            // Cold: the next request re-sends the whole context uncached.
-            <Text color="black" backgroundColor="yellow">{' cache ~cold '}</Text>
-          ) : (
-            <Text dimColor>{`cache ~warm ${span(line.cache.minutesLeft * 60000)}`}</Text>
-          ))}
+        <Text dimColor>{' · '}</Text>
+        {line.cache.kind === 'none' && <Text dimColor>cache none</Text>}
+        {line.cache.kind === 'warm' && <Text dimColor>{`cache ~warm ${span(line.cache.minutesLeft * 60000)}`}</Text>}
+        {/* Cold: the next request re-sends the whole context uncached. */}
+        {line.cache.kind === 'cold' && <Text color="black" backgroundColor="yellow">{' cache ~cold '}</Text>}
       </Box>
     )
   })
