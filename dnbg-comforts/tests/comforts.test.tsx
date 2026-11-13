@@ -71,6 +71,9 @@ test('on the standard model the band shows only the figures, cost left out', asy
 
   expect(texts).toContain('context 25% (compacts at 95%)')
   expect(texts).toContain('week 21% ↻4d0h')
+  // Cache sits beside context, before the windows that arrive later.
+  expect(texts.indexOf('cache')).toBeGreaterThan(texts.indexOf('context'))
+  expect(texts.indexOf('cache')).toBeLessThan(texts.indexOf('week'))
   expect(texts).not.toContain('$4.20')
   expect(texts).not.toContain('OPUS')
   await ui.unmount()
@@ -217,9 +220,8 @@ test('a new session shows context 0% and no cache yet, so the band keeps its sha
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
 
   const ui = await $.ui.mount(BAND)
-  const texts = (await ui.findAll({ type: 'Text' })).map(text => text.text)
-  expect(texts).toContain('context 0%')
-  expect(texts).toContain('cache none')
+  const texts = (await ui.findAll({ type: 'Text' })).map(text => text.text).join('')
+  expect(texts).toBe('context 0% · cache none')
   await ui.unmount()
 })
 

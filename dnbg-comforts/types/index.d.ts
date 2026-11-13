@@ -4,7 +4,8 @@ export type ModelFlag = { name: string; cost: 'more' | 'same' | 'less' }
 /** The prompt cache's estimated state: none before the first turn, then warm with minutes left, or cold. */
 export type CacheState = { kind: 'none' } | { kind: 'warm'; minutesLeft: number } | { kind: 'cold' }
 
-export type UsageLine = { model: ModelFlag | null; figures: string; cache: CacheState }
+/** Drawn in this order: model, context, cache, then the rest (usage windows, cost, updates). */
+export type UsageLine = { model: ModelFlag | null; context: string; cache: CacheState; rest: string }
 
 declare module 'claude-code' {
   interface PluginState {

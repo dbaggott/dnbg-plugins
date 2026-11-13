@@ -6,7 +6,7 @@ import { costAgainst, displayName, isModel } from './models'
 import { standardModel } from './options'
 import { findPending } from './updates'
 
-const usage = atom({ plugin: 'dnbg-comforts', key: 'usage' } as const, { model: null, figures: '', cache: { kind: 'none' } }, { shape: 'usage-4' })
+const usage = atom({ plugin: 'dnbg-comforts', key: 'usage' } as const, { model: null, context: 'context 0%', cache: { kind: 'none' }, rest: '' }, { shape: 'usage-5' })
 // When the last turn ended; kept in state so a reload keeps the cache countdown.
 const lastResponseAt = atom({ plugin: 'dnbg-comforts', key: 'lastResponseAt' } as const, null)
 const compactThreshold = atom({ plugin: 'dnbg-comforts', key: 'compactThreshold' } as const, null)
@@ -46,7 +46,7 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
   const { percent = 0, window } = figures.context
   const threshold = await read($, compactThreshold)
   const compactsAt = threshold === null ? '' : ` (compacts at ${Math.round((threshold / window) * 100)}%)`
-  parts.push(`context ${Math.round(percent)}%${compactsAt}`)
+  const context = `context ${Math.round(percent)}%${compactsAt}`
   for (const limit of figures.rateLimits) {
     const label = LIMIT_LABELS[limit.kind] ?? limit.kind
     const reset = limit.resetsAt ? ` ↻${span(Date.parse(limit.resetsAt) - now)}` : ''
@@ -70,7 +70,7 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
   const cache: CacheState =
     left === null ? { kind: 'none' } : left > 0 ? { kind: 'warm', minutesLeft: Math.round(left / 60000) } : { kind: 'cold' }
 
-  return { model: flag, figures: parts.join(' · '), cache }
+  return { model: flag, context, cache, rest: parts.join(' · ') }
 }
 
 async function refresh($: EngineInterface, standard: string): Promise<void> {
@@ -135,13 +135,13 @@ export function registerBand(on: On, options: PluginOptions): void {
         {line.model?.cost === 'more' && <Text bold color="white" backgroundColor="red">{` ⚠ ${line.model.name} `}</Text>}
         {line.model?.cost === 'less' && <Text bold color="white" backgroundColor="#5b8bd9">{` ${line.model.name} `}</Text>}
         {line.model?.cost === 'same' && <Text bold>{line.model.name}</Text>}
-        {line.model !== null && line.figures !== '' && <Text dimColor>{'  '}</Text>}
-        <Text dimColor>{line.figures}</Text>
-        <Text dimColor>{' · '}</Text>
+        {line.model !== null && <Text dimColor>{'  '}</Text>}
+        <Text dimColor>{`${line.context} · `}</Text>
         {line.cache.kind === 'none' && <Text dimColor>cache none</Text>}
         {line.cache.kind === 'warm' && <Text dimColor>{`cache ~warm ${span(line.cache.minutesLeft * 60000)}`}</Text>}
         {/* Cold: the next request re-sends the whole context uncached. */}
         {line.cache.kind === 'cold' && <Text color="black" backgroundColor="yellow">{' cache ~cold '}</Text>}
+        {line.rest !== '' && <Text dimColor>{` · ${line.rest}`}</Text>}
       </Box>
     )
   })
