@@ -92,7 +92,7 @@ It finishes with one list of every setting, what it is now and how to change it,
 | `issue-workflow` | `dnbg-workflow` | GitHub only | Writing issues that survive a cold handoff; claiming and resolving one |
 | `issue-reviewer` | `dnbg-workflow` | GitHub only | Reviewing an issue body as a spec, in rounds, before anyone picks it up |
 | `reviewer` | `dnbg-workflow` | GitHub only | Reviewing a pushed PR under an independent GitHub App identity |
-| `reviewer-setup` | `dnbg-workflow` | GitHub only | One-time creation of each role’s App |
+| `reviewer-setup` | `dnbg-workflow` | GitHub only | One-time creation of each role’s App, and connecting another machine to it |
 | `setup` | `dnbg-workflow` | GitHub only | Checking what an install still needs and walking you through only that |
 | `orchestrate` | `dnbg-workflow` | GitHub only | Driving an issue, a tracking issue’s children, or several issues to merged PRs with author and reviewer subagents |
 | `project-status` | `dnbg-workflow` | GitHub only | Which stage of the flow an issue is at, and the prompt to paste next |

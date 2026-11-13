@@ -3,7 +3,8 @@
 # Tests for role App setup. bootstrap.py runs in a copy of the plugin beside
 # fixture roles (role-tree.bash), with GitHub's half of the Manifest flow and the
 # browser click replaced by fixtures/bootstrap/drive.py, so what is under test is
-# the loop over roles: which it creates, from which permissions, into which dir.
+# the loop over roles: which it creates or connects, from which permissions, into
+# which dir. drive.py's header says what a world file holds.
 
 load role-tree
 
@@ -12,6 +13,28 @@ setup() {
   add_role author operator
   MANIFESTS="$BATS_TEST_TMPDIR/manifests"; : > "$MANIFESTS"
   PORT=$((20000 + RANDOM % 20000))
+  export HOME="$BATS_TEST_TMPDIR/home"; mkdir -p "$HOME/Downloads"
+  REVIEWER_DIR="$XDG_CONFIG_HOME/dnbg/reviewer"
+}
+
+# The world file drive.py answers from.
+github() {
+  export BOOTSTRAP_GITHUB="$BATS_TEST_TMPDIR/github.json"
+  printf '%s' "$1" > "$BOOTSTRAP_GITHUB"
+}
+
+# The run's JSON, which `run` leaves after the stderr lines.
+summary() {
+  printf '%s\n' "$output" | sed -n '/^\[/,$p'
+}
+
+# The reviewer App of the login drive.py answers with, and a key of its own.
+YOURS='"apps":{"agent-reviewer-tester":{"id":7,"owner":"tester"}},"keys":{"KEY-7":"agent-reviewer-tester"}'
+
+# <role dir>: holds what a create writes, at a create's modes.
+assert_saved() {
+  [ "$(find -L "$1" -maxdepth 0 -perm 700 | wc -l)" -eq 1 ]
+  [ "$(find -L "$1/private-key.pem" "$1/config.json" -perm 600 | wc -l)" -eq 2 ]
 }
 
 bootstrap() {
@@ -122,6 +145,272 @@ assert url % "reviewer" in failed and "no &lt;code&gt;" in failed, failed
 assert "installations/new" not in b.failed_page("Setup failed", "x", [])
 one = b.created_page([("reviewer", url % "reviewer")], [])
 assert one.count("installations/new") == 1 and "The reviewer bot is created" in one, one
+PY
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "--detect reports a bot of the operator's as yours and the rest as free, and changes nothing" {
+  github "{$YOURS}"
+  bootstrap --detect
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '.[] | select(.role == "reviewer") | [.state, .slug, .app_id, .owner]' <<<"$output")" = '["yours","agent-reviewer-tester","7","tester"]' ]
+  [ "$(jq -c '.[] | select(.role == "author") | [.state, .name]' <<<"$output")" = '["free","agent-author-tester"]' ]
+  [ ! -e "$MANIFESTS.opened" ]
+  [ ! -e "$XDG_CONFIG_HOME/dnbg" ]
+}
+
+@test "--detect counts an org in --owners as the operator's" {
+  github '{"apps":{"agent-reviewer-tester":{"id":7,"owner":"Acme","type":"Organization"}}}'
+  bootstrap --detect --roles reviewer --owners=other,acme
+  [ "$(jq -c '.[0] | [.state, .owner_type]' <<<"$output")" = '["yours","org"]' ]
+  bootstrap --detect --roles reviewer --owners='${user_config.owners}'
+  [ "$(jq -r '.[0].state' <<<"$output")" = free ]
+}
+
+@test "--detect with no gh login reads every role free, with the reason" {
+  github "{$YOURS}"
+  BOOTSTRAP_LOGIN='' bootstrap --detect --roles reviewer
+  [ "$status" -eq 0 ]
+  [ "$(jq -c '.[0] | [.state, .name, (.reason | length > 0)]' <<<"$output")" = '["free","agent-reviewer",true]' ]
+}
+
+@test "a create for a role whose bot exists is refused before the browser opens, and --name lifts it" {
+  github "{$YOURS}"
+  bootstrap --roles reviewer
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--adopt reviewer=agent-reviewer-tester"* ]]
+  [ ! -e "$MANIFESTS.opened" ]
+  bootstrap --roles reviewer --name second-reviewer
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .slug "$REVIEWER_DIR/config.json")" = second-reviewer ]
+}
+
+@test "a key the Downloads watch finds is proven, saved as a create saves, and removed" {
+  github "{$YOURS,\"download\":{\"agent-reviewer-tester\":\"KEY-7\"}}"
+  bootstrap --roles author --adopt reviewer=agent-reviewer-tester
+  [ "$status" -eq 0 ]
+  [ "$(cat "$REVIEWER_DIR/private-key.pem")" = KEY-7 ]
+  assert_saved "$REVIEWER_DIR"
+  [ "$(jq -c '[.app_id, .slug, .bot_login, .owner_type, .owner]' "$REVIEWER_DIR/config.json")" = '["7","agent-reviewer-tester","agent-reviewer-tester[bot]","user","tester"]' ]
+  [ "$(jq -cS keys "$REVIEWER_DIR/config.json")" = "$(jq -cS keys "$XDG_CONFIG_HOME/dnbg/author/config.json")" ]
+  [ -z "$(ls "$HOME/Downloads")" ]
+}
+
+@test "a run connects the roles in --adopt and creates the rest, and says which" {
+  github "{$YOURS,\"download\":{\"agent-reviewer-tester\":\"KEY-7\"}}"
+  bootstrap --roles author --adopt reviewer=agent-reviewer-tester
+  [ "$status" -eq 0 ]
+  [ "$(summary | jq -c 'map([.role, .action, .slug])')" = '[["reviewer","connected","agent-reviewer-tester"],["author","created","agent-author-tester"]]' ]
+  [ "$(summary | jq -c '.[0] | keys')" = "$(summary | jq -c '.[1] | keys')" ]
+  [ "$(wc -l < "$MANIFESTS")" -eq 1 ]
+}
+
+@test "--adopt alone creates nothing" {
+  github "{$YOURS,\"download\":{\"agent-reviewer-tester\":\"KEY-7\"}}"
+  bootstrap --adopt reviewer=agent-reviewer-tester
+  [ "$status" -eq 0 ]
+  [ ! -s "$MANIFESTS" ]
+  [ ! -e "$XDG_CONFIG_HOME/dnbg/author" ]
+}
+
+@test "a key from the page's file picker is proven and saved" {
+  github "{$YOURS,\"upload\":{\"reviewer\":\"KEY-7\"}}"
+  bootstrap --adopt reviewer=agent-reviewer-tester
+  [ "$status" -eq 0 ]
+  [ "$(cat "$REVIEWER_DIR/private-key.pem")" = KEY-7 ]
+  assert_saved "$REVIEWER_DIR"
+  [[ "$output" == *"operator's to delete"* ]]
+  [[ "$(cat "$MANIFESTS.status")" == *"yours to delete"* ]]
+}
+
+@test "a key from --key is proven and saved with no page, and its file left alone" {
+  github "{$YOURS}"
+  echo KEY-7 > "$BATS_TEST_TMPDIR/mine.pem"
+  bootstrap --adopt reviewer=agent-reviewer-tester --key "reviewer=$BATS_TEST_TMPDIR/mine.pem"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$REVIEWER_DIR/private-key.pem")" = KEY-7 ]
+  assert_saved "$REVIEWER_DIR"
+  [ -f "$BATS_TEST_TMPDIR/mine.pem" ]
+  [[ "$output" == *"operator's to delete"* ]]
+  [ ! -e "$MANIFESTS.opened" ]
+}
+
+@test "--adopt for a role already set up replaces its key and config" {
+  github "{$YOURS}"
+  mkdir -p "$REVIEWER_DIR"; echo '{"slug":"existing"}' > "$REVIEWER_DIR/config.json"
+  echo KEY-7 > "$BATS_TEST_TMPDIR/mine.pem"
+  bootstrap --adopt reviewer=agent-reviewer-tester --key "reviewer=$BATS_TEST_TMPDIR/mine.pem"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .slug "$REVIEWER_DIR/config.json")" = agent-reviewer-tester ]
+}
+
+@test "a role set up on this machine is not created over, and is pointed at --adopt" {
+  mkdir -p "$REVIEWER_DIR"; echo '{"slug":"existing"}' > "$REVIEWER_DIR/config.json"
+  bootstrap --roles reviewer
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--adopt reviewer=existing"* ]]
+  [ "$(jq -r .slug "$REVIEWER_DIR/config.json")" = existing ]
+  [ ! -e "$MANIFESTS.opened" ]
+}
+
+@test "a role whose App was deleted is created again with --name, as the refusal says" {
+  mkdir -p "$REVIEWER_DIR"; echo '{"slug":"deleted-app"}' > "$REVIEWER_DIR/config.json"
+  bootstrap --roles reviewer
+  [[ "$output" == *"If you deleted that App"*"--name"* ]]
+  bootstrap --roles reviewer --name fresh-reviewer
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .slug "$REVIEWER_DIR/config.json")" = fresh-reviewer ]
+}
+
+@test "a refused --key stops the run and names every role it did not reach" {
+  github '{"apps":{"agent-reviewer-tester":{"id":7,"owner":"tester"},"agent-author-tester":{"id":8,"owner":"tester"}},
+    "keys":{"KEY-8":"agent-author-tester"}}'
+  echo KEY-OTHER > "$BATS_TEST_TMPDIR/other.pem"; echo KEY-8 > "$BATS_TEST_TMPDIR/author.pem"
+  bootstrap --adopt reviewer=agent-reviewer-tester --adopt author=agent-author-tester \
+    --key "reviewer=$BATS_TEST_TMPDIR/other.pem" --key "author=$BATS_TEST_TMPDIR/author.pem"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Stopped before: author."* ]]
+  [ ! -e "$XDG_CONFIG_HOME/dnbg/author" ]
+}
+
+@test "--adopt is refused for a role whose key comes from its variables" {
+  github "{$YOURS}"
+  export DNBG_REVIEWER_PRIVATE_KEY_COMMAND='op read x'
+  bootstrap --adopt reviewer=agent-reviewer-tester
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"DNBG_REVIEWER_PRIVATE_KEY_COMMAND"* ]]
+  [ ! -e "$MANIFESTS.opened" ]
+}
+
+@test "--name with a role that is in --adopt is refused" {
+  github "{$YOURS}"
+  bootstrap --roles reviewer --name mine --adopt reviewer=agent-reviewer-tester
+  [ "$status" -eq 2 ]
+  [ ! -e "$MANIFESTS.opened" ]
+}
+
+@test "the Downloads watch ignores a matching file from before the page was served" {
+  github "{$YOURS}"
+  old="$HOME/Downloads/agent-reviewer-tester.2026-01-02.private-key.pem"
+  echo KEY-7 > "$old"; touch -t 202001010000 "$old"
+  bootstrap --adopt reviewer=agent-reviewer-tester --timeout 2
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Not connected: reviewer"* ]]
+  [ ! -e "$REVIEWER_DIR" ]
+  [ -f "$old" ]
+}
+
+@test "a key that GET /app answers with another slug is refused, and nothing is written" {
+  github '{"apps":{"agent-reviewer-tester":{"id":7,"owner":"tester","hidden":true},"other-app":{"id":9,"owner":"tester"}},
+    "keys":{"KEY-9":"other-app"},"upload":{"reviewer":"KEY-9"}}'
+  bootstrap --adopt reviewer=agent-reviewer-tester:9 --timeout 2
+  [ "$status" -eq 1 ]
+  [[ "$(cat "$MANIFESTS.status")" == *"belongs to the App 'other-app', not 'agent-reviewer-tester'"* ]]
+  [ ! -e "$REVIEWER_DIR" ]
+}
+
+@test "a key GitHub does not accept for the App is refused, and nothing is written" {
+  github "{$YOURS}"
+  echo KEY-OTHER > "$BATS_TEST_TMPDIR/other.pem"
+  bootstrap --roles author --adopt reviewer=agent-reviewer-tester --key "reviewer=$BATS_TEST_TMPDIR/other.pem"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Stopped before: author"* ]]
+  [ ! -e "$REVIEWER_DIR" ]
+  [ ! -s "$MANIFESTS" ]
+}
+
+@test "a slug the lookup cannot see is connected with its App ID, and refused before any page without" {
+  github '{"apps":{"agent-reviewer-tester":{"id":7,"owner":"tester","hidden":true}},
+    "keys":{"KEY-7":"agent-reviewer-tester"},"upload":{"reviewer":"KEY-7"}}'
+  bootstrap --adopt reviewer=agent-reviewer-tester
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--adopt reviewer=agent-reviewer-tester:<App ID>"* ]]
+  [ ! -e "$MANIFESTS.opened" ]
+  bootstrap --adopt reviewer=agent-reviewer-tester:7
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .app_id "$REVIEWER_DIR/config.json")" = 7 ]
+}
+
+@test "a permission shortfall is printed with its consequence, and the credentials are still saved" {
+  github '{"apps":{"agent-reviewer-tester":{"id":7,"owner":"tester","permissions":{"pull_requests":"write","issues":"read","metadata":"read"}}},
+    "keys":{"KEY-7":"agent-reviewer-tester"}}'
+  echo KEY-7 > "$BATS_TEST_TMPDIR/mine.pem"
+  bootstrap --adopt reviewer=agent-reviewer-tester --key "reviewer=$BATS_TEST_TMPDIR/mine.pem"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"issues: need write, have read"* ]]
+  [[ "$output" == *"contents: need write, not granted"*"without it, $(jq -r .consequence.contents "$TREE/roles/reviewer/permissions.json")"* ]]
+  [[ "$output" != *"pull_requests: need"* ]]
+  [ -f "$REVIEWER_DIR/private-key.pem" ]
+}
+
+@test "an over-long default name is shortened the same way on every run, and an over-long --name refused" {
+  add_role orchestrator operator
+  export BOOTSTRAP_LOGIN=abcdefghijklmn-xyz-and-more
+  bootstrap --detect --roles orchestrator
+  [ "$(jq -r '.[0].name' <<<"$output")" = agent-orchestrator-abcdefghijklmn ]
+  bootstrap --roles orchestrator
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .name "$MANIFESTS")" = agent-orchestrator-abcdefghijklmn ]
+  bootstrap --roles author --name "$(printf 'x%.0s' {1..35})"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"GitHub's limit for an App's name is 34"* ]]
+  [ "$(wc -l < "$MANIFESTS")" -eq 1 ]
+}
+
+@test "where the default name is someone else's App, the first free candidate is the name created" {
+  github '{"apps":{"agent-reviewer-tester":{"id":7,"owner":"stranger"}}}'
+  bootstrap --detect --roles reviewer
+  [ "$(jq -c '.[0] | [.state, .name]' <<<"$output")" = '["free","agent-reviewer-tester-2"]' ]
+  bootstrap --roles reviewer
+  [ "$status" -eq 0 ]
+  [ "$(jq -r .name "$MANIFESTS")" = agent-reviewer-tester-2 ]
+}
+
+@test "where the default name is someone else's App and the next candidate is the operator's, the role is yours" {
+  github '{"apps":{"agent-reviewer-tester":{"id":7,"owner":"stranger"},"agent-reviewer-tester-2":{"id":8,"owner":"tester"}}}'
+  bootstrap --detect --roles reviewer
+  [ "$(jq -c '.[0] | [.state, .slug]' <<<"$output")" = '["yours","agent-reviewer-tester-2"]' ]
+  bootstrap --roles reviewer
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--adopt reviewer=agent-reviewer-tester-2"* ]]
+  [ ! -e "$MANIFESTS.opened" ]
+}
+
+@test "a suffixed candidate cuts the login further to stay within the limit" {
+  run python3 - "$TREE/skills/reviewer-setup" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+import bootstrap as b
+assert b.default_name("orchestrator", "abcdefghijklmnopqrst") == "agent-orchestrator-abcdefghijklmno"
+assert b.default_name("orchestrator", "abcdefghijklmnopqrst", 2) == "agent-orchestrator-abcdefghijklm-2"
+assert b.default_name("reviewer", "tester", 3) == "agent-reviewer-tester-3"
+assert all(len(b.default_name("orchestrator", "x" * 39, n)) <= b.NAME_LIMIT for n in range(1, 21))
+PY
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "the App JWT is signed by the key, RS256, with the App ID as issuer" {
+  openssl genrsa -out "$BATS_TEST_TMPDIR/key.pem" 2048 2>/dev/null
+  openssl rsa -in "$BATS_TEST_TMPDIR/key.pem" -pubout -out "$BATS_TEST_TMPDIR/pub.pem" 2>/dev/null
+  run python3 - "$TREE/skills/reviewer-setup" "$BATS_TEST_TMPDIR" <<'PY'
+import base64, json, subprocess, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import bootstrap as b
+tmp = Path(sys.argv[2])
+decode = lambda part: base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))
+header, claims, signature = b.app_jwt("42", (tmp / "key.pem").read_text()).split(".")
+assert json.loads(decode(header)) == {"alg": "RS256", "typ": "JWT"}
+assert json.loads(decode(claims))["iss"] == "42"
+(tmp / "sig").write_bytes(decode(signature))
+subprocess.run(["openssl", "dgst", "-sha256", "-verify", str(tmp / "pub.pem"), "-signature",
+                str(tmp / "sig")], input=f"{header}.{claims}".encode(), check=True)
+try:
+    b.app_jwt("42", "not a key")
+except b.KeyRefused:
+    pass
+else:
+    raise AssertionError("a file that is no key was signed with")
 PY
   [ "$status" -eq 0 ] || { echo "$output"; false; }
 }
