@@ -1,30 +1,36 @@
+import type { CommandRunInput, On, SessionContextBreakdown } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
 const BAND = {
   plugin: 'dnbg-comforts',
   component: 'AbovePrompt',
   surface: 'terminal',
-  props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120 },
+  props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
 } as const
 
 const HOME = '/home/u'
 const SETTINGS = `${HOME}/.claude/settings.json`
 
+// A /later typed at the prompt.
+function later(args: string): CommandRunInput {
+  return { command: 'later', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } }
+}
+
 const NOW = Date.parse('2026-01-01T00:00:00Z')
 
 // The engine beneath the plugin: a subscription session on `model`.
-function world(on: Parameters<Parameters<typeof test>[1]>[1], model: string, files: Record<string, string> = {}) {
+function world(on: On, model: string, files: Record<string, string> = {}) {
   const clock = mock.clock(on, { now: NOW })
   mock.store(on)
   mock.env(on, { HOME })
   on('command.register', () => ({ value: { command: 'later' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('fs.read', (_, e) => (e.path in files ? { value: files[e.path] } : { deny: 'missing' }))
+  on('fs.read', (_, e) => (e.path in files ? { value: files[e.path] as string } : { deny: 'missing' }))
   on('session.model', () => ({ value: model }))
   on('session.usage', () => ({
     value: {
       startedAt: 0,
-      context: { tokens: 50_000, window: 200_000, percent: 25, breakdown: { autoCompactThreshold: 190_000 } },
+      context: { tokens: 50_000, window: 200_000, percent: 25, breakdown: { autoCompactThreshold: 190_000 } as SessionContextBreakdown },
       rateLimits: [{ kind: 'seven_day', percentUsed: 21, resetsAt: '2026-01-05T00:00:00Z' }],
       cost: { usd: 4.2 },
     },
@@ -41,7 +47,7 @@ function world(on: Parameters<Parameters<typeof test>[1]>[1], model: string, fil
 test('/later answers locally and hands the note to the model', async ($, on) => {
   world(on, 'claude-opus-5-5')
 
-  const ran = await $.command.run({ command: 'later', args: 'option B, no rush' })
+  const ran = await $.command.run(later('option B, no rush'))
 
   expect(ran.text).toBe('Queued for Claude’s next turn.')
   expect(ran.context?.[0]).toContain('option B, no rush')
@@ -50,7 +56,7 @@ test('/later answers locally and hands the note to the model', async ($, on) => 
 test('/later with no note says how to use it', async ($, on) => {
   world(on, 'claude-opus-5-5')
 
-  const ran = await $.command.run({ command: 'later', args: '  ' })
+  const ran = await $.command.run(later('  '))
 
   expect(ran.text).toBe('Usage: /later <note>')
   expect(ran.context).toBeUndefined()
@@ -90,7 +96,7 @@ test('saving a non-standard model for future sessions says so once', async ($, o
   const files: Record<string, string> = { [SETTINGS]: '{"model":"opus"}' }
   world(on, 'claude-opus-5-5', files)
   const notes: string[] = []
-  on('ui.notify', (_, e) => (notes.push(e.text), { value: { isSent: true } }))
+  on('ui.notify', (_, e) => (notes.push(e.text), { value: { isSent: true, channel: 'iterm2' } }))
   on('ui.toast', () => ({ value: undefined }))
   on('classic.PostModelSwitch', () => ({}))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
