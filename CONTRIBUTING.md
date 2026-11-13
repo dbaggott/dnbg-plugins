@@ -106,6 +106,7 @@ jq empty .claude-plugin/marketplace.json
 jq -r '.plugins[].source' .claude-plugin/marketplace.json \
   | xargs -I{} find {} -name '*.json' | xargs -n1 jq empty
 claude plugin validate . --strict
+claude plugin test dnbg-comforts            # the hooks module's own tests
 actionlint                                  # brew install actionlint
 docs/media/check-render.sh                  # README demos; a hook reword stales one
 ```

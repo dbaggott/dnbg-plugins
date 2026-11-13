@@ -297,6 +297,18 @@ jobs:
             exit 1
           }
 
+      - name: Test the hooks modules
+        if: ${{ !cancelled() }}
+        # A plugin that runs as a hooks module carries `*.test.ts(x)` files that
+        # `claude plugin test` runs against the engine; bats cannot reach them.
+        run: |
+          set -euo pipefail
+          while IFS= read -r src; do
+            jq -e '.modules' "$src/hooks/hooks.json" >/dev/null 2>&1 || continue
+            echo "  $src"
+            claude plugin test "$src"
+          done < <(jq -r '.plugins[].source | select(type == "string")' .claude-plugin/marketplace.json)
+
   hook-tests:
     name: hook-tests
     runs-on: ubuntu-latest

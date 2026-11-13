@@ -6,6 +6,11 @@ older client installing the plugin and misbehaving quietly. Verified working on
 v2.1.226. ([Where the floor comes
 from](maintainers.md#where-the-version-floor-comes-from), if you need it.)
 
+`dnbg-comforts` needs **v2.1.311 or newer**, the version it was built and
+verified on: it runs as a hooks module, which an older client may not load.
+Its transcript copy runs `mkdir` and `cp`, so on Windows outside Git Bash it
+fails, says so in a toast, and the compaction goes ahead.
+
 `orchestrate`'s author and reviewer keep a 1-hour prompt cache only on a client
 that reads the experimental `cacheTtl` agent option, verified on v2.1.300. An
 older client runs them on the 5-minute cache, without any error.

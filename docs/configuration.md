@@ -57,7 +57,16 @@ Edit with `/plugin configure dnbg-agent-summaries`.
 | `summary_dir` | `<data_dir>/agent-summaries` | Where agents write summary files. Absolute or under `~/` |
 
 `data_dir` is set per plugin. To move every dnbg directory, set it to the same
-value here and in `dnbg-workflow`.
+value here, in `dnbg-workflow` and in `dnbg-comforts`.
+
+### `dnbg-comforts`
+
+Edit with `/plugin configure dnbg-comforts`.
+
+| Setting | Default | Controls |
+| --- | --- | --- |
+| `standard_model` | `opus` | The model you normally run, as an alias or part of a model id. The band flags any other, and you are told when the saved model changes to another |
+| `data_dir` | `~/.claude/dnbg` | Directory the transcript copies sit under, as `transcripts/`. Absolute or under `~/` |
 
 ### `dnbg-work-summary`
 
