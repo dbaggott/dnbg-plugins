@@ -42,8 +42,9 @@ export const register: Register = (on, options) => {
     return result
   })
 
-  // A save of the default model writes user settings; this catches it whatever
-  // the order of the write and the switch.
+  // A save of the default model writes user settings. Whether Claude Code
+  // reports its own /model write here is unverified, so the re-check after a
+  // switch stays; this catches a save that lands later than that.
   on('classic.ConfigChange', async ($, e, next) => {
     const result = await next(e)
     if (e.source === 'user_settings') await announceSaved($, standard)
