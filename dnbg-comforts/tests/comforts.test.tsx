@@ -20,7 +20,7 @@ function later(args: string): CommandRunInput {
 const SWITCH = { from_model: 'claude-opus-5-5', to_model: 'claude-sonnet-5-5', requested_model: 'sonnet', source: 'command', context_tokens: 0, prompt_cache_warm: true, cache_ttl: '1h', estimated_cache_write_usd: 0, pricing: 'catalog' } as const
 
 // A model switch, with the clock moved past the plugin's second look at settings.
-async function switchModel($: Parameters<TestBody>[0], clock: MockClock, input: typeof SWITCH | (Omit<typeof SWITCH, 'to_model' | 'requested_model'> & { to_model: string; requested_model: string })) {
+async function switchModel($: Parameters<TestBody>[0], clock: MockClock, input: typeof SWITCH | (Omit<typeof SWITCH, 'to_model' | 'requested_model' | 'cache_ttl'> & { to_model: string; requested_model: string; cache_ttl: '5m' | '1h' })) {
   const switched = $.classic.PostModelSwitch(input)
   await clock.advance(600)
   await switched
@@ -146,6 +146,60 @@ test('the cache counts down after a turn and turns yellow once cold', async ($, 
   expect(badge?.text).toBe(' cache ~cold ')
   expect(badge?.props.backgroundColor).toBe('yellow')
   await cold.unmount()
+})
+
+// The session's state, which a /clear starts over as it moves the process to a
+// new session id; the kit's own `$.state` keeps its values through a session.end.
+function clearableState(on: On) {
+  let state = new Map<string, { value: unknown; version: number }>()
+  const name = (e: { plugin: string; key: string }) => `${e.plugin}.${e.key}`
+  on('state.get', (_, e) => ({ value: state.get(name(e)) ?? { value: undefined, version: 0 } }))
+  on('state.set', (_, e) => {
+    const version = (state.get(name(e))?.version ?? 0) + 1
+    state.set(name(e), { value: e.value, version })
+    return { value: { isSet: true, version } }
+  })
+  on('session.end', (_, e) => {
+    if (e.reason === 'clear') state = new Map()
+    return { sessionId: e.sessionId }
+  })
+}
+
+// A /clear ends the session and starts no other: the process goes on under a new id.
+async function clear($: Parameters<TestBody>[0]) {
+  await $.session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } })
+}
+
+test('after a /clear the cache counts down again from the next turn, for the lifetime a switch reported', async ($, on) => {
+  const clock = world(on, 'claude-opus-5-5')
+  clearableState(on)
+  on('turn.complete', () => ({ text: '' }))
+  on('classic.PostModelSwitch', () => ({}))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await switchModel($, clock, { ...SWITCH, cache_ttl: '5m' })
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+  await clear($)
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't2', reason: 'answer' })
+
+  const ui = await $.ui.mount(BAND)
+  expect((await ui.find({ type: 'Text', text: /cache/ }))?.text).toBe('cache ~warm 5m')
+  await ui.unmount()
+})
+
+test('after a /clear a switch for this session alone is not announced as saved', async ($, on) => {
+  const clock = world(on, 'claude-opus-5-5', { [SETTINGS]: '{"model":"fable"}' })
+  clearableState(on)
+  const toasts: string[] = []
+  on('ui.toast', (_, e) => (toasts.push(e.text), { value: undefined }))
+  on('classic.PostModelSwitch', () => ({}))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clear($)
+  await switchModel($, clock, SWITCH)
+
+  expect(toasts).toEqual([])
+  const ui = await $.ui.mount(BAND)
+  expect(await ui.find({ type: 'Text', text: /future sessions/ })).toBeUndefined()
+  await ui.unmount()
 })
 
 test('a new session shows no cost before its first response', async ($, on) => {

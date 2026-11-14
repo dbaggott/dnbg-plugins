@@ -9,15 +9,18 @@ import { findPending } from './updates'
 const usage = atom({ plugin: 'dnbg-comforts', key: 'usage' } as const, { model: null, saved: null, context: 'context 0%', cache: { kind: 'none' }, rest: '' }, { shape: 'usage-6' })
 // When the last turn ended; kept in state so a reload keeps the cache countdown.
 const lastResponseAt = atom({ plugin: 'dnbg-comforts', key: 'lastResponseAt' } as const, null)
-const compactThreshold = atom({ plugin: 'dnbg-comforts', key: 'compactThreshold' } as const, null)
-const pendingUpdates = atom({ plugin: 'dnbg-comforts', key: 'pendingUpdates' } as const, [])
-// Set once the band starts; a headless session never starts it.
-const isBandOn = atom({ plugin: 'dnbg-comforts', key: 'isBandOn' } as const, false)
 const savedNotice = atom({ plugin: 'dnbg-comforts', key: 'savedNotice' } as const, null)
 const SAVED_NOTICE_MS = 30_000
 const SAVED_LABEL = ' · all future sessions!'
+
+// Facts about the process rather than the conversation, held with the code: a
+// /clear starts `$.state` over and runs no `session.start`, while the band's timer runs on.
+// Set once the band starts; a headless session never starts it.
+let isBandOn = false
 // The cache lifetime a model switch reported; until one does, it is assumed.
-const cacheTtlMs = atom({ plugin: 'dnbg-comforts', key: 'cacheTtlMs' } as const, null)
+let cacheTtlMs: number | null = null
+let compactThreshold: number | null = null
+let pendingUpdates: string[] = []
 
 const REFRESH_MS = 15_000
 const HOUR_MS = 60 * 60 * 1000
@@ -36,7 +39,7 @@ async function measureThreshold($: EngineInterface): Promise<void> {
   // `summary` counts locally from the last response; it sends no request.
   const { context } = await $.session.usage({ breakdown: 'summary' })
   const threshold = context.breakdown?.autoCompactThreshold ?? null
-  await update($, compactThreshold, () => threshold)
+  compactThreshold = threshold
 }
 
 async function measure($: EngineInterface, standard: string): Promise<UsageLine> {
@@ -47,8 +50,7 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
 
   // Before the first response nothing has been sent, so 0% is the true reading.
   const { percent = 0, window } = figures.context
-  const threshold = await read($, compactThreshold)
-  const compactsAt = threshold === null ? '' : ` (compacts at ${Math.round((threshold / window) * 100)}%)`
+  const compactsAt = compactThreshold === null ? '' : ` (compacts at ${Math.round((compactThreshold / window) * 100)}%)`
   const context = `context ${Math.round(percent)}%${compactsAt}`
   for (const limit of figures.rateLimits) {
     const label = LIMIT_LABELS[limit.kind] ?? limit.kind
@@ -58,8 +60,7 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
   // Usage windows are reported only on a subscription, where cost is moot. Before
   // the first response neither has a reading, so a zero cost says nothing.
   if (figures.rateLimits.length === 0 && figures.cost && figures.cost.usd > 0) parts.push(`$${figures.cost.usd.toFixed(2)}`)
-  const updates = await read($, pendingUpdates)
-  if (updates.length > 0) parts.push(`restart to update ${updates.join(', ')}`)
+  if (pendingUpdates.length > 0) parts.push(`restart to update ${pendingUpdates.join(', ')}`)
 
   const flag = isModel(model, standard)
     ? null
@@ -67,7 +68,7 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
 
   // Unreported, the lifetime is assumed from the plan: an hour on a subscription
   // (usage windows reported), five minutes otherwise. Hence the `~`.
-  const ttl = (await read($, cacheTtlMs)) ?? (figures.rateLimits.length > 0 ? HOUR_MS : FIVE_MINUTES_MS)
+  const ttl = cacheTtlMs ?? (figures.rateLimits.length > 0 ? HOUR_MS : FIVE_MINUTES_MS)
   const respondedAt = await read($, lastResponseAt)
   const left = respondedAt === null ? null : respondedAt + ttl - now
   const cache: CacheState =
@@ -91,12 +92,12 @@ async function refresh($: EngineInterface, standard: string): Promise<void> {
 
 async function checkUpdates($: EngineInterface): Promise<void> {
   const pending = await findPending($)
-  await update($, pendingUpdates, () => pending)
+  pendingUpdates = pending
 }
 
 /** Marks `saved` as just saved for future sessions, in the band, for a while. */
 export async function showSaved($: EngineInterface, saved: string, standard: string): Promise<void> {
-  if (!(await read($, isBandOn))) return
+  if (!isBandOn) return
   const until = (await $.clock.now()) + SAVED_NOTICE_MS
   await update($, savedNotice, () => ({ model: saved, name: displayName(saved), cost: costAgainst(saved, standard), until }))
   await refresh($, standard)
@@ -104,15 +105,15 @@ export async function showSaved($: EngineInterface, saved: string, standard: str
 
 /** A model switch forfeits the cache: the next request writes it afresh. */
 export async function onModelSwitch($: EngineInterface, ttl: '5m' | '1h', standard: string): Promise<void> {
-  if (!(await read($, isBandOn))) return
-  await update($, cacheTtlMs, () => (ttl === '1h' ? HOUR_MS : FIVE_MINUTES_MS))
+  if (!isBandOn) return
+  cacheTtlMs = ttl === '1h' ? HOUR_MS : FIVE_MINUTES_MS
   await update($, lastResponseAt, current => (current === null ? null : 0))
   await refresh($, standard)
 }
 
 export async function startBand($: EngineInterface, options: PluginOptions): Promise<void> {
   const standard = standardModel(options)
-  await update($, isBandOn, () => true)
+  isBandOn = true
   await checkUpdates($)
   await measureThreshold($)
   await refresh($, standard)
@@ -127,7 +128,7 @@ export function registerBand(on: On, options: PluginOptions): void {
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
-    if (!(await read($, isBandOn))) return done
+    if (!isBandOn) return done
 
     try {
       const now = await $.clock.now()

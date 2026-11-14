@@ -1,4 +1,3 @@
-import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
 import { isModel } from './models'
@@ -6,9 +5,9 @@ import { configDir, readJson } from './settings'
 
 const TOAST_MS = 12_000
 
-// The saved model this session last saw. Session state: another session's
-// view of the settings file must not stand in for this one's.
-const lastSaved = atom({ plugin: 'dnbg-comforts', key: 'lastSaved' } as const, '')
+// The saved model this process last saw. Held with the code rather than in
+// `$.state`, which a /clear starts over.
+let lastSaved = ''
 
 /** The `model` saved in user settings for future sessions; '' when none is. */
 async function savedModel($: EngineInterface): Promise<string> {
@@ -18,8 +17,7 @@ async function savedModel($: EngineInterface): Promise<string> {
 }
 
 export async function startSavedModel($: EngineInterface): Promise<void> {
-  const saved = await savedModel($)
-  await update($, lastSaved, () => saved)
+  lastSaved = await savedModel($)
 }
 
 /**
@@ -29,8 +27,8 @@ export async function startSavedModel($: EngineInterface): Promise<void> {
  */
 export async function checkSavedModel($: EngineInterface, standard: string): Promise<string | null> {
   const saved = await savedModel($)
-  const previous = await read($, lastSaved)
-  await update($, lastSaved, () => saved)
+  const previous = lastSaved
+  lastSaved = saved
 
   if (saved !== previous && saved !== '' && !isModel(saved, standard)) {
     $.ui.toast(`FYI: you set your model to ${saved} for all future sessions.`, { timeoutMs: TOAST_MS })
