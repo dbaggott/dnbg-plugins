@@ -19,7 +19,6 @@ declare module 'claude-code' {
       pendingUpdates: string[]
       cacheTtlMs: number | null
       lastSaved: string
-      isBandOn: boolean
       savedNotice: SavedNotice | null
     }
   }

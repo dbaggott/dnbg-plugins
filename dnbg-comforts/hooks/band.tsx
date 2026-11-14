@@ -11,8 +11,9 @@ const usage = atom({ plugin: 'dnbg-comforts', key: 'usage' } as const, { model: 
 const lastResponseAt = atom({ plugin: 'dnbg-comforts', key: 'lastResponseAt' } as const, null)
 const compactThreshold = atom({ plugin: 'dnbg-comforts', key: 'compactThreshold' } as const, null)
 const pendingUpdates = atom({ plugin: 'dnbg-comforts', key: 'pendingUpdates' } as const, [])
-// Set once the band starts; a headless session never starts it.
-const isBandOn = atom({ plugin: 'dnbg-comforts', key: 'isBandOn' } as const, false)
+// Set once the band starts; a headless session never starts it. Held with the
+// code rather than in `$.state`, which a /clear starts over while the band's timer runs on.
+let isBandOn = false
 const savedNotice = atom({ plugin: 'dnbg-comforts', key: 'savedNotice' } as const, null)
 const SAVED_NOTICE_MS = 30_000
 const SAVED_LABEL = ' · all future sessions!'
@@ -96,7 +97,7 @@ async function checkUpdates($: EngineInterface): Promise<void> {
 
 /** Marks `saved` as just saved for future sessions, in the band, for a while. */
 export async function showSaved($: EngineInterface, saved: string, standard: string): Promise<void> {
-  if (!(await read($, isBandOn))) return
+  if (!isBandOn) return
   const until = (await $.clock.now()) + SAVED_NOTICE_MS
   await update($, savedNotice, () => ({ model: saved, name: displayName(saved), cost: costAgainst(saved, standard), until }))
   await refresh($, standard)
@@ -104,7 +105,7 @@ export async function showSaved($: EngineInterface, saved: string, standard: str
 
 /** A model switch forfeits the cache: the next request writes it afresh. */
 export async function onModelSwitch($: EngineInterface, ttl: '5m' | '1h', standard: string): Promise<void> {
-  if (!(await read($, isBandOn))) return
+  if (!isBandOn) return
   await update($, cacheTtlMs, () => (ttl === '1h' ? HOUR_MS : FIVE_MINUTES_MS))
   await update($, lastResponseAt, current => (current === null ? null : 0))
   await refresh($, standard)
@@ -112,7 +113,7 @@ export async function onModelSwitch($: EngineInterface, ttl: '5m' | '1h', standa
 
 export async function startBand($: EngineInterface, options: PluginOptions): Promise<void> {
   const standard = standardModel(options)
-  await update($, isBandOn, () => true)
+  isBandOn = true
   await checkUpdates($)
   await measureThreshold($)
   await refresh($, standard)
@@ -127,7 +128,7 @@ export function registerBand(on: On, options: PluginOptions): void {
 
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
-    if (!(await read($, isBandOn))) return done
+    if (!isBandOn) return done
 
     try {
       const now = await $.clock.now()

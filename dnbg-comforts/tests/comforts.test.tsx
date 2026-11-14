@@ -148,6 +148,33 @@ test('the cache counts down after a turn and turns yellow once cold', async ($, 
   await cold.unmount()
 })
 
+test('after a /clear the cache counts down again from the next turn', async ($, on) => {
+  world(on, 'claude-opus-5-5')
+  on('turn.complete', () => ({ text: '' }))
+  // The session's state, which starts over when a /clear moves the process to a new session id.
+  let state = new Map<string, { value: unknown; version: number }>()
+  const name = (e: { plugin: string; key: string }) => `${e.plugin}.${e.key}`
+  on('state.get', (_, e) => ({ value: state.get(name(e)) ?? { value: undefined, version: 0 } }))
+  on('state.set', (_, e) => {
+    const version = (state.get(name(e))?.version ?? 0) + 1
+    state.set(name(e), { value: e.value, version })
+    return { value: { isSet: true, version } }
+  })
+  on('session.end', (_, e) => {
+    if (e.reason === 'clear') state = new Map()
+    return { sessionId: e.sessionId }
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+  // A /clear ends the session and starts no other: the process goes on under a new id.
+  await $.session.end({ reason: 'clear', sessionId: 's1', resume: { id: 's1' } })
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't2', reason: 'answer' })
+
+  const ui = await $.ui.mount(BAND)
+  expect((await ui.find({ type: 'Text', text: /cache/ }))?.text).toBe('cache ~warm 1h00m')
+  await ui.unmount()
+})
+
 test('a new session shows no cost before its first response', async ($, on) => {
   world(on, 'claude-opus-5-5', {}, { startedAt: 0, context: { window: 200_000 }, rateLimits: [], cost: { usd: 0 } })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
