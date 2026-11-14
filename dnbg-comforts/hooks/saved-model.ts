@@ -5,8 +5,8 @@ import { configDir, readJson } from './settings'
 
 const TOAST_MS = 12_000
 
-// The saved model this process last saw. Held with the code, which no other
-// session shares, rather than in `$.state`, which a /clear starts over.
+// The saved model this process last saw. Held with the code rather than in
+// `$.state`, which a /clear starts over.
 let lastSaved = ''
 
 /** The `model` saved in user settings for future sessions; '' when none is. */
