@@ -20,7 +20,7 @@ function later(args: string): CommandRunInput {
 const SWITCH = { from_model: 'claude-opus-5-5', to_model: 'claude-sonnet-5-5', requested_model: 'sonnet', source: 'command', context_tokens: 0, prompt_cache_warm: true, cache_ttl: '1h', estimated_cache_write_usd: 0, pricing: 'catalog' } as const
 
 // A model switch, with the clock moved past the plugin's second look at settings.
-async function switchModel($: Parameters<TestBody>[0], clock: MockClock, input: typeof SWITCH | (Omit<typeof SWITCH, 'to_model' | 'requested_model'> & { to_model: string; requested_model: string })) {
+async function switchModel($: Parameters<TestBody>[0], clock: MockClock, input: typeof SWITCH | (Omit<typeof SWITCH, 'to_model' | 'requested_model' | 'cache_ttl'> & { to_model: string; requested_model: string; cache_ttl: '5m' | '1h' })) {
   const switched = $.classic.PostModelSwitch(input)
   await clock.advance(600)
   await switched
