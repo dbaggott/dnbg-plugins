@@ -1,4 +1,6 @@
-Fixed the usage band's prompt-cache estimate sticking at `cache none` after a
-`/clear`. It now counts down again from the first turn that finishes after the
-clear, and the model-switch and saved-model notices in the band also work again
-after a `/clear`.
+Fixed the usage band losing track of things after a `/clear`. Its prompt-cache
+estimate stuck at `cache none`, and now counts down again from the first turn
+after the clear. A cache lifetime reported by a model switch, the pending-update
+hint and the compaction point now carry through a `/clear`, and switching model
+after a `/clear` no longer announces a long-saved model as newly saved for all
+future sessions.

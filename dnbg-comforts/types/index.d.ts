@@ -15,10 +15,6 @@ declare module 'claude-code' {
     'dnbg-comforts': {
       usage: Shaped<UsageLine>
       lastResponseAt: number | null
-      compactThreshold: number | null
-      pendingUpdates: string[]
-      cacheTtlMs: number | null
-      lastSaved: string
       savedNotice: SavedNotice | null
     }
   }
