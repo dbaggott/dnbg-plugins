@@ -1007,6 +1007,19 @@ frontmatter_keys() {  # <file> -> its frontmatter's keys, indentation kept, valu
   [ "$(sed -n 's/^plugin_version: //p' "$f")" = "$(jq -r .version "$ROOT/dnbg-workflow/.claude-plugin/plugin.json")" ]
 }
 
+# Without the session-start note, process-review's own report takes its version
+# from the manifest path its SKILL.md gives relative to the skill's base
+# directory. A path that no longer resolves leaves every default install
+# writing `none`.
+@test "the manifest path process-review reads plugin_version from resolves" {
+  local skill="$ROOT/dnbg-workflow/skills/process-review/SKILL.md"
+  local rel
+  rel=$(grep -oE '"<skill-dir>/[^"]*plugin\.json"' "$skill" | tr -d '"' | sed 's|^<skill-dir>/||')
+  [ -n "$rel" ] || { echo "process-review/SKILL.md names no manifest path"; false; }
+  jq -e '.version | length > 0' "$ROOT/dnbg-workflow/skills/process-review/$rel" >/dev/null || {
+    echo "<skill-dir>/$rel does not resolve to a manifest with a version"; false; }
+}
+
 # The same path, from the findings entry format. Its writers come from three
 # skills, and `<skill-dir>/../../` reaches the manifest from any of them.
 @test "the manifest path entry.md reads plugin_version from resolves" {

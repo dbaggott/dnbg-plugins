@@ -179,6 +179,11 @@ plugin_version: <the session-start note's version, else the manifest's>
 ---
 ```
 
+`plugin_version` is the version a `## dnbg-workflow <version>` note at session
+start names; with no such note, `jq -r .version
+"<skill-dir>/../../.claude-plugin/plugin.json"`. Write `none` only when neither
+gives one, never a version from memory.
+
 `<root>` is the root step 1 read from. Only a `delta` or `all` run writes
 `newest`. The body is the report above, then:
 
