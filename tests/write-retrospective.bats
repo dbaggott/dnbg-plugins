@@ -217,6 +217,16 @@ EOF
   ! grep -q '^issue\|^pr' "$CALLS" || false
 }
 
+@test "--post-usage on an UNKNOWN file posts nothing, and on a file it did not write refuses" {
+  run "$WRITE" usage-1111111111111111 --role=author --issue="$ISSUE" --body="$BODY"
+  local f; f=$(path_of "$output")
+  run "$WRITE" --post-usage="$f"
+  [ "$output" = "result=OK path=$f usage_comment=none" ]
+  run "$WRITE" --post-usage="$BODY"
+  [ "$output" = "result=ERROR reason=bad-file" ]
+  ! grep -q '^issue\|^pr' "$CALLS" || false
+}
+
 @test "a reviewer posts as the reviewer role, which refuses with no App, so the post fails" {
   run "$WRITE" "$MAIN_NONCE" --role=issue-reviewer --issue="$ISSUE" --body="$BODY"
   [[ $output == *" usage=OK usage_comment=failed" ]]

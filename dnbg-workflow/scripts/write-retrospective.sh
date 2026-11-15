@@ -152,7 +152,8 @@ case "${1:-}" in
         LINES="$USAGE"; [ -z "$CHILDREN" ] || LINES="$LINES"$'\n'"$CHILDREN"
         echo "result=OK path=$FILE usage_comment=$(post_usage "$ROLE" "$URL" "$LINES")" ;;
       result=*) echo "result=OK path=$FILE usage_comment=none" ;;
-      *) fail bad-file ;;
+      *) printf '%s\n' "$FRONT" | grep -q '^usage: {result: UNKNOWN' || fail bad-file
+         echo "result=OK path=$FILE usage_comment=none" ;;
     esac
     exit 0 ;;
   ''|-*) fail bad-args ;;
