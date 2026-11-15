@@ -123,6 +123,8 @@ EOF
   # The body follows the closing `---` and a blank line, as given.
   [ "$(awk 'f { print } /^---$/ && NR > 1 { f = 1 }' "$f" | tail -n +2)" = "$(cat "$BODY")" ]
   grep -qx 'issue comment 48 --repo acme/widgets --body-file -' "$CALLS"
+  # Written beside the file, then linked into place; nothing else is left.
+  [ "$(ls -A "$(dirname "$f")")" = "$(basename "$f")" ]
 }
 
 # Issue 44's digest recognises the comment by its first line, so the comment's

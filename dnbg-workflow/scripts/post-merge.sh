@@ -26,9 +26,11 @@
 #   since it would fast-forward the wrong branch.
 # - branch: the local branch, with `-D` where the repo allows squash or rebase
 #   merges (either leaves the branch's tip outside the base's ancestry, so `-d`
-#   refuses) and `-d` otherwise. A local tip other than the PR's head commit is
-#   kept and `failed`: it holds commits the PR does not, or is another branch
-#   of the same name.
+#   refuses) and `-d` otherwise. A local tip that is neither the PR's head
+#   commit nor an ancestor of it is kept and `failed`: it holds commits the PR
+#   does not, or is another branch of the same name. A tip behind the head, as
+#   GitHub's "Update branch" leaves it, is deleted; the head is fetched from
+#   `refs/pull/<pr>/head` first, since a squash merge leaves it unfetched.
 # - remote: `by-repo` where `delete_branch_on_merge` is on, `fork` where the
 #   head branch lives in another repo, else deleted as the author role through
 #   as-role.sh, which pushed it; a branch already gone is `absent`.
@@ -119,11 +121,17 @@ else
   echo "step=pull result=skipped"
 fi
 
+in_pr_head() {  # <commit> -> 0 when it is the PR's head or an ancestor of it
+  [ "$1" = "$HEAD_OID" ] && return 0
+  git -C "$MAIN" cat-file -e "$HEAD_OID^{commit}" 2>/dev/null ||
+    git -C "$MAIN" fetch -q origin "refs/pull/$PR/head" >&2 || return 1
+  git -C "$MAIN" merge-base --is-ancestor "$1" "$HEAD_OID"
+}
 FLAG=-d; [ "$REWRITES" = true ] && FLAG=-D
 if ! git -C "$MAIN" show-ref --verify --quiet "refs/heads/$BRANCH"; then
   echo "step=branch result=absent flag=$FLAG"
-elif [ "$(git -C "$MAIN" rev-parse "refs/heads/$BRANCH")" != "$HEAD_OID" ]; then
-  echo "post-merge.sh: local $BRANCH is not the PR's head $HEAD_OID; kept" >&2
+elif ! in_pr_head "$(git -C "$MAIN" rev-parse "refs/heads/$BRANCH")"; then
+  echo "post-merge.sh: local $BRANCH holds commits the PR's head $HEAD_OID does not; kept" >&2
   echo "step=branch result=failed flag=$FLAG"; FAILED+=(branch)
 elif git -C "$MAIN" branch "$FLAG" "$BRANCH" >&2; then
   echo "step=branch result=deleted flag=$FLAG"

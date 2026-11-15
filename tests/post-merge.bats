@@ -76,6 +76,7 @@ feature() {  # <worktree path> [merged]
   git -C "$CHECKOUT" worktree add -q "$1" -b feature main
   git -C "$1" commit -q --allow-empty -m work
   git -C "$1" push -q origin feature
+  git -C "$1" push -q origin "feature:refs/pull/7/head"
   if [ "${2:-}" = merged ]; then
     git -C "$1" push -q origin feature:main
   else
@@ -127,7 +128,22 @@ run_cleanup() {
   [[ $output == *"step=branch result=failed flag=-D"* ]]
   [ "${lines[-1]}" = "result=FAILED failed=branch pr=7 branch=feature" ]
   git -C "$CHECKOUT" show-ref --verify --quiet refs/heads/feature
-  [[ $stderr == *"not the PR's head"* ]]
+  [[ $stderr == *"holds commits the PR's head"* ]]
+}
+
+# GitHub's "Update branch", or someone else's push, moves the PR's head past
+# the local tip, and a squash merge leaves that head unfetched.
+@test "a local branch behind the PR's head is deleted, the head fetched first" {
+  pr MERGED; settings true true
+  feature "$CHECKOUT/.worktrees/feature"
+  local clone="$TMP/other"
+  git clone -q -b feature "$ORIGIN" "$clone"
+  git -C "$clone" commit -q --allow-empty -m update-branch
+  git -C "$clone" push -q origin feature "feature:refs/pull/7/head"
+  ! git -C "$CHECKOUT" cat-file -e "$(git -C "$ORIGIN" rev-parse feature)^{commit}" 2>/dev/null || false
+  run_cleanup
+  [[ $output == *"step=branch result=deleted flag=-D"* ]]
+  [ "${lines[-1]}" = "result=OK pr=7 branch=feature" ]
 }
 
 @test "a PR from a fork leaves the base repo's same-named branch alone" {

@@ -234,9 +234,13 @@ frontmatter() {
 
 mkdir -p "$DIR" 2>/dev/null || fail write
 [ ! -e "$FILE" ] || fail exists
-# noclobber, so a file written in the same second by another call is never
-# replaced.
-( set -C; { frontmatter; cat "$BODY"; } > "$FILE" ) 2>/dev/null || fail write
+# Written beside the file under a name process-review's `*.md` never reads,
+# then linked into place, so no half-written file joins a batch and a link
+# refuses one already written in the same second.
+PARTIAL="$DIR/.${FILE##*/}.partial.$$"
+{ frontmatter; cat "$BODY"; } > "$PARTIAL" 2>/dev/null || fail write
+ln "$PARTIAL" "$FILE" 2>/dev/null || { rm -f "$PARTIAL"; fail exists; }
+rm -f "$PARTIAL"
 
 case "$USAGE" in
   "result=OK scope=session "*)
