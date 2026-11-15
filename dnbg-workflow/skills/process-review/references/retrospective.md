@@ -75,11 +75,11 @@ Under them:
 
 Write the five headings and their answers, and nothing else, to a file in your
 draft directory (`git-workflow`'s `references/draft-files.md`). Then, in a Bash
-call of its own, run `write-retrospective.sh` again, given the nonce it printed
-above this prompt:
+call of its own, run the script again by the path you ran `--begin` by, given
+the nonce it printed above this prompt:
 
 ```bash
-write-retrospective.sh <nonce> --role=<role> --issue=<URL> --body=<file> [--root=<dir>]
+"<script>" <nonce> --role=<role> --issue=<URL> --body=<file> [--root=<dir>]
 ```
 
 - **`--role`** is the one your close-out names: `author`, `spec-author`,
@@ -94,7 +94,7 @@ write-retrospective.sh <nonce> --role=<role> --issue=<URL> --body=<file> [--root
 The script writes the file, and on a session's own usage posts the `Usage:`
 comment on the issue as your role. Its result line names the file's `path=`, for
 your report. `usage_comment=failed` means the file is written and the comment is
-not: run it again as `write-retrospective.sh --post-usage=<path>`. A
+not: run `"<script>" --post-usage=<path>`. A
 `result=ERROR` wrote nothing; fix what its `reason=` names and run it again.
 
 ## Asking the agents for one

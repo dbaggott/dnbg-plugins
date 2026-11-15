@@ -13,7 +13,7 @@
 #   step=switch result=ok|failed branch=<default branch>
 #   step=pull result=ok|failed|skipped
 #   step=branch result=deleted|absent|failed flag=<-D|-d>
-#   step=remote result=deleted|absent|by-repo|failed
+#   step=remote result=deleted|absent|by-repo|fork|failed
 #   result=OK pr=<n> branch=<head branch>
 #   result=FAILED failed=<step,…> pr=<n> branch=<head branch>
 #
@@ -24,19 +24,22 @@
 # - switch, pull: the main worktree onto the default branch, then
 #   `git pull --ff-only --prune`. The pull is `skipped` when the switch failed,
 #   since it would fast-forward the wrong branch.
-# - branch: the local branch, with `-D` where the repo allows squash merges (a
-#   squashed branch's tip is never an ancestor of the base, so `-d` refuses)
-#   and `-d` otherwise.
-# - remote: `by-repo` where `delete_branch_on_merge` is on, else deleted as the
-#   author role through as-role.sh, which pushed it; a branch already gone is
-#   `absent`.
+# - branch: the local branch, with `-D` where the repo allows squash or rebase
+#   merges (either leaves the branch's tip outside the base's ancestry, so `-d`
+#   refuses) and `-d` otherwise. A local tip other than the PR's head commit is
+#   kept and `failed`: it holds commits the PR does not, or is another branch
+#   of the same name.
+# - remote: `by-repo` where `delete_branch_on_merge` is on, `fork` where the
+#   head branch lives in another repo, else deleted as the author role through
+#   as-role.sh, which pushed it; a branch already gone is `absent`.
 #
 # Each step runs even when an earlier one failed, wherever it still can, so a
 # failed pull still deletes the branch. Git's own errors go to stderr.
 #
 #   result=ERROR reason=bad-args|unsupported-forge|not-a-checkout|wrong-repo|pr-query|repo-query
 #
-# `wrong-repo` is a checkout whose `origin` is not <owner/repo>; nothing ran.
+# `wrong-repo` is a checkout whose `origin` is not <owner/repo>, compared
+# without case as GitHub does; nothing ran.
 #
 # ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: the `FORGE` guard
 # below refuses any other forge.
@@ -60,11 +63,16 @@ ORIGIN=$(git -C "$MAIN" remote get-url origin 2>/dev/null) || fail not-a-checkou
 # https://github.com/o/r(.git), ssh://git@github.com/o/r.git, git@github.com:o/r.git
 ORIGIN=${ORIGIN%.git}; ORIGIN=${ORIGIN%/}
 ORIGIN_NAME=${ORIGIN##*/}; ORIGIN=${ORIGIN%/*}; ORIGIN_OWNER=${ORIGIN##*[/:]}
-[ "$ORIGIN_OWNER/$ORIGIN_NAME" = "$REPO" ] || fail wrong-repo
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+[ "$(lower "$ORIGIN_OWNER/$ORIGIN_NAME")" = "$(lower "$REPO")" ] || fail wrong-repo
 
-PRJSON=$(gh pr view "$PR" --repo "$REPO" --json state,autoMergeRequest,headRefName 2>/dev/null) || fail pr-query
-IFS=$'\t' read -r STATE AUTO BRANCH < <(printf '%s' "$PRJSON" | jq -r '
-  [.state, (if .autoMergeRequest == null then "none" else "scheduled" end), .headRefName] | @tsv' 2>/dev/null) || fail pr-query
+PRJSON=$(gh pr view "$PR" --repo "$REPO" --json state,autoMergeRequest,headRefName,headRefOid,isCrossRepository 2>/dev/null) || fail pr-query
+# A separator that is not whitespace, since `read` folds adjacent whitespace
+# ones and an empty field would shift the rest into its place.
+IFS=$'\x1f' read -r STATE AUTO BRANCH HEAD_OID CROSS < <(printf '%s' "$PRJSON" | jq -r '
+  [.state, (if .autoMergeRequest == null then "none" else "scheduled" end),
+   .headRefName, .headRefOid, .isCrossRepository] | map(tostring) | join("\u001f")' 2>/dev/null) || fail pr-query
+[ -n "$HEAD_OID" ] || fail pr-query
 case "$STATE" in OPEN|CLOSED|MERGED) ;; *) fail pr-query ;; esac
 [ -n "$BRANCH" ] || fail pr-query
 if [ "$STATE" != MERGED ]; then
@@ -72,8 +80,8 @@ if [ "$STATE" != MERGED ]; then
   exit 0
 fi
 
-SETTINGS=$(gh api "repos/$REPO" --jq '[.default_branch, .allow_squash_merge, .delete_branch_on_merge] | @tsv' 2>/dev/null) || fail repo-query
-IFS=$'\t' read -r DEFAULT SQUASH DELETE_ON_MERGE <<< "$SETTINGS"
+SETTINGS=$(gh api "repos/$REPO" --jq '[.default_branch, (.allow_squash_merge or .allow_rebase_merge), .delete_branch_on_merge] | @tsv' 2>/dev/null) || fail repo-query
+IFS=$'\t' read -r DEFAULT REWRITES DELETE_ON_MERGE <<< "$SETTINGS"
 [ -n "$DEFAULT" ] || fail repo-query
 
 FAILED=()
@@ -111,25 +119,34 @@ else
   echo "step=pull result=skipped"
 fi
 
-FLAG=-d; [ "$SQUASH" = true ] && FLAG=-D
+FLAG=-d; [ "$REWRITES" = true ] && FLAG=-D
 if ! git -C "$MAIN" show-ref --verify --quiet "refs/heads/$BRANCH"; then
   echo "step=branch result=absent flag=$FLAG"
+elif [ "$(git -C "$MAIN" rev-parse "refs/heads/$BRANCH")" != "$HEAD_OID" ]; then
+  echo "post-merge.sh: local $BRANCH is not the PR's head $HEAD_OID; kept" >&2
+  echo "step=branch result=failed flag=$FLAG"; FAILED+=(branch)
 elif git -C "$MAIN" branch "$FLAG" "$BRANCH" >&2; then
   echo "step=branch result=deleted flag=$FLAG"
 else
   echo "step=branch result=failed flag=$FLAG"; FAILED+=(branch)
 fi
 
+# The branch name in a URL path, where git allows characters such as `#`.
+REF_PATH=$(jq -rn --arg b "$BRANCH" '$b | @uri')
 remote_left() {  # -> 0 when the head branch still exists on the forge
   local n
-  n=$(gh api "repos/$REPO/git/matching-refs/heads/$BRANCH" \
-        --jq "[.[] | select(.ref == \"refs/heads/$BRANCH\")] | length" 2>/dev/null) || return 0
+  n=$(gh api "repos/$REPO/git/matching-refs/heads/$REF_PATH" \
+        --jq "[.[] | select(.ref == \"refs/heads/\" + $(jq -n --arg b "$BRANCH" '$b'))] | length" 2>/dev/null) || return 0
   [ "$n" != 0 ]
 }
 if [ "$DELETE_ON_MERGE" = true ]; then
   echo "step=remote result=by-repo"
+elif [ "$CROSS" = true ]; then
+  echo "step=remote result=fork"
 elif "$(dirname "$0")/as-role.sh" author "$REPO" -- \
-       gh api -X DELETE "repos/$REPO/git/refs/heads/$BRANCH" >/dev/null 2>&1; then
+       gh api -X DELETE "repos/$REPO/git/refs/heads/$REF_PATH" >/dev/null 2>&1; then
+  # The pull's --prune ran before the branch was gone.
+  git -C "$MAIN" update-ref -d "refs/remotes/origin/$BRANCH" 2>/dev/null || true
   echo "step=remote result=deleted"
 elif ! remote_left; then
   echo "step=remote result=absent"

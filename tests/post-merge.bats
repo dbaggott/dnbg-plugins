@@ -32,10 +32,12 @@ jq_of() {  # <json file> <args…> — applies any --jq in the args
   for a in "$@"; do [ "$prev" != --jq ] || expr=$a; prev=$a; done
   jq -r "$expr" "$1"
 }
-case "$1 $2" in
-  "pr view") cat "$PR_JSON" ;;
+# GitHub matches a repo's name without case.
+case "$(printf '%s %s' "$1" "$2" | tr '[:upper:]' '[:lower:]')" in
+  "pr view")  # the head commit is the origin's, as GitHub's is
+    jq --arg o "$(git -C "$BARE_ORIGIN" rev-parse --verify -q refs/heads/feature)" '.headRefOid = $o' "$PR_JSON" ;;
   "api user") echo operator-login ;;
-  "api -X") [ ! -e "$DELETE_FAIL" ] ;;
+  "api -x") [ ! -e "$DELETE_FAIL" ] ;;
   "api repos/acme/r") shift 2; jq_of "$REPO_JSON" "$@" ;;
   "api repos/acme/r/git/matching-refs/"*) shift 2; jq_of "$REFS_JSON" "$@" ;;
   *) exit 1 ;;
@@ -46,7 +48,7 @@ EOF
 
   # Resolved, since git reports a worktree's path with symlinks resolved.
   TMP=$(cd "$BATS_TEST_TMPDIR" && pwd -P)
-  ORIGIN="$TMP/acme/r.git"
+  ORIGIN="$TMP/acme/r.git"; export BARE_ORIGIN="$ORIGIN"
   CHECKOUT="$TMP/checkout"
   git init -q --bare -b main "$ORIGIN"
   git init -q -b main "$CHECKOUT"
@@ -55,14 +57,15 @@ EOF
   git -C "$CHECKOUT" push -q -u origin main
 }
 
-pr() {  # <state> [auto-merge: scheduled|none]
-  jq -n --arg s "$1" --arg a "${2:-none}" \
-    '{state: $s, headRefName: "feature", autoMergeRequest: (if $a == "scheduled" then {mergeMethod: "SQUASH"} else null end)}' > "$PR_JSON"
+pr() {  # <state> [auto-merge: scheduled|none] [cross-repository: true|false]
+  jq -n --arg s "$1" --arg a "${2:-none}" --argjson x "${3:-false}" \
+    '{state: $s, headRefName: "feature", isCrossRepository: $x,
+      autoMergeRequest: (if $a == "scheduled" then {mergeMethod: "SQUASH"} else null end)}' > "$PR_JSON"
 }
 
-settings() {  # <allow_squash_merge> <delete_branch_on_merge>
-  jq -n --argjson s "$1" --argjson d "$2" \
-    '{default_branch: "main", allow_squash_merge: $s, delete_branch_on_merge: $d}' > "$REPO_JSON"
+settings() {  # <allow_squash_merge> <delete_branch_on_merge> [allow_rebase_merge]
+  jq -n --argjson s "$1" --argjson d "$2" --argjson r "${3:-false}" \
+    '{default_branch: "main", allow_squash_merge: $s, allow_rebase_merge: $r, delete_branch_on_merge: $d}' > "$REPO_JSON"
 }
 
 # The feature branch, checked out in a worktree at <path>, one commit ahead of
@@ -108,6 +111,40 @@ run_cleanup() {
   [[ ${lines[-1]} == "result=OK pr=7 branch=feature" ]]
 }
 
+@test "a rebase-merging repo deletes with -D too" {
+  pr MERGED; settings false true true
+  feature "$CHECKOUT/.worktrees/feature"
+  run_cleanup
+  [[ $output == *"step=branch result=deleted flag=-D"* ]]
+  [ "${lines[-1]}" = "result=OK pr=7 branch=feature" ]
+}
+
+@test "a local branch ahead of the PR's head is kept, and the result names the branch" {
+  pr MERGED; settings true true
+  feature "$CHECKOUT/.worktrees/feature"
+  git -C "$CHECKOUT/.worktrees/feature" commit -q --allow-empty -m unpushed
+  run_cleanup
+  [[ $output == *"step=branch result=failed flag=-D"* ]]
+  [ "${lines[-1]}" = "result=FAILED failed=branch pr=7 branch=feature" ]
+  git -C "$CHECKOUT" show-ref --verify --quiet refs/heads/feature
+  [[ $stderr == *"not the PR's head"* ]]
+}
+
+@test "a PR from a fork leaves the base repo's same-named branch alone" {
+  pr MERGED none true; settings true false
+  feature "$CHECKOUT/.worktrees/feature"
+  run_cleanup
+  [[ $output == *"step=remote result=fork"* ]]
+  ! grep -q -- '-X DELETE' "$CALLS" || false
+}
+
+@test "the repo is matched without case" {
+  pr MERGED; settings true true
+  feature "$CHECKOUT/.worktrees/feature"
+  run --separate-stderr bash -c 'cd "$1" && "$2" ACME/R 7' _ "$CHECKOUT" "$POST_MERGE"
+  [ "${lines[-1]}" = "result=OK pr=7 branch=feature" ]
+}
+
 @test "a worktree outside .worktrees/ is found and removed" {
   pr MERGED; settings true true
   feature "$TMP/elsewhere/wt"
@@ -123,6 +160,7 @@ run_cleanup() {
   run_cleanup
   [[ $output == *"step=remote result=deleted"* ]]
   grep -qx 'api -X DELETE repos/acme/r/git/refs/heads/feature' "$CALLS"
+  ! git -C "$CHECKOUT" show-ref --verify --quiet refs/remotes/origin/feature || false
   [ "${lines[-1]}" = "result=OK pr=7 branch=feature" ]
 }
 
@@ -142,7 +180,7 @@ run_cleanup() {
   [[ $output == *"step=remote result=absent"* ]]
   [ "${lines[-1]}" = "result=OK pr=7 branch=feature" ]
 
-  git -C "$CHECKOUT" branch -q feature main
+  git -C "$CHECKOUT" branch -q feature "$(git -C "$ORIGIN" rev-parse feature)"
   echo '[{"ref": "refs/heads/feature"}]' > "$REFS_JSON"
   run_cleanup
   [[ $output == *"step=remote result=failed"* ]]

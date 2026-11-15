@@ -11,7 +11,7 @@ Any time the operator says something about the merge — kicking it off
 ("merged", "it is merged", "done") — **verify state before acting on the
 words**. Operators use "merged" for both "the button was clicked, auto-merge is
 queued" and "GitHub shows merged"; same phrasing, different states. The cleanup
-script reads the state itself, so run it from the main checkout:
+script reads the state itself, so run it from any checkout of the repo:
 
 ```bash
 "<skill-dir>/../../scripts/post-merge.sh" <owner>/<repo> <num>
