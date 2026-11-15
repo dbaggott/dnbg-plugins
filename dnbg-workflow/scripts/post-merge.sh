@@ -38,8 +38,8 @@
 #
 # `wrong-repo` is a checkout whose `origin` is not <owner/repo>; nothing ran.
 #
-# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: the `FORGE` guard below refuses any
-# other forge.
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: the `FORGE` guard
+# below refuses any other forge.
 set -euo pipefail
 unset GH_TOKEN
 

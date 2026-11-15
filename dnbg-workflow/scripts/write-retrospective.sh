@@ -74,11 +74,14 @@
 # One result line, then exit 0:
 #   result=OK path=<file> usage=<OK|UNKNOWN> usage_comment=<posted|none|failed>
 #   result=OK path=<file> usage_comment=<posted|none|failed>      # --post-usage
-#   result=ERROR reason=bad-args|bad-root|bad-body|no-prompt|exists|write|bad-file
+#   result=ERROR reason=bad-args|unsupported-forge|bad-root|bad-body|no-prompt|exists|write|bad-file
 #
 # A failed post leaves the file written. `exists` is a file already at the
 # path, never overwritten; `bad-file` a `--post-usage` file this script did not
 # write.
+#
+# ⚠️ THE FORGE IS ASSUMED TO BE GITHUB: the `FORGE` guard
+# below refuses any other forge. The issue URLs are github.com ones.
 set -euo pipefail
 unset GH_TOKEN
 
@@ -87,6 +90,9 @@ REFERENCE="$HERE/../skills/process-review/references/retrospective.md"
 MANIFEST="$HERE/../.claude-plugin/plugin.json"
 
 fail() { echo "result=ERROR reason=$1"; exit 0; }
+
+FORGE="${FORGE:-github}"
+[ "$FORGE" = github ] || fail unsupported-forge
 
 HEADINGS=$'## Slowed or blocked\n## Skill wrong or missing\n## Worked around\n## Wished to ask\n## Read but not used'
 

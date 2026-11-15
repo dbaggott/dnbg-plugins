@@ -50,7 +50,7 @@ EOF
   export PATH="$STUB:$PATH"
 
   BODY="$BATS_TEST_TMPDIR/body.md"
-  printf '%s\n' '## Slowed or blocked' '' '- `watch-pr.sh`: slow.' '' \
+  printf '%s\n' '## Slowed or blocked' '' '- `claim-issue.sh`: slow.' '' \
     '## Skill wrong or missing' '' 'Nothing.' '' '## Worked around' '' 'Nothing.' '' \
     '## Wished to ask' '' 'Nothing.' '' '## Read but not used' '' 'Nothing.' > "$BODY"
   ROOT="$HOME/.claude/dnbg/retrospectives"
