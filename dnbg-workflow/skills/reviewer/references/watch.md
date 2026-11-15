@@ -187,7 +187,9 @@ close-out", which in the issue-scoped mode is the assignment's end, not a PR's
 
 Reviewing one PR, that `CLOSED` is your close-out: close out per
 `<skill-dir>/../process-review/references/retrospective.md`, "When a
-retrospective is written".
+retrospective is written". With retrospectives on, that is
+`"<skill-dir>/../../scripts/write-retrospective.sh" --begin`, followed as it
+prints.
 
 In the issue-scoped mode both reports fire **per PR**, and the close-out says
 nothing about the assignment being over: re-discovery decides that, and the

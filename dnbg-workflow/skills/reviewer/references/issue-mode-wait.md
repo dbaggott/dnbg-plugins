@@ -33,7 +33,10 @@ So the assignment is a loop, not a pass:
    open also ends it: stop your issue wait by its task id first. That end is
    your close-out: close out per
    `<skill-dir>/../process-review/references/retrospective.md`, "When a
-   retrospective is written", with the issue as its `issue:`. Its report is
+   retrospective is written", with the issue as its `issue:`; with
+   retrospectives on, that is
+   `"<skill-dir>/../../scripts/write-retrospective.sh" --begin`, followed as
+   it prints. Its report is
    one per `<skill-dir>/../findings-review/references/report.md` on the
    assignment, its Summary naming the issue and each PR you reviewed with how
    it ended, and its first line is exactly

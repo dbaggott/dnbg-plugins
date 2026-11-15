@@ -95,7 +95,9 @@ entries, since a round's observations are settled in the round:
 
 Close out per
 `<skill-dir>/../process-review/references/retrospective.md`, "When a
-retrospective is written", with `role: issue-reviewer`.
+retrospective is written", with `role: issue-reviewer`. With retrospectives on, that is
+`"<skill-dir>/../../scripts/write-retrospective.sh" --begin`, followed as it
+prints.
 
 ## Keeping the issue readable
 

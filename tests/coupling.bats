@@ -934,22 +934,56 @@ practice_ids() {  # <SKILL.md> -> the IDs the body defines, one per line
 
 # `process-review` groups by the retrospective's headings, so a heading the
 # writer spells one way and the reader another is a whole section that never
-# joins a pattern. The template in retrospective.md is the one spelling; the
-# fixture batch process-review is exercised on has to match it too.
+# joins a pattern. "The prompt" in retrospective.md is the one spelling, which
+# write-retrospective.sh prints and enforces; the fixture batch process-review
+# is exercised on has to match it too.
 retrospective_headings() {  # <file> -> the `## ` headings, in order
   grep '^## ' "$1"
 }
 
-@test "every retrospective fixture carries the template's headings and frontmatter" {
-  local tmpl="$ROOT/dnbg-workflow/skills/process-review/references/retrospective.md"
+prompt_headings() {  # -> "The prompt"'s questions, as `## ` headings
+  awk '/^## The prompt$/ { on = 1; next } on && (/^## / || /^Under them:/) { exit } on && /^- \*\*/' \
+    "$ROOT/dnbg-workflow/skills/process-review/references/retrospective.md" |
+    sed -n 's/^- \*\*\([^*]*\)\*\*:.*/## \1/p'
+}
+
+# A retrospective the script writes, from the session-usage fixture, so it
+# carries both `usage` and `children`.
+scripted_retrospective() {  # -> its path
+  local home="$BATS_TEST_TMPDIR/home" id=0b6c1e1a-1111-4222-8333-444455556666
+  local project="$BATS_TEST_TMPDIR/config/projects/-x"
+  mkdir -p "$home" "$project/$id"
+  cp "$ROOT/tests/fixtures/session-usage/main.jsonl" "$project/$id.jsonl"
+  cp -R "$ROOT/tests/fixtures/session-usage/subagents" "$project/$id/subagents"
+  prompt_headings | awk '{ print; print ""; print "Nothing."; print "" }' > "$BATS_TEST_TMPDIR/body.md"
+  # The main transcript's nonce, for `children`. That is a session's usage,
+  # which the script posts: a `gh` that fails keeps the post off the network,
+  # and the file is written either way.
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  printf '#!/bin/sh\nexit 1\n' > "$BATS_TEST_TMPDIR/bin/gh"; chmod +x "$BATS_TEST_TMPDIR/bin/gh"
+  local out v
+  for v in $(compgen -v DNBG_); do unset "$v"; done
+  out=$(PATH="$BATS_TEST_TMPDIR/bin:$PATH" HOME="$home" XDG_CONFIG_HOME="$home/xdg" \
+    CLAUDE_CONFIG_DIR="$BATS_TEST_TMPDIR/config" CLAUDE_CODE_SESSION_ID=$id \
+    "$ROOT/dnbg-workflow/scripts/write-retrospective.sh" usage-0000000000000000 --role=orchestrator \
+    --issue=https://github.com/acme/widgets/issues/52 --body="$BATS_TEST_TMPDIR/body.md" --root="$BATS_TEST_TMPDIR/retro" \
+    2>/dev/null | sed -n 's/^result=OK path=\([^ ]*\) .*/\1/p') || true
+  printf '%s' "$out"
+}
+
+frontmatter_keys() {  # <file> -> its frontmatter's keys, indentation kept, values dropped
+  awk 'NR == 1 { next } /^---$/ { exit } { print }' "$1" | sed -E 's/^( *(- )?[a-z_]+):.*/\1/' | uniq
+}
+
+@test "every retrospective fixture carries the prompt's headings and frontmatter" {
   local want f n=0 bad=0
-  want=$(awk '/^```markdown$/{inside=1; next} /^```$/{inside=0} inside' "$tmpl" | grep '^## ')
+  want=$(prompt_headings)
   [ "$(printf '%s\n' "$want" | wc -l)" -eq 5 ] || {
-    echo "retrospective.md's template does not carry five headings:"; echo "$want"; false; }
+    echo "retrospective.md's prompt does not carry five headings:"; echo "$want"; false; }
   for f in "$ROOT"/tests/fixtures/retrospectives/*/*/*.md; do
     n=$((n + 1))
     [ "$(retrospective_headings "$f")" = "$want" ] || {
-      echo "$(basename "$f") headings differ from the template"; bad=1; }
+      echo "$(basename "$f") headings differ from the prompt"; bad=1; }
     local field
     for field in tags role issue plugin_version date; do
       sed -n '2,/^---$/p' "$f" | grep -q "^$field:" || {
@@ -960,16 +994,17 @@ retrospective_headings() {  # <file> -> the `## ` headings, in order
   [ "$bad" -eq 0 ]
 }
 
-# Without the session-start note, a retrospective's version comes from the
-# manifest path retrospective.md gives relative to the skill's base directory. A
-# path that no longer resolves leaves every default install writing `none`.
-@test "the manifest path retrospective.md reads plugin_version from resolves" {
-  local tmpl="$ROOT/dnbg-workflow/skills/process-review/references/retrospective.md"
-  local rel
-  rel=$(grep -oE '"<skill-dir>/[^"]*plugin\.json"' "$tmpl" | tr -d '"' | sed 's|^<skill-dir>/||')
-  [ -n "$rel" ] || { echo "retrospective.md names no manifest path"; false; }
-  jq -e '.version | length > 0' "$ROOT/dnbg-workflow/skills/process-review/$rel" >/dev/null || {
-    echo "<skill-dir>/$rel does not resolve to a manifest with a version"; false; }
+# process-review is exercised on the fixture batch, so a file the script writes
+# has to be shaped as a fixture is: the same keys, nested the same way, and the
+# same headings. The orchestrator fixture is the one with `children`.
+@test "a retrospective write-retrospective.sh writes is shaped as the fixtures are" {
+  local f fixture="$ROOT/tests/fixtures/retrospectives/acme/widgets/2026-10-15T090200Z-52-orchestrator.md"
+  f=$(scripted_retrospective)
+  [ -s "$f" ] || { echo "the script wrote no file"; false; }
+  [ "$(frontmatter_keys "$f")" = "$(frontmatter_keys "$fixture")" ] || {
+    diff <(frontmatter_keys "$fixture") <(frontmatter_keys "$f"); false; }
+  [ "$(retrospective_headings "$f")" = "$(retrospective_headings "$fixture")" ]
+  [ "$(sed -n 's/^plugin_version: //p' "$f")" = "$(jq -r .version "$ROOT/dnbg-workflow/.claude-plugin/plugin.json")" ]
 }
 
 # The same path, from the findings entry format. Its writers come from three
@@ -1034,6 +1069,29 @@ on_state_wording() {  # <file> -> each on-state phrase it carries
   if grep -n retrospective "$ROOT"/dnbg-workflow/agents/*.md; then
     echo "an agent definition asks for a retrospective"; false
   fi
+}
+
+# With retrospectives on, a role's own close-out is the script, so the site
+# names it rather than sending the role to read the reference. orchestrate's
+# SKILL.md routes its own close-out through findings-fold.md.
+@test "each role's own close-out names write-retrospective.sh --begin" {
+  local f
+  for f in git-workflow/references/post-merge.md reviewer/references/watch.md \
+           reviewer/references/issue-mode-wait.md orchestrate/references/findings-fold.md \
+           issue-reviewer/references/rounds.md issue-workflow/references/spec-review-rounds.md; do
+    [[ $(joined "$ROOT/dnbg-workflow/skills/$f") == *'<skill-dir>/../../scripts/write-retrospective.sh" --begin'* ]] || {
+      echo "$f does not name write-retrospective.sh --begin"; false; }
+  done
+}
+
+# The steps, layout, naming and comment recipe the scripts own are stated in
+# them alone, so the prose cannot drift from what runs.
+@test "post-merge.md and retrospective.md leave to the scripts what the scripts do" {
+  local pm="$ROOT/dnbg-workflow/skills/git-workflow/references/post-merge.md"
+  local retro="$ROOT/dnbg-workflow/skills/process-review/references/retrospective.md"
+  grep -q '"<skill-dir>/../../scripts/post-merge.sh" <owner>/<repo> <num>' "$pm"
+  ! grep -nE 'git worktree remove|git branch -[dD]|pull --ff-only|git/refs/heads' "$pm" || false
+  ! grep -nE 'session-usage\.sh|as-role\.sh|gh issue comment|^```markdown|<YYYY-MM-DD>T' "$retro" || false
 }
 
 # retrospective.md is the gate and states both states; report.md is the shared

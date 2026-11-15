@@ -8,30 +8,38 @@ handled a review round.
 
 Any time the operator says something about the merge — kicking it off
 ("merging", "auto-merge is on", "go ahead") **or asserting it is done**
-("merged", "it is merged", "done") — **verify state with `gh pr view` before
-acting on the words**. Operators use "merged" for both "the button was clicked,
-auto-merge is queued" and "GitHub shows merged"; same phrasing, different states.
+("merged", "it is merged", "done") — **verify state before acting on the
+words**. Operators use "merged" for both "the button was clicked, auto-merge is
+queued" and "GitHub shows merged"; same phrasing, different states. The cleanup
+script reads the state itself, so run it from the main checkout:
 
 ```bash
-gh pr view <num> --repo <repo> --json state,autoMergeRequest
+"<skill-dir>/../../scripts/post-merge.sh" <owner>/<repo> <num>
 ```
 
-- **`state=MERGED`** — run the cleanup below. If a watch is still in
+With retrospectives on, add `"<skill-dir>/../../scripts/write-retrospective.sh"
+--begin` to the same Bash call: a merge or a close without one is your
+close-out, below, and on an open PR its nonce goes unused.
+
+- **`result=NOT-MERGED state=CLOSED`** — nothing was removed, which leaves the
+  worktree in case they reopen; close out as "Then close out" below says.
+- **`result=NOT-MERGED state=OPEN auto_merge=scheduled`** — auto-merge is
+  scheduled and a running watch will catch it.
+- **`result=NOT-MERGED state=OPEN auto_merge=none`** — either they were being
+  forward-looking or it has not merged. Say so; don't start a second watch.
+- **`result=OK`** — merged, and the cleanup is done: the branch's worktree
+  removed, wherever it is, the main checkout switched to the default branch
+  and fast-forwarded, the local branch deleted, and the remote one deleted as
+  the author when the repo does not delete it on merge. If a watch is still in
   flight it will report `CLOSED state=MERGED` shortly; ignore the duplicate
   rather than cleaning up twice.
-- **`state=CLOSED`** without a merge — leave the worktree in case they reopen,
-  and close out as "Then close out" below says, skipping the cleanup.
-- **`state=OPEN`, `autoMergeRequest` non-null** — auto-merge is scheduled and a
-  running watch will catch it.
-- **`state=OPEN`, nothing scheduled** — either they were being forward-looking or
-  it has not merged. Say so; don't start a second watch.
+- **`result=FAILED failed=<step,…>`** — merged, and the steps it names did not
+  finish, each on a `step=<name> result=failed` line above it, with git's own
+  error on stderr. Every other step ran. Finish those by hand before starting
+  any new work.
 
-Once `state=MERGED` is confirmed (or the merge watch in `references/merge-wait.md` reports `CLOSED state=MERGED`), clean up **before starting any new work**, in this order:
-
-1. Remove the worktree: `git worktree remove .worktrees/<branch-name>`
-2. `git switch <default-branch> && git pull --ff-only --prune` — make sure the primary checkout is on the default branch (a no-op given the rule at the top of this skill, but cheap defense in depth against the pull silently fast-forwarding the wrong branch), then fast-forward with the merge commit. `--prune` also clears the remote-tracking branch, if the repo already deleted it on merge.
-3. Delete the local branch: `git branch -d <branch-name>`. **On a squash-merge repo this fails**, and that's expected rather than a problem: a squash rewrites the commits, so the feature branch tip is never an ancestor of the base branch, and `-d` walks that ancestry and refuses. Check `allow_squash_merge` from `SKILL.md`'s "Know the repo's merge settings" — where squash is the repo's merge method, go straight to `git branch -D`. The operator's "merged" confirmation (or the watch's `CLOSED state=MERGED`) is what authorises the force delete; git's ancestry check can't.
-4. Delete the remote branch **only if the repo doesn't do it for you**: `delete_branch_on_merge` from the settings read says which. When it's on, GitHub already deleted it and step 2's `--prune` cleared your local view — nothing to do. When it's off, delete it as the author, who pushed it: `"<skill-dir>/../../scripts/as-role.sh" author <owner>/<repo> -- gh api -X DELETE repos/<owner>/<repo>/git/refs/heads/<branch-name>`. A `git push` from the main checkout would go up under your own credential.
+The cleanup comes **before any new work**, as does the run on a merge the watch
+in `references/merge-wait.md` reports as `CLOSED state=MERGED`.
 
 ### Then close out
 
@@ -40,4 +48,5 @@ per `<skill-dir>/../findings-review/references/report.md`, a delta against the
 handoff report `references/merge.md` gave, with Summary opening with the PR's
 full URL and the cleanup, or the close. Close out per
 `<skill-dir>/../process-review/references/retrospective.md`, "When a
-retrospective is written", with `role: author`.
+retrospective is written", with `role: author`. With retrospectives on, that is
+what `write-retrospective.sh --begin` printed above, followed as it says.

@@ -10,10 +10,11 @@ file is an anecdote. This finds what recurs across many, and drafts an upstream
 issue for whatever the shipped tooling is to blame for. It runs cold: everything
 it needs is in the files and this page.
 
-The file format, including the five headings this groups by, is in this
-skill's `references/retrospective.md`, at
-`<skill-dir>/references/retrospective.md`. `<skill-dir>` is the **Base
-directory** announced when this skill loads.
+The five headings this groups by are "The prompt" in this skill's
+`references/retrospective.md`, at `<skill-dir>/references/retrospective.md`, and
+the file's name and frontmatter are what `write-retrospective.sh` writes, given
+in its header at `<skill-dir>/../../scripts/write-retrospective.sh`.
+`<skill-dir>` is the **Base directory** announced when this skill loads.
 
 ## 1. Gather the batch
 
@@ -174,7 +175,7 @@ date: <YYYY-MM-DD>
 batch: <delta, all, or the subset named>
 files: <count read>
 newest: <the newest basename prefix in the batch, never earlier than the chained report's>
-plugin_version: <as retrospective.md's plugin_version step sources it>
+plugin_version: <the session-start note's version, else the manifest's>
 ---
 ```
 
