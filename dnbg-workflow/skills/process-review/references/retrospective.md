@@ -23,33 +23,16 @@ Retrospectives are **off**, unless a `dnbg-workflow` note at session start says
 they are on. Either way, answer the prompt below for your run; the state decides
 where the answers go.
 
-- **On**: write the file, per the rest of this reference, with the usage of
-  your run in its frontmatter: run
-  `"<skill-dir>/../../scripts/session-usage.sh" --nonce`, then, in a second
-  Bash call, the same script given the nonce it printed, and record its lines
-  as "The file" shows, posting them on the issue too when they read
-  `scope=session`, per "The `Usage:` comment" below. The report names its
-  path in a **Retrospective** section, with a dispatcher's also naming each path
-  its agents' reports gave, and says nothing else about process friction. The
+- **On**: write the file with `write-retrospective.sh`, at
+  `<skill-dir>/../../scripts/write-retrospective.sh`. Its `--begin` prints a
+  nonce, then "The prompt" below, which ends on the call that writes the file;
+  the file's name and frontmatter are the script's, given in its header. The
+  report names its path in a **Retrospective** section, with a dispatcher's
+  also naming each path its agents' reports gave, and says nothing else about
+  process friction. The
   always-on rule's offer to file upstream ("When shipped tooling
   doesn't fit, tell the user") is for friction that stopped the task from
   finishing; the rest waits in the file for `process-review`.
-
-  **The `Usage:` comment.** A `scope=session` result goes on the issue the
-  file's `issue:` names, the first for a list, as a comment whose first line
-  is exactly `Usage:`, followed by the result line and each `child=` line, one
-  per line, in a fenced block. Draft it in your draft directory
-  (`<skill-dir>/../git-workflow/references/draft-files.md`) and post it as
-  your role, `author` for `author` and `spec-author`, `reviewer` for
-  `reviewer` and `issue-reviewer`, and `orchestrator`:
-
-  ```bash
-  "<skill-dir>/../../scripts/as-role.sh" <role> <owner>/<repo> -- \
-    gh issue comment <n> --repo <owner>/<repo> --body-file <file>
-  ```
-
-  A `scope=self` result posts nothing: it is inside its dispatcher's
-  `child=` lines.
 - **Off**: write no file, and give the report no **Retrospective** section.
   Under its **Observations**, put each item that would have gone under
   **Skill wrong or missing** or **Worked around**, both headings whole, as one
@@ -66,32 +49,10 @@ where the answers go.
   "Asking the agents for one" below does not apply, and a dispatcher's report
   names no role as having left none: there is no file to ask for.
 
-## Where a retrospective goes
-
-In `~/.claude/dnbg/retrospectives/<owner>/<repo>/`, where `<owner>/<repo>` is
-the repo the issue lives in. Expand `~` to your home directory and
-create the directory if it is missing.
-
-**`~/.claude/dnbg/retrospectives` is the default, not a constant.** If a
-`dnbg-workflow` note at session start names a different retrospective root, that
-root wins, and `<owner>/<repo>/` goes under it the same way.
-
-Name the file `<YYYY-MM-DD>T<HHMMSS>Z-<n>-<role>.md`, in UTC, where `<n>` is the
-issue number and `<role>` is `author` (a PR, the `git-workflow` skill),
-`spec-author` (answering a spec round, `issue-workflow`'s
-`references/spec-review-rounds.md`), `reviewer` (a PR review, the `reviewer`
-skill), `issue-reviewer` (a spec round, the `issue-reviewer` skill) or
-`orchestrator`. The time keeps a second dispatch of the same role from
-overwriting the first. A reviewer of a set of issues takes their parent as its
-issue, here and in the file's `issue:`. A set with no parent resolved by one
-PR (`orchestrate`'s `references/several-issues.md`) names every agent's file for
-the set: `issue:` is a YAML list of every issue's URL, ordered by repo and then
-number, and the first gives `<owner>/<repo>` and `<n>`. Work under no issue
-takes its PR: `<n>` is the PR number and `issue:` the PR's URL.
-
 ## The prompt
 
-Answer from this run only, one heading per question:
+Answer from this run only, one `## ` heading per question, spelled and ordered
+as here:
 
 - **Slowed or blocked**: what slowed or blocked you?
 - **Skill wrong or missing**: what did a skill tell you that was wrong, missing,
@@ -101,84 +62,40 @@ Answer from this run only, one heading per question:
 - **Read but not used**: which reference files or sections did you read that
   this run did not need? One bullet per file, naming it.
 
-## The file
+Under them:
 
-```markdown
----
-tags:
-  - retrospective
-  - <role>
-role: <role>
-issue: <issue URL>
-plugin_version: <version>
-date: <YYYY-MM-DD>
-usage:
-  result: OK
-  scope: <session|self>
-  agent: <main|agentType>
-  requests: <n>
-  input: <n>
-  cache_write: <n>
-  cache_read: <n>
-  output: <n>
-children:
-  - agent: <agentType>
-    id: <agent id>
-    depth: <n>
-    parent: <session|agent id>
-    requests: <n>
-    input: <n>
-    cache_write: <n>
-    cache_read: <n>
-    output: <n>
----
-
-## Slowed or blocked
-
-- <item>
-
-## Skill wrong or missing
-
-- <item>
-
-## Worked around
-
-- <item>
-
-## Wished to ask
-
-- <item>
-
-## Read but not used
-
-- <file or section>
-```
-
-- **`role`** is the `<role>` in the file name.
-- **`usage`** holds `session-usage.sh`'s result line, one key per field and
-  named as the line names it, so `agent` is the line's and `role` stays the
-  file's own. **`children`** holds one entry per `child=` line, keyed the same
-  way, the `child=` value under `agent`; with no `child=` lines, leave it out.
-  An `UNKNOWN` result is `usage: {result: UNKNOWN, reason: <reason>}`.
-- **All five headings, spelled exactly as above.** `process-review` groups by
-  them. Under a heading with nothing to report, write `Nothing.`, since a clean
-  run is data too.
+- **`Nothing.`** under a heading with nothing to report, since a clean run is
+  data too. `process-review` groups by the headings.
 - **One bullet per item, naming what it is about**: the skill and step, the
   reference file, or the script (`git-workflow` step 7, `watch-pr.sh`). Where a
   skill said something wrong, quote the line. Patterns are found by grouping on
   these names, so an item that names nothing cannot join one.
-- **`plugin_version`** is the version a `## dnbg-workflow <version>` note at
-  session start names. With no such note, read it from the installed plugin's
-  manifest:
-
-  ```bash
-  jq -r .version "<skill-dir>/../../.claude-plugin/plugin.json"
-  ```
-
-  Write `none` only when neither gives one. Never write a version from memory,
-  since a guessed version reads like a real one.
 - **No secrets and no credentials.** The files are local, but `process-review`
   quotes them into issue drafts.
+
+Write the five headings and their answers, and nothing else, to a file in your
+draft directory (`git-workflow`'s `references/draft-files.md`). Then, in a Bash
+call of its own, run the script again by the path you ran `--begin` by, given
+the nonce it printed above this prompt:
+
+```bash
+"<script>" <nonce> --role=<role> --issue=<URL> --body=<file> [--root=<dir>]
+```
+
+- **`--role`** is the one your close-out names: `author`, `spec-author`,
+  `reviewer`, `issue-reviewer` or `orchestrator`.
+- **`--issue`** is the issue your run worked. A reviewer of a set of issues
+  passes their parent. A set with no parent resolved by one PR
+  (`orchestrate`'s `references/several-issues.md`) passes one `--issue` per
+  issue. Work under no issue passes its PR's URL.
+- **`--root`** is the retrospective root the session-start note names, when it
+  names one. Without it the file goes under `~/.claude/dnbg/retrospectives`.
+
+The script writes the file, and on a session's own usage posts the `Usage:`
+comment on the issue as your role. Its result line names the file's `path=`, for
+your report. `usage_comment=failed` means the file is written and the comment is
+not: run `"<script>" --post-usage=<path>`. A
+`result=ERROR` wrote nothing; fix what its `reason=` names and run it again.
 
 ## Asking the agents for one
 

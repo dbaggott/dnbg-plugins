@@ -71,7 +71,7 @@ applies on any forge.
 
 Worktrees live in `.worktrees/` inside the repo. Ensure `.worktrees` is in `.gitignore`.
 
-**`.worktrees/` is the default, not a constant.** It is configurable, so if a `dnbg-workflow` note at session start names a different worktree root, that note wins and every `.worktrees/` in this skill means the root it names — including the `git worktree add` in step 4 and the `git worktree remove` in the post-merge cleanup. With no such note, the literal above is what this session uses.
+**`.worktrees/` is the default, not a constant.** It is configurable, so if a `dnbg-workflow` note at session start names a different worktree root, that note wins and every `.worktrees/` in this skill means the root it names — including the `git worktree add` in step 4; the post-merge cleanup finds a worktree wherever it is. With no such note, the literal above is what this session uses.
 
 **Concurrent work is the norm — other worktrees are not a finding.** `.worktrees/` routinely holds branches from other sessions, other agents, and the operator's own in-flight work. Their presence is expected, needs no report, and is not evidence anything is wrong. Never touch one you didn't create.
 

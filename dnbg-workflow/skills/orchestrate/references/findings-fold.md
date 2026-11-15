@@ -14,6 +14,9 @@ directory**.
 At Stop, once the agents' close-outs are in, give your own close-out per that
 file's "When a retrospective is written", with `role: orchestrator`, answering
 its prompt about your own run: the triage, the escalations, and the dispatches.
+With retrospectives on, that is
+`"<skill-dir>/../../scripts/write-retrospective.sh" --begin`, followed as it
+prints.
 
 ## Fold the project's findings into the parent
 

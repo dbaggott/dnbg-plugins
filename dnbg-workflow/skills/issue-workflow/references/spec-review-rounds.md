@@ -202,7 +202,9 @@ each issue and its final verdict, and Actionable, at a halt, what is left for
 the operator. Close out per
 `<skill-dir>/../process-review/references/retrospective.md`, "When a
 retrospective is written", with `role: spec-author` and the issue's URL, or the
-parent's for a set, as `issue:`.
+parent's for a set, as `issue:`. With retrospectives on, that is
+`"<skill-dir>/../../scripts/write-retrospective.sh" --begin`, followed as it
+prints.
 
 Then, once the review has converged, end on the next stage, by the first of
 these that fits. Each exit says that GitHub now holds everything the next stage
