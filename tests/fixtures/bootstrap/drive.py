@@ -3,11 +3,11 @@
   python3 drive.py <bootstrap-dir> <manifest-log> [bootstrap args…]
 
 Each "browser open" touches <manifest-log>.opened and fetches the local page.
-On a create page it records the manifest the page would POST and follows
-GitHub's redirect back with the page's own state; the conversion answers as
-GitHub would, with an App named after the manifest. On the connect page it does
-what the world file says, then polls the page's status until the run is done,
-leaving the last answer in <manifest-log>.status.
+On the create page it records, row by row, the manifest the row's button would
+POST and follows GitHub's redirect back with the row's own state; the conversion
+answers as GitHub would, with an App named after the manifest. On the connect
+page it does what the world file says. On either it then polls the page's status
+until the run is done, leaving the last answer in <manifest-log>.status.
 
 $BOOTSTRAP_GITHUB names the world file, JSON standing in for GitHub and for the
 operator's clicks. Unset, GitHub has no Apps.
@@ -18,6 +18,9 @@ operator's clicks. Unset, GitHub has no Apps.
   download  {slug: pem text}, keys the click saves to ~/Downloads, each named
             as a browser names the day's second download
   upload    {role: pem text}, keys the click sends through the file picker
+  uninstalled  [slug], created Apps that are never installed; every other is
+            installed as soon as it is created
+  unconverted  [name], Apps whose manifest conversion fails
 
 $BOOTSTRAP_LOGIN is the `gh` login, `tester` unless set.
 """
@@ -27,6 +30,7 @@ import re
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from html import unescape
 from pathlib import Path
@@ -46,13 +50,20 @@ def owner_of(app):
     return {"login": app["owner"], "type": app.get("type", "User")}
 
 
-def create(url, page, manifest_attr):
-    state = re.search(r"state=([^\"&]+)", page).group(1)
-    manifest = json.loads(unescape(manifest_attr))
-    with open(LOG, "a") as fh:
-        fh.write(json.dumps(manifest) + "\n")
-    seen["name"] = manifest["name"]
-    urllib.request.urlopen(f"{url}callback?state={state}&code=c", timeout=10).read()
+ROW = re.compile(r'<form action="[^"]*state=([^"&]+)"[^>]*>\s*<input type="hidden" name="manifest" value="([^"]*)">')
+
+
+def create(url, page):
+    for state, manifest_attr in ROW.findall(page):
+        manifest = json.loads(unescape(manifest_attr))
+        with open(LOG, "a") as fh:
+            fh.write(json.dumps(manifest) + "\n")
+        seen["name"] = manifest["name"]
+        try:
+            urllib.request.urlopen(f"{url}callback?state={state}&code=c", timeout=10).read()
+        except urllib.error.HTTPError:
+            pass
+    poll(url)
 
 
 def connect(url, page):
@@ -64,7 +75,11 @@ def connect(url, page):
     for role, pem in WORLD.get("upload", {}).items():
         Path(LOG + ".status").write_bytes(urllib.request.urlopen(urllib.request.Request(
             f"{url}key/{role}?state={state}", data=pem.encode(), method="POST"), timeout=10).read())
-    for _ in range(50):
+    poll(url)
+
+
+def poll(url):
+    for _ in range(100):
         status = urllib.request.urlopen(f"{url}status", timeout=10).read().decode()
         if json.loads(status)["done"]:
             return
@@ -75,9 +90,8 @@ def connect(url, page):
 def fake_open(url):
     def click():
         page = urllib.request.urlopen(url, timeout=10).read().decode()
-        manifest = re.search(r'name="manifest" value="([^"]*)"', page)
-        if manifest:
-            create(url, page, manifest.group(1))
+        if 'name="manifest"' in page:
+            create(url, page)
         else:
             connect(url, page)
     Path(LOG + ".opened").touch()
@@ -87,6 +101,8 @@ def fake_open(url):
 
 def fake_convert(code):
     name = seen["name"]
+    if name in WORLD.get("unconverted", []):
+        raise urllib.error.URLError("conversion refused")
     return {"id": len(name), "pem": f"PEM for {name}", "slug": name, "owner": {"login": "tester"}}
 
 
@@ -110,7 +126,13 @@ def fake_prove(app_id, pem):
             "html_url": f"https://github.com/apps/{slug}"}
 
 
+def fake_installed(app_id, pem):
+    return pem.removeprefix("PEM for ") not in WORLD.get("uninstalled", [])
+
+
 bootstrap.webbrowser.open = fake_open
+bootstrap.app_installed = fake_installed
+bootstrap.INSTALL_POLL = 0.1
 bootstrap.convert_manifest = fake_convert
 bootstrap.lookup_app = fake_lookup
 bootstrap.prove_key = fake_prove

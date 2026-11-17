@@ -125,28 +125,47 @@ bootstrap() {
   [[ "$output" == *"unknown role(s) Odd_Name"* ]]
 }
 
-# The run opens the next role's tab the moment one App exists, so an install
-# button on an earlier page is left in a tab nobody is looking at.
-@test "the install buttons are on a run's last page, or on the page of the role that stopped it" {
+@test "the create page has a row per role, each creating its own App in a new tab" {
   run python3 - "$BATS_TEST_DIRNAME/../dnbg-workflow/skills/reviewer-setup/bootstrap.py" <<'PY'
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("bootstrap", sys.argv[1])
 b = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)
-url = "https://github.com/apps/agent-%s-t/installations/new"
-mid = b.created_page([("reviewer", url % "reviewer")], ["author", "orchestrator"])
-assert "installations/new" not in mid and "author bot is next" in mid, mid
-last = b.created_page([(r, url % r) for r in ("reviewer", "author", "orchestrator")], [])
-assert all(url % r in last for r in ("reviewer", "author", "orchestrator")), last
-assert "All 3 bots are created" in last, last
-untabbed = b.created_page([("reviewer", url % "reviewer")], ["author"], tabs=False)
-assert 'href="/start/author"' in untabbed and "installations/new" not in untabbed, untabbed
-failed = b.failed_page("Setup failed", "no <code>", [("reviewer", url % "reviewer")])
-assert url % "reviewer" in failed and "no &lt;code&gt;" in failed, failed
-assert "installations/new" not in b.failed_page("Setup failed", "x", [])
-one = b.created_page([("reviewer", url % "reviewer")], [])
-assert one.count("installations/new") == 1 and "The reviewer bot is created" in one, one
+rows = [{"role": r, "name": f"agent-{r}-t", "create_url": f"https://github.com/settings/apps/new?state={r}",
+         "manifest": {"name": f"agent-{r}-t", "url": "a\"<b"}} for r in ("reviewer", "author")]
+page = b.create_page(rows)
+assert page.count('<section class="row"') == 2 and page.count('target="_blank"') == 2, page
+assert 'id="row-reviewer"' in page and "state=author" in page and "Create your bots" in page, page
+assert "&quot;&lt;b" in page and '"<b' not in page, page
+assert "installations/new" not in page, page
+assert "no &lt;code&gt;" in b.failed_page("Setup failed", "no <code>")
 PY
   [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "a create run ends once every App it created is installed, and says so" {
+  bootstrap --roles reviewer,author
+  [ "$status" -eq 0 ]
+  [ "$(summary | jq -c 'map([.role, .action, .installed])')" = '[["reviewer","created",true],["author","created",true]]' ]
+}
+
+@test "a create that fails stops the run as attempted, and the others are set up all the same" {
+  github '{"unconverted":["agent-author-tester"]}'
+  bootstrap --roles reviewer,author
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Setup failed for author: manifest conversion failed"* ]]
+  [[ "$output" == *"Not created: author."* ]]
+  [[ "$output" != *"Stopped before"* ]]
+  [ "$(summary | jq -c 'map([.role, .installed])')" = '[["reviewer",true]]' ]
+  [ ! -e "$XDG_CONFIG_HOME/dnbg/author" ]
+}
+
+@test "an App never installed is created all the same, and reported not installed at the timeout" {
+  github '{"uninstalled":["agent-author-tester"]}'
+  bootstrap --roles reviewer,author --timeout 2
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Timed out after 4s waiting for author"* ]]
+  [ "$(summary | jq -c 'map([.role, .installed])')" = '[["reviewer",true],["author",false]]' ]
+  [ -f "$XDG_CONFIG_HOME/dnbg/author/private-key.pem" ]
 }
 
 @test "--detect reports a bot of the operator's as yours and the rest as free, and changes nothing" {
@@ -201,7 +220,7 @@ PY
   bootstrap --roles author --adopt reviewer=agent-reviewer-tester
   [ "$status" -eq 0 ]
   [ "$(summary | jq -c 'map([.role, .action, .slug])')" = '[["reviewer","connected","agent-reviewer-tester"],["author","created","agent-author-tester"]]' ]
-  [ "$(summary | jq -c '.[0] | keys')" = "$(summary | jq -c '.[1] | keys')" ]
+  [ "$(summary | jq -c '.[0] | keys')" = "$(summary | jq -c '.[1] | keys - ["installed"]')" ]
   [ "$(wc -l < "$MANIFESTS")" -eq 1 ]
 }
 
