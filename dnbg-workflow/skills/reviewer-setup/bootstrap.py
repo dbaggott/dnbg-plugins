@@ -736,8 +736,12 @@ function show(row) {
                          textContent: 'Install the ' + row.role + ' bot'});
   }
 }
-// A poll that fails is retried; five in a row mean the run has ended, so no
-// create button is left to make an App nobody is listening for.
+// Once the run has ended no create button is left: an App it made would come
+// back to a server nobody is listening on.
+function ended() {
+  document.querySelectorAll('form').forEach(f => f.replaceWith('Setup ended before this bot was created.'));
+}
+// A poll that fails is retried; five in a row mean the run has ended.
 let missed = 0;
 async function poll() {
   let status;
@@ -745,14 +749,15 @@ async function poll() {
     status = await (await fetch('/status')).json();
   } catch (e) {
     if (++missed < 5) { setTimeout(poll, 1000); return; }
-    document.querySelectorAll('form').forEach(f => f.replaceWith('Setup ended before this bot was created.'));
+    ended();
     document.getElementById('end').textContent = 'This setup run has ended. Return to Claude Code.';
     return;
   }
   missed = 0;
   status.rows.forEach(show);
   document.getElementById('end').textContent = status.end;
-  if (!status.done) setTimeout(poll, 1000);
+  if (status.done) ended();
+  else setTimeout(poll, 1000);
 }
 poll();
 """
