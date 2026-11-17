@@ -725,36 +725,38 @@ def created_page(installs: list[tuple[str, str]], left: list[str], tabs: bool = 
     run opens the next role's tab as soon as this one is served, so a button on
     an earlier page would be left behind in a tab nobody is looking at."""
     role = installs[-1][0]
-    if left and tabs:
-        return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
-<p>This tab is done: you can close it.</p>
-<p class="note">The {html.escape(left[0])} bot is next, in a new tab. You install the bots together, after the last is created.</p>"""
     if left:
+        placed = f"That is bot {len(installs)} of {len(installs) + len(left)}."
+        if tabs:
+            return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
+<p>{placed} This tab is done: you can close it.</p>
+<p class="note">The {html.escape(left[0])} bot is next, in a new tab. You install the bots together, after the last is created.</p>"""
         # No browser was opened for this run, so none will be for the next role.
         return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
+<p>{placed}</p>
 <p><a class="go" href="/start/{html.escape(left[0], quote=True)}">Next: the {html.escape(left[0])} bot</a></p>
 <p class="note">You install the bots together, after the last is created.</p>"""
+    roles = [html.escape(r) for r, _ in installs]
     if len(installs) == 1:
-        heading = f"The {html.escape(role)} bot is created"
-        step = "One step left: install it."
+        heading = f"The {roles[0]} bot is created"
+        created = f"Create the bot<span class=\"note\">The {roles[0]} bot.</span>"
+        install = "Install it"
         how = "The button opens GitHub in a new tab."
-        closing = "When it is installed, close this tab and return to Claude Code."
     else:
         heading = f"All {len(installs)} bots are created"
-        step = "One step left: install each of them."
+        named = ", ".join(roles[:-1]) + f" and {roles[-1]}"
+        created = f"Create the bots<span class=\"note\">The {named} bots.</span>"
+        install = "Install each bot"
         how = "Each button opens GitHub in a new tab. Come back here after each one."
-        closing = "When all are installed, close this tab and return to Claude Code."
-    buttons = install_buttons(installs)
     return f"""<h1>&#10003; {heading}</h1>
-<p>{step} GitHub will ask which repos:</p>
-<ul>
-<li><b>All repositories</b> (recommended): least upkeep; new repos are covered automatically.</li>
-<li><b>Only select repositories</b>: limits what the bot can touch; you add new repos later.</li>
-</ul>
-<p class="note">You can change this at any time on GitHub, under Settings, then Applications.</p>
-<p>{how}</p>
-{buttons}
-<p class="note">{closing}</p>"""
+<ol class="steps">
+<li class="done">{created}</li>
+<li class="now">{install}
+<span class="note">GitHub asks which repos. <b>All repositories</b> (recommended) is the least upkeep: new repos are covered automatically. <b>Only select repositories</b> limits what the bot can touch, and you add new repos later.</span>
+<span class="note">You can change this at any time on GitHub, under Settings, then Applications. {how}</span>
+{install_buttons(installs)}</li>
+<li>Close this tab and return to Claude Code.</li>
+</ol>"""
 
 
 def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path,

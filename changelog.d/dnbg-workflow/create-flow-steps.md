@@ -1,0 +1,1 @@
+`reviewer-setup`'s create flow now lays its last page out as numbered steps, like the page that connects a machine to an existing bot: creating the bots is ticked, installing them is the step to do now, and closing the tab comes last. The pages between bots say which bot of how many was just created.

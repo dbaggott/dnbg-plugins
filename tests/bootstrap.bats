@@ -135,16 +135,23 @@ b = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)
 url = "https://github.com/apps/agent-%s-t/installations/new"
 mid = b.created_page([("reviewer", url % "reviewer")], ["author", "orchestrator"])
 assert "installations/new" not in mid and "author bot is next" in mid, mid
+assert "bot 1 of 3" in mid and 'class="steps"' not in mid, mid
 last = b.created_page([(r, url % r) for r in ("reviewer", "author", "orchestrator")], [])
 assert all(url % r in last for r in ("reviewer", "author", "orchestrator")), last
 assert "All 3 bots are created" in last, last
+assert '<li class="done">Create the bots' in last and "reviewer, author and orchestrator bots" in last, last
+now = last.split('<li class="now">', 1)[1].split("</li>", 1)[0]
+assert now.startswith("Install each bot") and all(url % r in now for r in ("reviewer", "author", "orchestrator")), last
+assert "All repositories" in now and last.count("<li") == 3, last
 untabbed = b.created_page([("reviewer", url % "reviewer")], ["author"], tabs=False)
 assert 'href="/start/author"' in untabbed and "installations/new" not in untabbed, untabbed
+assert "bot 1 of 2" in untabbed, untabbed
 failed = b.failed_page("Setup failed", "no <code>", [("reviewer", url % "reviewer")])
 assert url % "reviewer" in failed and "no &lt;code&gt;" in failed, failed
 assert "installations/new" not in b.failed_page("Setup failed", "x", [])
 one = b.created_page([("reviewer", url % "reviewer")], [])
 assert one.count("installations/new") == 1 and "The reviewer bot is created" in one, one
+assert '<li class="done">Create the bot<' in one and '<li class="now">Install it' in one, one
 PY
   [ "$status" -eq 0 ] || { echo "$output"; false; }
 }
