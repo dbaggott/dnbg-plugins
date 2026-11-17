@@ -728,7 +728,9 @@ function show(row) {
     form.replaceWith(made);
   }
   const install = steps[1].querySelector('.install');
-  if (row.install_url && !install.firstChild) {
+  if (row.state === 'installed') {
+    install.replaceChildren();
+  } else if (row.install_url && !install.firstChild) {
     const link = install.appendChild(document.createElement('p')).appendChild(document.createElement('a'));
     Object.assign(link, {className: 'go', target: '_blank', rel: 'noopener', href: row.install_url,
                          textContent: 'Install the ' + row.role + ' bot'});
@@ -777,9 +779,8 @@ def create_page(rows: list[dict]) -> str:
 </ol>
 </section>"""
 
-    one = len(rows) == 1
-    return f"""<h1>Create your {"bot" if one else "bots"}</h1>
-<p>{"Each bot takes" if not one else "It takes"} three steps, the first two on GitHub. When GitHub asks which repos to install {"it" if one else "a bot"} on:</p>
+    return f"""<h1>{create_heading(len(rows))}</h1>
+<p>{"It takes" if len(rows) == 1 else "Each bot takes"} three steps, the first two on GitHub. When GitHub asks which repos to install {"it" if len(rows) == 1 else "a bot"} on:</p>
 <ul>
 <li><b>All repositories</b> (recommended): least upkeep; new repos are covered automatically.</li>
 <li><b>Only select repositories</b>: limits what the bot can touch; you add new repos later.</li>
@@ -789,6 +790,10 @@ def create_page(rows: list[dict]) -> str:
 <p id="end"></p>
 <noscript><p>This page needs JavaScript to show progress and the install buttons.</p></noscript>
 <script>{CREATE_SCRIPT}</script>"""
+
+
+def create_heading(count: int) -> str:
+    return f"Create your {'bot' if count == 1 else 'bots'}"
 
 
 CREATE_WAITING = "Come back to this tab once GitHub has created it."
@@ -892,7 +897,7 @@ def run_create(args: argparse.Namespace, creates: list[str], names: dict[str, st
                               else "Created. Install it, then return to Claude Code.")
             settle()
         return 200, f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
-<p>This tab is done: close it, and install the bot from the setup tab.</p>"""
+<p>This tab is done: close it, and return to the original &ldquo;{create_heading(len(creates))}&rdquo; tab.</p>"""
 
     def watch() -> None:
         while not stop_watching.wait(INSTALL_POLL):

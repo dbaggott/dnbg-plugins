@@ -141,8 +141,8 @@ already in place.
 **Creating** follows, on one browser page with a row per role. Each row's
 button opens GitHub in a new tab, where the operator presses **"Create GitHub
 App"**; GitHub sends that tab back to the local server, which saves the new
-App's key. The row then shows an install button, and ticks the install once
-GitHub reports the App installed. The run ends when every row is installed, or
+App's key. The row then shows an install button, and ticks the install,
+removing the button, once GitHub reports the App installed. The run ends when every row is installed, or
 at the timeout.
 
 At the end it prints a JSON list with each role's `action` (`connected` or
@@ -185,8 +185,9 @@ org only.)
 
 When the run ends with every created role `installed`, say "The `<role>` bot
 is created and installed: `<slug>`." for each. `installed` means installed on
-one account, so ask whether it is to work on any other, where its row's button
-installs it again, and go to **Verify** for every account it is to work on.
+one account, so ask whether it is to work on any other, give its install URL
+from the JSON for each that is, and go to **Verify** for every account it is to
+work on.
 
 Otherwise tell the operator in this shape and no longer. The create page
 already shows an install button for each bot, so repeat neither the URLs nor
