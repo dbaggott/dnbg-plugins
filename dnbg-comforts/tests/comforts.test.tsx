@@ -137,7 +137,7 @@ test('the cache counts down after a turn and turns yellow once cold', async ($, 
   await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
 
   const warm = await $.ui.mount(BAND)
-  expect((await warm.find({ type: 'Text', text: /cache/ }))?.text).toBe('cache ~warm 1h00m')
+  expect((await warm.find({ type: 'Text', text: /cache/ }))?.text).toBe('cache cold in ~1h00m')
   await warm.unmount()
 
   await clock.advance(61 * 60 * 1000)
@@ -182,7 +182,7 @@ test('after a /clear the cache counts down again from the next turn, for the lif
   await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't2', reason: 'answer' })
 
   const ui = await $.ui.mount(BAND)
-  expect((await ui.find({ type: 'Text', text: /cache/ }))?.text).toBe('cache ~warm 5m')
+  expect((await ui.find({ type: 'Text', text: /cache/ }))?.text).toBe('cache cold in ~5m')
   await ui.unmount()
 })
 

@@ -162,7 +162,7 @@ export function registerBand(on: On, options: PluginOptions): void {
         {(line.model !== null || line.saved !== null) && <Text dimColor>{'  '}</Text>}
         <Text dimColor>{`${line.context} · `}</Text>
         {line.cache.kind === 'none' && <Text dimColor>cache none</Text>}
-        {line.cache.kind === 'warm' && <Text dimColor>{`cache ~warm ${span(line.cache.minutesLeft * 60000)}`}</Text>}
+        {line.cache.kind === 'warm' && <Text dimColor>{`cache cold in ~${span(line.cache.minutesLeft * 60000)}`}</Text>}
         {/* Cold: the next request re-sends the whole context uncached. */}
         {line.cache.kind === 'cold' && <Text color="black" backgroundColor="yellow">{' cache ~cold '}</Text>}
         {line.rest !== '' && <Text dimColor>{` · ${line.rest}`}</Text>}
