@@ -20,6 +20,7 @@ operator's clicks. Unset, GitHub has no Apps.
   upload    {role: pem text}, keys the click sends through the file picker
   uninstalled  [slug], created Apps that are never installed; every other is
             installed as soon as it is created
+  unconverted  [name], Apps whose manifest conversion fails
 
 $BOOTSTRAP_LOGIN is the `gh` login, `tester` unless set.
 """
@@ -100,6 +101,8 @@ def fake_open(url):
 
 def fake_convert(code):
     name = seen["name"]
+    if name in WORLD.get("unconverted", []):
+        raise urllib.error.URLError("conversion refused")
     return {"id": len(name), "pem": f"PEM for {name}", "slug": name, "owner": {"login": "tester"}}
 
 

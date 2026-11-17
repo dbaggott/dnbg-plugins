@@ -184,7 +184,9 @@ work on. (An **org-owned** App, if you chose `--owner-type org`, installs on the
 org only.)
 
 When the run ends with every created role `installed`, say "The `<role>` bot
-is created and installed: `<slug>`." for each, and go to **Verify**.
+is created and installed: `<slug>`." for each. `installed` means installed on
+one account, so ask whether it is to work on any other, where its row's button
+installs it again, and go to **Verify** for every account it is to work on.
 
 Otherwise tell the operator in this shape and no longer. The create page
 already shows an install button for each bot, so repeat neither the URLs nor

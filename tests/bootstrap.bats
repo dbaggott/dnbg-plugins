@@ -148,11 +148,22 @@ PY
   [ "$(summary | jq -c 'map([.role, .action, .installed])')" = '[["reviewer","created",true],["author","created",true]]' ]
 }
 
+@test "a create that fails stops the run as attempted, and the others are set up all the same" {
+  github '{"unconverted":["agent-author-tester"]}'
+  bootstrap --roles reviewer,author
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Setup failed for author: manifest conversion failed"* ]]
+  [[ "$output" == *"Not created: author."* ]]
+  [[ "$output" != *"Stopped before"* ]]
+  [ "$(summary | jq -c 'map([.role, .installed])')" = '[["reviewer",true]]' ]
+  [ ! -e "$XDG_CONFIG_HOME/dnbg/author" ]
+}
+
 @test "an App never installed is created all the same, and reported not installed at the timeout" {
   github '{"uninstalled":["agent-author-tester"]}'
   bootstrap --roles reviewer,author --timeout 2
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Timed out after 2s waiting for author"* ]]
+  [[ "$output" == *"Timed out after 4s waiting for author"* ]]
   [ "$(summary | jq -c 'map([.role, .installed])')" = '[["reviewer",true],["author",false]]' ]
   [ -f "$XDG_CONFIG_HOME/dnbg/author/private-key.pem" ]
 }

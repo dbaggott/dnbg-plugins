@@ -55,6 +55,7 @@ import time
 import urllib.error
 import urllib.request
 import webbrowser
+from http.client import HTTPException
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -733,9 +734,20 @@ function show(row) {
                          textContent: 'Install the ' + row.role + ' bot'});
   }
 }
+// A poll that fails is retried; five in a row mean the run has ended, so no
+// create button is left to make an App nobody is listening for.
+let missed = 0;
 async function poll() {
   let status;
-  try { status = await (await fetch('/status')).json(); } catch (e) { return; }
+  try {
+    status = await (await fetch('/status')).json();
+  } catch (e) {
+    if (++missed < 5) { setTimeout(poll, 1000); return; }
+    document.querySelectorAll('form').forEach(f => f.replaceWith('Setup ended before this bot was created.'));
+    document.getElementById('end').textContent = 'This setup run has ended. Return to Claude Code.';
+    return;
+  }
+  missed = 0;
   status.rows.forEach(show);
   document.getElementById('end').textContent = status.end;
   if (!status.done) setTimeout(poll, 1000);
@@ -780,6 +792,7 @@ def create_page(rows: list[dict]) -> str:
 
 
 CREATE_WAITING = "Come back to this tab once GitHub has created it."
+INSTALL_WAITING = "Created. Waiting for it to be installed."
 
 
 def failed_page(heading: str, detail: str) -> str:
@@ -839,7 +852,7 @@ def run_create(args: argparse.Namespace, creates: list[str], names: dict[str, st
         if role is None:
             return 400, failed_page("Setup stopped", "This page did not come from this setup run.")
         with lock:
-            if rows[role]["state"] != "waiting":
+            if rows[role]["state"] not in ("waiting", "failed"):
                 return 200, failed_page(f"The {html.escape(role)} bot is already set up",
                                         "Close this tab and return to the setup tab.")
         code = (qs.get("code") or [""])[0]
@@ -875,7 +888,7 @@ def run_create(args: argparse.Namespace, creates: list[str], names: dict[str, st
             keys[role] = app["pem"]
             rows[role].update(state="created", slug=summary["slug"],
                               install_url=summary["install_url"],
-                              text="Created. Waiting for it to be installed." if watching
+                              text=INSTALL_WAITING if watching
                               else "Created. Install it, then return to Claude Code.")
             settle()
         return 200, f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
@@ -889,9 +902,16 @@ def run_create(args: argparse.Namespace, creates: list[str], names: dict[str, st
             for role, app_id, pem in waiting:
                 try:
                     if not app_installed(app_id, pem):
+                        with lock:
+                            rows[role]["text"] = INSTALL_WAITING
                         continue
-                except (OSError, ValueError, KeyRefused):
-                    # Not known yet; asked again on the next pass.
+                except (OSError, ValueError, HTTPException, KeyRefused) as exc:
+                    # Asked again on the next pass; said once per distinct reason.
+                    reason = f"GitHub could not be asked whether it is installed ({exc})."
+                    with lock:
+                        if rows[role]["text"] != reason:
+                            print(f"The {role} bot: {reason} Still asking.", file=sys.stderr)
+                            rows[role]["text"] = reason
                     continue
                 with lock:
                     created[role]["installed"] = True
@@ -954,14 +974,15 @@ def run_create(args: argparse.Namespace, creates: list[str], names: dict[str, st
         print(f"No browser could be opened here. Open {open_url} yourself, on this machine.",
               file=sys.stderr)
 
-    if finished.wait(timeout=args.timeout):
+    if finished.wait(timeout=args.timeout * len(creates)):
         # The page learns a row's state by polling, so the server stays up for
         # the poll that shows the last row settled.
         final_status_served.wait(timeout=3)
     else:
         with lock:
             late = [r for r, row in rows.items() if row["state"] in ("waiting", "created")]
-        print(f"Timed out after {args.timeout}s waiting for {', '.join(late)}.", file=sys.stderr)
+        print(f"Timed out after {args.timeout * len(creates)}s waiting for {', '.join(late)}.",
+              file=sys.stderr)
     stop_watching.set()
     server.shutdown()
     server.server_close()
@@ -1122,8 +1143,8 @@ def run(args: argparse.Namespace) -> int:
 
     done: list[dict] = []
 
-    def stop(failed: str | None = None) -> int:
-        reached = {summary["role"] for summary in done} | {failed}
+    def stop(*failed: str) -> int:
+        reached = {summary["role"] for summary in done} | set(failed)
         unreached = [r for r in list(adopt) + creates if r not in reached]
         if unreached:
             print(f"Stopped before: {', '.join(unreached)}.", file=sys.stderr)
@@ -1156,7 +1177,7 @@ def run(args: argparse.Namespace) -> int:
         missed = [r for r in creates if r not in made]
         if missed:
             print(f"Not created: {', '.join(missed)}.", file=sys.stderr)
-            return stop()
+            return stop(*missed)
     print(json.dumps(done, indent=2))
     return 0
 
@@ -1189,7 +1210,7 @@ def main() -> int:
                                   f"must be globally unique, and at most {NAME_LIMIT} "
                                   "characters)")
     p.add_argument("--port", type=int, default=8765, help="localhost callback port")
-    p.add_argument("--timeout", type=int, default=600, help="seconds to wait for the browser")
+    p.add_argument("--timeout", type=int, default=600, help="seconds to wait for the browser, per bot")
     p.add_argument("--no-browser", action="store_true", help="don't auto-open the browser")
     return run(p.parse_args())
 
