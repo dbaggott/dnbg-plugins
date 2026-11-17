@@ -140,7 +140,17 @@ test('the cache counts down after a turn and turns yellow once cold', async ($, 
   expect((await warm.find({ type: 'Text', text: /cache/ }))?.text).toBe('cache cold in ~1h00m')
   await warm.unmount()
 
-  await clock.advance(61 * 60 * 1000)
+  await clock.advance(30.5 * 60 * 1000)
+  const half = await $.ui.mount(BAND)
+  expect((await half.find({ type: 'Text', text: /cache/ }))?.text).toBe('cache cold in ~29m')
+  await half.unmount()
+
+  await clock.advance(29.25 * 60 * 1000)
+  const last = await $.ui.mount(BAND)
+  expect((await last.find({ type: 'Text', text: /cache/ }))?.text).toBe('cache cold in <1m')
+  await last.unmount()
+
+  await clock.advance(1.25 * 60 * 1000)
   const cold = await $.ui.mount(BAND)
   const badge = await cold.find({ type: 'Text', text: /cache/ })
   expect(badge?.text).toBe(' cache ~cold ')

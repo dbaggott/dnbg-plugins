@@ -71,8 +71,9 @@ async function measure($: EngineInterface, standard: string): Promise<UsageLine>
   const ttl = cacheTtlMs ?? (figures.rateLimits.length > 0 ? HOUR_MS : FIVE_MINUTES_MS)
   const respondedAt = await read($, lastResponseAt)
   const left = respondedAt === null ? null : respondedAt + ttl - now
+  // Rounded down, so the countdown never promises warmth past the estimate.
   const cache: CacheState =
-    left === null ? { kind: 'none' } : left > 0 ? { kind: 'warm', minutesLeft: Math.round(left / 60000) } : { kind: 'cold' }
+    left === null ? { kind: 'none' } : left > 0 ? { kind: 'warm', minutesLeft: Math.floor(left / 60000) } : { kind: 'cold' }
 
   const notice = await read($, savedNotice)
   const isNoticeUp = notice !== null && now < notice.until
@@ -162,7 +163,7 @@ export function registerBand(on: On, options: PluginOptions): void {
         {(line.model !== null || line.saved !== null) && <Text dimColor>{'  '}</Text>}
         <Text dimColor>{`${line.context} · `}</Text>
         {line.cache.kind === 'none' && <Text dimColor>cache none</Text>}
-        {line.cache.kind === 'warm' && <Text dimColor>{`cache cold in ~${span(line.cache.minutesLeft * 60000)}`}</Text>}
+        {line.cache.kind === 'warm' && <Text dimColor>{`cache cold in ${line.cache.minutesLeft === 0 ? '<1m' : `~${span(line.cache.minutesLeft * 60000)}`}`}</Text>}
         {/* Cold: the next request re-sends the whole context uncached. */}
         {line.cache.kind === 'cold' && <Text color="black" backgroundColor="yellow">{' cache ~cold '}</Text>}
         {line.rest !== '' && <Text dimColor>{` · ${line.rest}`}</Text>}
