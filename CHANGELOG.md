@@ -10,6 +10,11 @@ tagged, and their versions used a two-component scheme that predates the current
 
 <!-- releases below -->
 
+## dnbg-workflow 2026.11.27 — 2026-11-17
+
+`reviewer-setup` now creates bots from one page, laid out like the page that connects a machine to an existing bot: a row per bot, each with numbered steps to create it on GitHub, install it, and confirm. The page ticks each step as it lands, including the install, which it reads from GitHub. The setup run ends once every bot it created is installed, so the agent no longer has to ask whether you have finished installing.
+
+
 ## dnbg-comforts 2026.11.4 — 2026-11-17
 
 The band's prompt-cache estimate now reads as a countdown to cold, such as
