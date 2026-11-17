@@ -2,19 +2,21 @@
 """Bootstrap per-developer GitHub Apps for the agent roles.
 
 Sets up one App per chosen role (`reviewer`, and any other role defined under
-`dnbg-workflow/roles/`), one after another. A role with no App gets one
-created, by driving the GitHub App Manifest flow end to end except the one
-browser click GitHub requires to create any App:
+`dnbg-workflow/roles/`). A role with no App gets one created, by driving the
+GitHub App Manifest flow end to end except the browser clicks GitHub requires
+to create and install any App:
 
   1. Build the role's App manifest from `roles/<role>/permissions.json` (no
      webhook).
-  2. Serve a local page that POSTs the manifest to GitHub's create-from-manifest
-     URL; you click "Create GitHub App" in the browser.
+  2. Serve a local page with a row per role, whose button POSTs the manifest
+     to GitHub's create-from-manifest URL; you click "Create GitHub App" there.
   3. GitHub redirects back to this server with a temporary code.
   4. Exchange the code via POST /app-manifests/{code}/conversions for the App's
      id, slug, and private key (PEM) — returned exactly once, here.
   5. Save the key (mode 600) and config in the role's own config dir. The key
      never leaves this machine; `as-role.sh` mints short-lived tokens from it.
+  6. Show the row's install button, and watch `GET /app/installations` until
+     you have installed the App.
 
 A role whose App already exists, created from another machine, is connected
 (`--adopt`): GitHub has no API that generates an App private key, so you
@@ -222,9 +224,9 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   /* A row's steps: the one to do now stands out, the ones done carry a tick and
      recede, and the ones to come stay readable before the first is taken. */
   .steps {{ list-style: none; padding: 0; margin: 0; counter-reset: step; }}
-  .steps > li {{ counter-increment: step; position: relative; margin: 0;
+  .steps li {{ counter-increment: step; position: relative; margin: 0;
               padding: .15rem 0 1.1rem 2.75rem; }}
-  .steps > li::before {{ content: counter(step); position: absolute; left: 0; top: 0;
+  .steps li::before {{ content: counter(step); position: absolute; left: 0; top: 0;
                       width: 2rem; height: 2rem; border-radius: 50%; box-sizing: border-box;
                       display: grid; place-items: center; font-weight: 700;
                       border: 2px solid currentColor; }}
@@ -233,11 +235,8 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .steps li.now {{ font-weight: 600; }}
   .steps li.now::before {{ background: #1f883d; border-color: #1f883d; color: #fff; }}
   .steps li.done::before {{ content: "\\2713"; border-color: #1f883d; color: #1f883d; }}
-  .steps .note, .steps .detail {{ display: block; font-weight: 400; margin-top: .35rem; }}
+  .steps .note {{ display: block; font-weight: 400; margin-top: .35rem; }}
   .saved .steps .pick {{ display: none; }}
-  /* The fallback for a redirect that did not happen: hidden while it should. */
-  .late {{ visibility: hidden; animation: late 0s 3s forwards; }}
-  @keyframes late {{ to {{ visibility: visible; }} }}
 </style></head><body><main>
 {body}
 </main></body></html>"""
@@ -376,10 +375,10 @@ def app_jwt(app_id: str, pem: str) -> str:
     return f"{unsigned}.{b64url(signed.stdout)}"
 
 
-def prove_key(app_id: str, pem: str) -> dict:
-    """The App the key belongs to, as `GET /app` answers under a JWT it signed."""
+def app_get(path: str, app_id: str, pem: str):
+    """`GET <path>` as the App, under a JWT signed with its key."""
     req = urllib.request.Request(
-        f"{API_ROOT}/app",
+        f"{API_ROOT}{path}",
         headers={
             "Authorization": f"Bearer {app_jwt(app_id, pem)}",
             "Accept": "application/vnd.github+json",
@@ -387,9 +386,14 @@ def prove_key(app_id: str, pem: str) -> dict:
             "User-Agent": "reviewer-setup",
         },
     )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read())
+
+
+def prove_key(app_id: str, pem: str) -> dict:
+    """The App the key belongs to, as `GET /app` answers under a JWT it signed."""
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
+        return app_get("/app", app_id, pem)
     except urllib.error.HTTPError as exc:
         # 401 where the ID is another App's, 404 where it is no App's.
         if exc.code in (401, 404):
@@ -398,6 +402,11 @@ def prove_key(app_id: str, pem: str) -> dict:
         raise KeyUnchecked(f"GitHub answered HTTP {exc.code} when the key was checked.")
     except (OSError, ValueError) as exc:
         raise KeyUnchecked(f"GitHub could not be asked about the key ({exc}).")
+
+
+def app_installed(app_id: str, pem: str) -> bool:
+    """Whether the App is installed on any account yet."""
+    return bool(app_get("/app/installations?per_page=1", app_id, pem))
 
 
 def permission_shortfall(role: str, granted: dict) -> str:
@@ -543,11 +552,11 @@ def waiting_text(watching: bool) -> str:
             "read your Downloads folder.")
 
 
-def run_connect(args: argparse.Namespace, targets: list[dict], next_role: str | None) -> dict:
+def run_connect(args: argparse.Namespace, targets: list[dict], creating: bool) -> dict:
     """Serve the connect page until every target's key is proven and saved, or
-    the timeout. Returns the summaries of the roles saved, by role. `next_role`
-    is the first role the run creates afterwards, if any."""
-    # Guards the key upload as run_flow's guards its callback: only a page this
+    the timeout. Returns the summaries of the roles saved, by role. `creating` is
+    whether the run creates bots afterwards."""
+    # Guards the key upload as run_create's guards its callback: only a page this
     # server served can post one.
     state = secrets.token_urlsafe(24)
     try:
@@ -619,12 +628,12 @@ def run_connect(args: argparse.Namespace, targets: list[dict], next_role: str | 
         done = all_saved.is_set()
         if not done:
             end = ""
-        elif next_role is None:
+        elif not creating:
             end = "All connected. Close this tab and return to Claude Code."
         elif flow["tabs"]:
-            end = f"All connected. The {next_role} bot is created next, in a new tab."
+            end = "All connected. The bots to create open next, in a new tab."
         else:
-            end = f"All connected. Reload this page to create the {next_role} bot."
+            end = "All connected. Reload this page to create the rest."
         return {"rows": [{"role": r, "state": row["state"], "text": row["text"]}
                          for r, row in rows.items()],
                 "done": done, "end": end}
@@ -699,202 +708,265 @@ def run_connect(args: argparse.Namespace, targets: list[dict], next_role: str | 
     return saved
 
 
-def install_buttons(installs: list[tuple[str, str]]) -> str:
-    return "\n".join(
-        f'<p><a class="go" target="_blank" rel="noopener" href="{html.escape(url, quote=True)}">'
-        f'Install the {html.escape(r)} bot</a></p>' for r, url in installs)
+CREATE_SCRIPT = """
+// Which step of its row each role is at: 1 until its App is created, 2 until it
+// is installed, and 4, every step done, once it is.
+function show(row) {
+  const step = row.state === 'installed' ? 4 : row.state === 'created' ? 2 : 1;
+  const steps = document.querySelectorAll('#row-' + row.role + ' .steps > li');
+  steps.forEach((li, i) => {
+    li.className = i + 1 < step ? 'done' : i + 1 === step ? 'now' : '';
+  });
+  document.getElementById('row-' + row.role).classList.toggle('saved', step === 4);
+  document.getElementById('status-' + row.role).textContent = row.text;
+  const form = steps[0].querySelector('form');
+  if (row.slug && form) {
+    const made = document.createElement('span');
+    made.append('Created on GitHub: ');
+    made.appendChild(document.createElement('code')).textContent = row.slug;
+    form.replaceWith(made);
+  }
+  const install = steps[1].querySelector('.install');
+  if (row.install_url && !install.firstChild) {
+    const link = install.appendChild(document.createElement('p')).appendChild(document.createElement('a'));
+    Object.assign(link, {className: 'go', target: '_blank', rel: 'noopener', href: row.install_url,
+                         textContent: 'Install the ' + row.role + ' bot'});
+  }
+}
+async function poll() {
+  let status;
+  try { status = await (await fetch('/status')).json(); } catch (e) { return; }
+  status.rows.forEach(show);
+  document.getElementById('end').textContent = status.end;
+  if (!status.done) setTimeout(poll, 1000);
+}
+poll();
+"""
+
+# Seconds between asking GitHub whether a created App is installed yet.
+INSTALL_POLL = 3
 
 
-def failed_page(heading: str, detail: str, installs: list[tuple[str, str]]) -> str:
-    """A page for a role whose App was not set up. The Apps the run created
-    before it get their install buttons here, since its last page never comes."""
-    body = f"<h1>{heading}</h1><p>{html.escape(detail)}</p>"
-    if installs:
-        body += ("<p>The bots created before this one still need installing. "
-                 "Each button opens GitHub in a new tab.</p>" + install_buttons(installs))
-    return body
-
-
-def created_page(installs: list[tuple[str, str]], left: list[str], tabs: bool = True) -> str:
-    """The page shown once a role's App exists. `installs` is (role, install URL)
-    for every App this run has created, the newest last; `left` is the roles the
-    run still has to create; `tabs` is whether the run opens each role's page
-    itself.
-
-    Installing waits for the last page, which carries every App's button: the
-    run opens the next role's tab as soon as this one is served, so a button on
-    an earlier page would be left behind in a tab nobody is looking at."""
-    if left:
-        role = installs[-1][0]
-        placed = f"That is bot {len(installs)} of {len(installs) + len(left)} to create."
-        if tabs:
-            return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
-<p>{placed} This tab is done: you can close it.</p>
-<p class="note">The {html.escape(left[0])} bot is next, in a new tab. You install the bots together, after the last is created.</p>"""
-        # No browser was opened for this run, so none will be for the next role.
-        return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
-<p>{placed}</p>
-<p><a class="go" href="/start/{html.escape(left[0], quote=True)}">Next: the {html.escape(left[0])} bot</a></p>
-<p class="note">You install the bots together, after the last is created.</p>"""
-    roles = [html.escape(r) for r, _ in installs]
-    if len(installs) == 1:
-        heading = f"The {roles[0]} bot is created"
-        created = f"Create the bot<span class=\"note\">The {roles[0]} bot.</span>"
-        install = "Install it"
-        how = "The button opens GitHub in a new tab."
-    else:
-        heading = f"All {len(installs)} bots are created"
-        named = ", ".join(roles[:-1]) + f" and {roles[-1]}"
-        created = f"Create the bots<span class=\"note\">The {named} bots.</span>"
-        install = "Install each bot"
-        how = "Each button opens GitHub in a new tab. Come back here after each one."
-    return f"""<h1>&#10003; {heading}</h1>
+def create_page(rows: list[dict]) -> str:
+    """The page for the roles being created: a row each, laid out as the three
+    steps the operator takes, which the page's script marks as they are done.
+    Each row is a role's `role`, `name`, `create_url` and `manifest`."""
+    def row(r: dict) -> str:
+        role = html.escape(r["role"], quote=True)
+        return f"""<section class="row" id="row-{role}">
+<h2>The {role} bot: <code>{html.escape(r["name"])}</code></h2>
 <ol class="steps">
-<li class="done">{created}</li>
-<li class="now">{install}
-<div class="detail">GitHub will ask which repos:
+<li class="now"><form action="{html.escape(r["create_url"], quote=True)}" method="post" target="_blank">
+<input type="hidden" name="manifest" value="{html.escape(json.dumps(r["manifest"]), quote=True)}">
+<button class="go" type="submit">Create it on GitHub</button>
+<span class="note">On GitHub, press <b>Create GitHub App</b>.</span></form></li>
+<li>Install it on GitHub.<div class="install"></div></li>
+<li><span id="status-{role}">{html.escape(CREATE_WAITING)}</span></li>
+</ol>
+</section>"""
+
+    one = len(rows) == 1
+    return f"""<h1>Create your {"bot" if one else "bots"}</h1>
+<p>{"Each bot takes" if not one else "It takes"} three steps, the first two on GitHub. When GitHub asks which repos to install {"it" if one else "a bot"} on:</p>
 <ul>
 <li><b>All repositories</b> (recommended): least upkeep; new repos are covered automatically.</li>
 <li><b>Only select repositories</b>: limits what the bot can touch; you add new repos later.</li>
-</ul></div>
-<span class="note">You can change this at any time on GitHub, under Settings, then Applications. {how}</span>
-{install_buttons(installs)}</li>
-<li>Close this tab and return to Claude Code.</li>
-</ol>"""
+</ul>
+<p class="note">You can change this at any time on GitHub, under Settings, then Applications.</p>
+{chr(10).join(row(r) for r in rows)}
+<p id="end"></p>
+<noscript><p>This page needs JavaScript to show progress and the install buttons.</p></noscript>
+<script>{CREATE_SCRIPT}</script>"""
 
 
-def run_flow(args: argparse.Namespace, role: str, name: str, config_dir: Path,
-             earlier: list[dict], left: list[str]) -> dict | None:
-    """Create one role's App. Returns its summary, or None after printing why not.
-    `earlier` is the summaries of the Apps this run already created, and `left`
-    the roles it creates after this one."""
+CREATE_WAITING = "Come back to this tab once GitHub has created it."
+
+
+def failed_page(heading: str, detail: str) -> str:
+    """The page GitHub's tab comes back to when a role's App was not set up."""
+    return f"<h1>{heading}</h1><p>{html.escape(detail)}</p>"
+
+
+def run_create(args: argparse.Namespace, creates: list[str], names: dict[str, str],
+               config_dirs: dict[str, Path]) -> dict:
+    """Serve the create page until every role's App is created and installed, or
+    has failed, or the timeout. Returns the summaries of the roles created, by
+    role, each saying whether its App was installed."""
     # Default to user-owned + public: the only model installable on BOTH the org
     # (for org PRs) and your personal account (for personal repos). Private Apps
     # install only on their owner, so --owner-type org covers org repos only.
     owner_type = args.owner_type or "user"
     public = owner_type == "user"
-
-    # CSRF guard: GitHub echoes this back on the /callback redirect, so the
-    # callback handler only accepts a code that came from the page we served.
-    state = secrets.token_urlsafe(24)
     if owner_type == "org":
-        create_url = f"https://github.com/organizations/{args.org}/settings/apps/new?state={state}"
+        new_app_url = f"https://github.com/organizations/{args.org}/settings/apps/new"
     else:
-        create_url = f"https://github.com/settings/apps/new?state={state}"
+        new_app_url = "https://github.com/settings/apps/new"
+    redirect_url = f"http://localhost:{args.port}/callback"
 
-    result: dict = {}
-    done = threading.Event()
-    before = [(e["role"], e["install_url"]) for e in earlier]
-    # Whether this run opens each role's page itself; settled below, before any
-    # callback can be served.
-    flow = {"tabs": not args.no_browser}
+    # CSRF guard, and how a callback names its role: GitHub echoes the create
+    # URL's state back on the redirect, so only a form this server served counts.
+    states = {secrets.token_urlsafe(24): role for role in creates}
+    page_rows = [{"role": role, "name": names[role], "create_url": f"{new_app_url}?state={state}",
+                  "manifest": build_manifest(role, names[role], redirect_url, public)}
+                 for state, role in states.items()]
+    # Checking an install takes a JWT, which openssl signs; without it a row ends
+    # at created.
+    watching = shutil.which("openssl") is not None
+    rows = {role: {"state": "waiting", "text": CREATE_WAITING, "slug": "", "install_url": ""}
+            for role in creates}
+    created: dict[str, dict] = {}
+    keys: dict[str, str] = {}
+    lock = threading.Lock()
+    finished = threading.Event()
+    final_status_served = threading.Event()
+    stop_watching = threading.Event()
+
+    def settle() -> None:
+        """Called under the lock: the run is finished once no row can move on."""
+        ends = ("installed", "failed") if watching else ("created", "installed", "failed")
+        if all(row["state"] in ends for row in rows.values()):
+            finished.set()
+
+    def fail(role: str, message: str) -> None:
+        print(f"Setup failed for {role}: {message}", file=sys.stderr)
+        with lock:
+            rows[role].update(state="failed", text=f"Not set up: {message}")
+            settle()
+
+    def callback(query: str) -> tuple[int, str]:
+        qs = parse_qs(query)
+        role = states.get((qs.get("state") or [""])[0])
+        if role is None:
+            return 400, failed_page("Setup stopped", "This page did not come from this setup run.")
+        with lock:
+            if rows[role]["state"] != "waiting":
+                return 200, failed_page(f"The {html.escape(role)} bot is already set up",
+                                        "Close this tab and return to the setup tab.")
+        code = (qs.get("code") or [""])[0]
+        if not code:
+            fail(role, "no code in GitHub's callback.")
+            return 400, failed_page("Setup failed", "No code in callback.")
+        try:
+            app = convert_manifest(code)
+            # Validate here (not in save_credentials) so a malformed 200
+            # response fails with an accurate message instead of a KeyError.
+            if not all(k in app for k in ("id", "pem", "slug")):
+                raise KeyError("conversion response missing id/pem/slug")
+        except (urllib.error.HTTPError, urllib.error.URLError, KeyError) as exc:
+            fail(role, f"manifest conversion failed: {exc}")
+            return 500, failed_page("Setup failed", f"Manifest conversion failed: {exc}")
+        # The App now exists on GitHub. If saving its key fails (dir not
+        # writable, disk full, chmod fails) the App is orphaned — say so
+        # explicitly rather than dying with a traceback.
+        try:
+            owner = ((args.org or "") if owner_type == "org"
+                     else app.get("owner", {}).get("login", ""))
+            save_credentials(config_dirs[role], owner_type, owner, app)
+        except OSError as exc:
+            msg = (f"App '{app.get('slug', '')}' was created on GitHub, but saving its "
+                   f"credentials to {config_dirs[role]} failed ({exc}). Delete the App in its "
+                   f"GitHub settings, fix the directory, and re-run setup.")
+            fail(role, msg)
+            return 500, failed_page("Setup failed", msg)
+        summary = role_summary(role, app, config_dirs[role], "created")
+        summary["installed"] = False
+        with lock:
+            created[role] = summary
+            keys[role] = app["pem"]
+            rows[role].update(state="created", slug=summary["slug"],
+                              install_url=summary["install_url"],
+                              text="Created. Waiting for it to be installed." if watching
+                              else "Created. Install it, then return to Claude Code.")
+            settle()
+        return 200, f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
+<p>This tab is done: close it, and install the bot from the setup tab.</p>"""
+
+    def watch() -> None:
+        while not stop_watching.wait(INSTALL_POLL):
+            with lock:
+                waiting = [(r, s["app_id"], keys[r]) for r, s in created.items()
+                           if not s["installed"]]
+            for role, app_id, pem in waiting:
+                try:
+                    if not app_installed(app_id, pem):
+                        continue
+                except (OSError, ValueError, KeyRefused):
+                    # Not known yet; asked again on the next pass.
+                    continue
+                with lock:
+                    created[role]["installed"] = True
+                    rows[role].update(state="installed", text="Created and installed.")
+                    settle()
+
+    def status() -> dict:
+        with lock:
+            done = finished.is_set()
+            if not done:
+                end = ""
+            elif all(row["state"] == "installed" for row in rows.values()):
+                end = "All set. Close this tab and return to Claude Code."
+            elif any(row["state"] == "created" for row in rows.values()):
+                end = "Install each bot created, then close this tab and return to Claude Code."
+            else:
+                end = "Close this tab and return to Claude Code."
+            return {"rows": [{"role": r, **row} for r, row in rows.items()],
+                    "done": done, "end": end}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):  # quiet
             pass
 
-        def _html(self, code: int, body: str) -> None:
+        def _send(self, code: int, content_type: str, body: str) -> None:
             self.send_response(code)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Type", content_type)
             self.end_headers()
-            self.wfile.write(PAGE.format(body=body).encode())
+            self.wfile.write(body.encode())
 
         def do_GET(self):  # noqa: N802
             parsed = urlparse(self.path)
-            # `/start/<role>` is the link an earlier role's page carries when no
-            # browser is opened: only this role's server answers it, so a click
-            # that lands before the hand-over cannot start the earlier role again.
-            if parsed.path in ("/", f"/start/{role}"):
-                manifest = build_manifest(role, name, f"http://localhost:{args.port}/callback", public)
-                # Auto-submitting form: the manifest must be POSTed to GitHub.
-                # html.escape so the embedded JSON is safe in the attribute
-                # regardless of manifest content (defense-in-depth).
-                manifest_attr = html.escape(json.dumps(manifest), quote=True)
-                self._html(200, f"""<form id="f" action="{html.escape(create_url, quote=True)}" method="post">
-  <input type="hidden" name="manifest" value="{manifest_attr}">
-</form>
-<p>Taking you to GitHub to create the {html.escape(role)} bot&hellip;</p>
-<div class="late">
-<p class="note">Still here? Continue by hand:</p>
-<p><button class="go" form="f" type="submit">Continue to GitHub</button></p>
-</div>
-<script>document.getElementById('f').submit();</script>""")
+            if parsed.path == "/":
+                self._send(200, "text/html; charset=utf-8", PAGE.format(body=create_page(page_rows)))
             elif parsed.path == "/callback":
-                qs = parse_qs(parsed.query)
-                if (qs.get("state") or [""])[0] != state:
-                    self._html(400, failed_page("Setup stopped", "State mismatch — possible CSRF. Setup aborted.", before))
-                    result["error"] = "state mismatch on callback"
-                    done.set()
-                    return
-                code = (qs.get("code") or [""])[0]
-                if not code:
-                    self._html(400, failed_page("Setup failed", "No code in callback.", before))
-                    result["error"] = "no code in callback"
-                    done.set()
-                    return
-                try:
-                    app = convert_manifest(code)
-                    # Validate here (not in save_credentials) so a malformed 200
-                    # response fails fast with an accurate message instead of
-                    # raising KeyError out of the save step and hanging main.
-                    if not all(k in app for k in ("id", "pem", "slug")):
-                        raise KeyError("conversion response missing id/pem/slug")
-                except (urllib.error.HTTPError, urllib.error.URLError, KeyError) as exc:
-                    self._html(500, failed_page("Setup failed", f"Manifest conversion failed: {exc}", before))
-                    result["error"] = f"manifest conversion failed: {exc}"
-                    done.set()
-                    return
-                # The App now exists on GitHub. If saving its key fails (dir not
-                # writable, disk full, chmod fails) the App is orphaned — say so
-                # explicitly rather than dying with a traceback in main.
-                try:
-                    owner = ((args.org or "") if owner_type == "org"
-                             else app.get("owner", {}).get("login", ""))
-                    save_credentials(config_dir, owner_type, owner, app)
-                except OSError as exc:
-                    msg = (f"App '{app.get('slug', '')}' was created on GitHub, but saving its "
-                           f"credentials to {config_dir} failed ({exc}). Delete the App in its "
-                           f"GitHub settings, fix the directory, and re-run setup.")
-                    self._html(500, failed_page("Setup failed", msg, before))
-                    result["error"] = msg
-                    done.set()
-                    return
-                result["app"] = app
-                install_url = f"https://github.com/apps/{app.get('slug', '')}/installations/new"
-                self._html(200, created_page(before + [(role, install_url)], left, flow["tabs"]))
-                done.set()
+                code, body = callback(parsed.query)
+                self._send(code, "text/html; charset=utf-8", PAGE.format(body=body))
+            elif parsed.path == "/status":
+                answer = status()
+                self._send(200, "application/json", json.dumps(answer))
+                if answer["done"]:
+                    final_status_served.set()
             else:
-                self._html(404, "not found")
+                self._send(404, "text/html; charset=utf-8", PAGE.format(body="not found"))
 
     try:
         server = HTTPServer(("localhost", args.port), Handler)
     except OSError as exc:
         print(f"Could not bind localhost:{args.port} ({exc}) — it may be in use by a "
               f"previous run. Retry with --port <other>.", file=sys.stderr)
-        return None
+        return {}
     threading.Thread(target=server.serve_forever, daemon=True).start()
+    if watching:
+        threading.Thread(target=watch, daemon=True).start()
 
     open_url = f"http://localhost:{args.port}/"
-    print(f"Opening {open_url} — complete the {role} App's creation in your browser.", file=sys.stderr)
+    print(f"Opening {open_url} — create and install {', '.join(creates)} in your browser.",
+          file=sys.stderr)
     if not args.no_browser and not webbrowser.open(open_url):
-        flow["tabs"] = False
         print(f"No browser could be opened here. Open {open_url} yourself, on this machine.",
               file=sys.stderr)
 
-    if not done.wait(timeout=args.timeout):
-        print(f"Timed out after {args.timeout}s waiting for the GitHub callback.", file=sys.stderr)
-        server.shutdown()
-        server.server_close()
-        return None
+    if finished.wait(timeout=args.timeout):
+        # The page learns a row's state by polling, so the server stays up for
+        # the poll that shows the last row settled.
+        final_status_served.wait(timeout=3)
+    else:
+        with lock:
+            late = [r for r, row in rows.items() if row["state"] in ("waiting", "created")]
+        print(f"Timed out after {args.timeout}s waiting for {', '.join(late)}.", file=sys.stderr)
+    stop_watching.set()
     server.shutdown()
-    # Released here, so the next role's flow can bind the same port.
     server.server_close()
-
-    if "error" in result or "app" not in result:
-        print(f"Setup failed for {role}: {result.get('error', 'unknown error')}", file=sys.stderr)
-        return None
-
-    return role_summary(role, result["app"], config_dir, "created")
+    with lock:
+        return dict(created)
 
 
 def choose_roles(requested: str | None) -> list[str]:
@@ -1071,21 +1143,20 @@ def run(args: argparse.Namespace) -> int:
               "operator's to delete.", file=sys.stderr)
     on_page = [t for t in targets if t["role"] not in keys]
     if on_page:
-        saved = run_connect(args, on_page, creates[0] if creates else None)
+        saved = run_connect(args, on_page, bool(creates))
         done.extend(saved.values())
         missed = [t["role"] for t in on_page if t["role"] not in saved]
         if missed:
             print(f"Not connected: {', '.join(missed)}.", file=sys.stderr)
             return stop()
 
-    created: list[dict] = []
-    for role in creates:
-        left = creates[creates.index(role) + 1:]
-        summary = run_flow(args, role, names[role], config_dirs[role], created, left)
-        if summary is None:
-            return stop(role)
-        created.append(summary)
-        done.append(summary)
+    if creates:
+        made = run_create(args, creates, names, config_dirs)
+        done.extend(made[r] for r in creates if r in made)
+        missed = [r for r in creates if r not in made]
+        if missed:
+            print(f"Not created: {', '.join(missed)}.", file=sys.stderr)
+            return stop()
     print(json.dumps(done, indent=2))
     return 0
 

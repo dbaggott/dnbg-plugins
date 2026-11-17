@@ -138,15 +138,17 @@ who already has the key file skips the page for that role with
 `--key <role>=<path>`. Nothing is installed: the App's installations are
 already in place.
 
-**Creating** follows, a role at a time: the browser opens a local page that
-immediately forwards to GitHub, where the **one step it can't automate** is the
-click GitHub requires to create any App: press **"Create GitHub App"**. GitHub
-redirects back to the local server, which saves the new App's key and moves to
-the next role.
+**Creating** follows, on one browser page with a row per role. Each row's
+button opens GitHub in a new tab, where the operator presses **"Create GitHub
+App"**; GitHub sends that tab back to the local server, which saves the new
+App's key. The row then shows an install button, and ticks the install once
+GitHub reports the App installed. The run ends when every row is installed, or
+at the timeout.
 
 At the end it prints a JSON list with each role's `action` (`connected` or
-`created`), App slug, config dir, and **install URL**. A failure stops the run
-and names the roles it did not reach; the roles before it stay set up.
+`created`), App slug, config dir, and **install URL**, and for a created role
+`installed`: whether GitHub reported it installed before the run ended. A role
+not created stops the run, which names it; the roles set up stay set up.
 
 The run waits on the browser, so say this in the same message as the call that
 starts it, with the port you passed, 8765 by default:
@@ -160,11 +162,11 @@ and have the operator forward the port and open that URL.
 
 Creation does not install an App — an App with no installation can't mint a
 token. A connected App is installed already, so this section is for the Apps
-the run created. The run's last browser page carries an install button for each App it
-created (`https://github.com/apps/<slug>/installations/new`) and says how to
-choose the repos: all of an account's, which it recommends for the least
-upkeep, or a selected list. Each App is installed on **each account whose repos
-that role will work on**.
+the run created. The create page carries an install button for each App
+(`https://github.com/apps/<slug>/installations/new`) and says how to choose the
+repos: all of an account's, which it recommends for the least upkeep, or a
+selected list. Each App is installed on **each account whose repos that role
+will work on**; the page ticks a row at the first.
 
 When the operator asks which to choose, give them the trade: the reviewer App
 needs `contents: write` to review at all — GitHub gates resolving a thread and
@@ -181,15 +183,18 @@ repo each time the role acts, so install on every account you intend the role to
 work on. (An **org-owned** App, if you chose `--owner-type org`, installs on the
 org only.)
 
-When the run ends, tell the operator in this shape and no longer. The last
-browser tab already shows an install button for each bot the run created, so
-repeat neither the URLs nor why an App needs installing:
+When the run ends with every created role `installed`, say "The `<role>` bot
+is created and installed: `<slug>`." for each, and go to **Verify**.
+
+Otherwise tell the operator in this shape and no longer. The create page
+already shows an install button for each bot, so repeat neither the URLs nor
+why an App needs installing:
 
 > The `<role>` bot is created: `<slug>`. *(or: The `<role>`, `<role>` and
 > `<role>` bots are created.)*
 >
-> The browser tab headed "… created" has the install buttons under step 2:
-> click each, then close the tab. The page says how to choose the repos.
+> Install the `<role>` bot from its row on the setup page *(naming each one
+> not installed)*. The page says how to choose the repos.
 >
 > Tell me when it's done.
 
@@ -197,8 +202,8 @@ For the roles the run connected, say "connected" in place of "created" and ask
 for no install: "The `<role>` bot is connected: `<slug>`." A run that only
 connected ends there, and you go straight to **Verify**.
 
-A run that stopped early showed no install buttons: give the install URL of
-each bot it did create, from the JSON it printed.
+When the operator no longer has the setup page, give the install URL of each
+bot not installed, from the JSON the run printed.
 
 Name the accounts to install it on when you know them.
 
