@@ -188,8 +188,8 @@ repeat neither the URLs nor why an App needs installing:
 > The `<role>` bot is created: `<slug>`. *(or: The `<role>`, `<role>` and
 > `<role>` bots are created.)*
 >
-> In the browser tab, step 2 is yours: click **Install** for each, then close
-> the tab. The page says how to choose the repos.
+> The browser tab headed "… created" has the install buttons under step 2:
+> click each, then close the tab. The page says how to choose the repos.
 >
 > Tell me when it's done.
 

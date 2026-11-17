@@ -222,9 +222,9 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   /* A row's steps: the one to do now stands out, the ones done carry a tick and
      recede, and the ones to come stay readable before the first is taken. */
   .steps {{ list-style: none; padding: 0; margin: 0; counter-reset: step; }}
-  .steps li {{ counter-increment: step; position: relative; margin: 0;
+  .steps > li {{ counter-increment: step; position: relative; margin: 0;
               padding: .15rem 0 1.1rem 2.75rem; }}
-  .steps li::before {{ content: counter(step); position: absolute; left: 0; top: 0;
+  .steps > li::before {{ content: counter(step); position: absolute; left: 0; top: 0;
                       width: 2rem; height: 2rem; border-radius: 50%; box-sizing: border-box;
                       display: grid; place-items: center; font-weight: 700;
                       border: 2px solid currentColor; }}
@@ -233,7 +233,7 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
   .steps li.now {{ font-weight: 600; }}
   .steps li.now::before {{ background: #1f883d; border-color: #1f883d; color: #fff; }}
   .steps li.done::before {{ content: "\\2713"; border-color: #1f883d; color: #1f883d; }}
-  .steps .note {{ display: block; font-weight: 400; margin-top: .35rem; }}
+  .steps .note, .steps .detail {{ display: block; font-weight: 400; margin-top: .35rem; }}
   .saved .steps .pick {{ display: none; }}
   /* The fallback for a redirect that did not happen: hidden while it should. */
   .late {{ visibility: hidden; animation: late 0s 3s forwards; }}
@@ -726,7 +726,7 @@ def created_page(installs: list[tuple[str, str]], left: list[str], tabs: bool = 
     an earlier page would be left behind in a tab nobody is looking at."""
     if left:
         role = installs[-1][0]
-        placed = f"That is bot {len(installs)} of {len(installs) + len(left)}."
+        placed = f"That is bot {len(installs)} of {len(installs) + len(left)} to create."
         if tabs:
             return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
 <p>{placed} This tab is done: you can close it.</p>
@@ -752,7 +752,11 @@ def created_page(installs: list[tuple[str, str]], left: list[str], tabs: bool = 
 <ol class="steps">
 <li class="done">{created}</li>
 <li class="now">{install}
-<span class="note">GitHub asks which repos. <b>All repositories</b> (recommended) is the least upkeep: new repos are covered automatically. <b>Only select repositories</b> limits what the bot can touch, and you add new repos later.</span>
+<div class="detail">GitHub will ask which repos:
+<ul>
+<li><b>All repositories</b> (recommended): least upkeep; new repos are covered automatically.</li>
+<li><b>Only select repositories</b>: limits what the bot can touch; you add new repos later.</li>
+</ul></div>
 <span class="note">You can change this at any time on GitHub, under Settings, then Applications. {how}</span>
 {install_buttons(installs)}</li>
 <li>Close this tab and return to Claude Code.</li>

@@ -135,14 +135,16 @@ b = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)
 url = "https://github.com/apps/agent-%s-t/installations/new"
 mid = b.created_page([("reviewer", url % "reviewer")], ["author", "orchestrator"])
 assert "installations/new" not in mid and "author bot is next" in mid, mid
-assert "bot 1 of 3" in mid and 'class="steps"' not in mid, mid
+assert "bot 1 of 3 to create" in mid and 'class="steps"' not in mid, mid
 last = b.created_page([(r, url % r) for r in ("reviewer", "author", "orchestrator")], [])
 assert all(url % r in last for r in ("reviewer", "author", "orchestrator")), last
 assert "All 3 bots are created" in last, last
 assert '<li class="done">Create the bots' in last and "reviewer, author and orchestrator bots" in last, last
-now = last.split('<li class="now">', 1)[1].split("</li>", 1)[0]
-assert now.startswith("Install each bot") and all(url % r in now for r in ("reviewer", "author", "orchestrator")), last
-assert "All repositories" in now and last.count("<li") == 3, last
+steps = last.split('<ol class="steps">', 1)[1]
+done, now = steps.split('<li class="done">', 1)[1].split('<li class="now">', 1)
+now, close = now.split("<li>Close this tab", 1)
+assert "<ol" not in close and all(url % r in now for r in ("reviewer", "author", "orchestrator")), last
+assert now.startswith("Install each bot") and "All repositories" in now, last
 untabbed = b.created_page([("reviewer", url % "reviewer")], ["author"], tabs=False)
 assert 'href="/start/author"' in untabbed and "installations/new" not in untabbed, untabbed
 assert "bot 1 of 2" in untabbed, untabbed
