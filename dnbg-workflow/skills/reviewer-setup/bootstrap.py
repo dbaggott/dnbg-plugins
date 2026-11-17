@@ -724,8 +724,8 @@ def created_page(installs: list[tuple[str, str]], left: list[str], tabs: bool = 
     Installing waits for the last page, which carries every App's button: the
     run opens the next role's tab as soon as this one is served, so a button on
     an earlier page would be left behind in a tab nobody is looking at."""
-    role = installs[-1][0]
     if left:
+        role = installs[-1][0]
         placed = f"That is bot {len(installs)} of {len(installs) + len(left)}."
         if tabs:
             return f"""<h1>&#10003; The {html.escape(role)} bot is created</h1>
