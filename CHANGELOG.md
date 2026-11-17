@@ -10,6 +10,12 @@ tagged, and their versions used a two-component scheme that predates the current
 
 <!-- releases below -->
 
+## dnbg-comforts 2026.11.4 — 2026-11-17
+
+The band's prompt-cache estimate now reads as a countdown to cold, such as
+`cache cold in ~31m` (`<1m` in the last minute), instead of `cache ~warm 31m`.
+
+
 ## dnbg-workflow 2026.11.26 — 2026-11-15
 
 A role's close-out after its work ends is now a few script calls instead of a
