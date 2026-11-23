@@ -114,8 +114,8 @@ and environment only, never the working directory.
 ### The enforcement hooks are not a security boundary
 
 `check-worktree.sh`, `check-issue-create.sh` and `check-retrospectives.sh`
-block things, so it is easy to read them as a control. They are not, and treating them as one is the mistake
-this section exists to prevent:
+block things, so it is easy to read them as a control. They are not, and
+treating them as one is the mistake this section exists to prevent:
 
 - **They fail open.** Without `jq` (all three) or `git` (`check-worktree.sh`) they
   cannot parse or resolve, and the action proceeds either way — by two different

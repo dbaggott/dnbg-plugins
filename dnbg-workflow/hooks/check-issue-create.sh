@@ -22,8 +22,8 @@ TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
 
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 
-# A line-continuation joined, so a `--repo` written on the next line is still in
-# the segment searched below.
+# Joined here as well as inside `invokes_command`, so a `--repo` written on a
+# continuation line is still in the segment searched below.
 CMD=$(join_line_continuations "$CMD")
 
 # The phrase has to be a command, not a mention of one (`invokes_command` in

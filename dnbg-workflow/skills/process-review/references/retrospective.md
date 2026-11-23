@@ -44,8 +44,8 @@ questions its branch names.
   Under the report's **Observations**, put each answer as one line opening
   `Friction:`, naming what it is about. After those lines comes the
   always-on rule's offer to file upstream, with the operator approving the
-  exact text first. With no answer to either question,
-  there are no lines and no offer.
+  exact text first. With no answer to either question, there are no lines and
+  no offer.
 
   A dispatched agent has no one to offer to: it puts the lines in its report
   and leaves the offer out. Its dispatcher relays them under its own
