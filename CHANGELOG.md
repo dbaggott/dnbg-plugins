@@ -10,6 +10,18 @@ tagged, and their versions used a two-component scheme that predates the current
 
 <!-- releases below -->
 
+## dnbg-workflow 2026.11.28 — 2026-11-23
+
+With retrospectives off (the default), a close-out no longer writes a
+retrospective file or posts a `Usage:` comment. A new hook blocks the
+retrospective script whenever the `retrospectives` option is not `true`, and the
+session-start note now says outright that retrospectives are off.
+
+An off-mode close-out also costs less: the agent answers only the two questions
+it reports as `Friction:` lines, instead of reading and answering the whole
+retrospective prompt.
+
+
 ## dnbg-workflow 2026.11.27 — 2026-11-17
 
 `reviewer-setup` now creates bots from one page, laid out like the page that connects a machine to an existing bot: a row per bot, each with numbered steps to create it on GitHub, install it, and confirm. The page ticks each step as it lands, including the install, which it reads from GitHub. The setup run ends once every bot it created is installed, so the agent no longer has to ask whether you have finished installing.
