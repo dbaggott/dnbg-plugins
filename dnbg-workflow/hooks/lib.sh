@@ -348,14 +348,15 @@ COMMAND_PREFIX_RE='(([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|command|time|sudo|env(
 
 # Does <command> invoke <command-re> (an ERE), rather than mention it?
 #
-# <keep> is the one word a quoted span may end in and still count: a script run
-# by a quoted path, as the skills run theirs, survives masking as that bare word
+# <keep> is the word a quoted span may end in and still count: a script run by
+# a quoted path, as the skills run theirs, survives masking as that bare word
 # instead of vanishing with every other quoted span, so it can still sit in
-# command position or in a prefix.
+# command position. `as-role.sh` is always kept too, since the prefix needs it.
 invokes_command() {  # <command> <keep> <command-re>
   local keep_re=${2//./\\.}
   join_line_continuations "$1" \
     | sed -E "s/\"[^\"]*${keep_re}\"/$2/g; s/'[^']*${keep_re}'/$2/g" \
+    | sed -E "s/\"[^\"]*as-role\\.sh\"/as-role.sh/g; s/'[^']*as-role\\.sh'/as-role.sh/g" \
     | sed -E "s/\"[^\"]*\"/ /g; s/'[^']*'/ /g" \
     | grep -qE "(^|[;&|(])[[:space:]]*${COMMAND_PREFIX_RE}$3"
 }

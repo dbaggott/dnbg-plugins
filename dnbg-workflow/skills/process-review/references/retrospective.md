@@ -42,7 +42,8 @@ questions its branch names.
   - **Worked around**: what did you work around?
 
   Under the report's **Observations**, put each answer as one line opening
-  `Friction:`, naming what it is about. After those lines comes the
+  `Friction:`, naming what it is about, with no secrets and no credentials:
+  the line may be filed upstream. After those lines comes the
   always-on rule's offer to file upstream, with the operator approving the
   exact text first. With no answer to either question, there are no lines and
   no offer.

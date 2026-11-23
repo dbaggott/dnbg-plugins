@@ -466,6 +466,12 @@ run_hook_retrospectives() {  # [option-value]
   [ "$output" = "$DEFAULT_PAYLOAD" ]
 }
 
+@test "the off line comes before a rejected configuration, not inside it" {
+  stub_path jq git gh
+  run_hook_configured '../escape' ''
+  [[ "$output" == *"Retrospectives are off."*"INVALID configuration"* ]]
+}
+
 @test "still emits the rules when a knob is configured" {
   # Same additive property the dependency preflight has: a configured session
   # must not trade its always-on rules for a note about a directory name.

@@ -406,9 +406,15 @@ MSG')"
 
 RETRO='"/p/dnbg-workflow/scripts/write-retrospective.sh"'
 
+# With no value, the option is unset rather than empty, as in a real session
+# that never set it.
 run_retro_hook() {  # <command> [retrospectives-option-value]
-  local CLAUDE_PLUGIN_OPTION_RETROSPECTIVES="${2-}"
-  export CLAUDE_PLUGIN_OPTION_RETROSPECTIVES
+  if [ "$#" -gt 1 ]; then
+    local CLAUDE_PLUGIN_OPTION_RETROSPECTIVES="$2"
+    export CLAUDE_PLUGIN_OPTION_RETROSPECTIVES
+  else
+    unset CLAUDE_PLUGIN_OPTION_RETROSPECTIVES
+  fi
   run_hook check-retrospectives.sh "$(bash_payload "$1")"
 }
 
@@ -451,7 +457,9 @@ run_retro_hook() {  # <command> [retrospectives-option-value]
   [ "$status" -eq 2 ]
 }
 
-@test "unset and unreadable values are off" {
+@test "unset, empty and unreadable values are off" {
+  run_retro_hook "$RETRO --begin"
+  [ "$status" -eq 2 ]
   run_retro_hook "$RETRO --begin" ''
   [ "$status" -eq 2 ]
   run_retro_hook "$RETRO --begin" on
@@ -489,6 +497,11 @@ run_retro_hook() {  # <command> [retrospectives-option-value]
 block "write-retrospective.sh" when off, and write-retrospective.sh --begin too
 MSG'
   [ "$status" -eq 0 ]
+}
+
+@test "retrospectives off: an as-role prefix with a quoted path does not hide the script" {
+  run_retro_hook "\"/p/as-role.sh\" author o/r -- $RETRO --begin"
+  [ "$status" -eq 2 ]
 }
 
 @test "check-retrospectives ignores non-Bash tools" {
