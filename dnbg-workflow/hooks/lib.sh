@@ -312,3 +312,50 @@ retrospectives_enabled() {
   esac
   return 1
 }
+
+# --- matching a command, not a mention of one --------------------------------
+#
+# A Bash hook that gates a command has to tell an invocation from text that
+# names it: the commands most likely to name a gated one are the commit
+# messages, review bodies and issue text written while working on these
+# plugins. Two narrowings, because neither covers the other:
+#
+#   MASK QUOTED SPANS: text inside "…" or '…' is an argument, so a mention there
+#   is data. Handles `-m "document the gh issue create gate"`.
+#
+#   REQUIRE COMMAND POSITION: start of a line, or after a separator. A heredoc
+#   body is not quoted, and heredocs are how commit messages and PR bodies are
+#   written, so masking alone leaves the common case matching. Prose names a
+#   command mid-sentence; an invocation starts one.
+#
+# Residual, accepted: a heredoc line that *begins* with the command still
+# matches. A false positive blocks real work, so precision beats recall here,
+# and that line is the one case the two narrowings cannot separate.
+
+# <command> with every backslash-newline joined to a space. Each match is
+# line-based, so an unjoined continuation splits an invocation in two and both
+# halves fail open. A bare newline is left alone: that one separates commands.
+join_line_continuations() {  # <command>
+  printf '%s' "${1//\\$'\n'/ }"
+}
+
+# What may stand between a command position and the command itself. An
+# invocation is routinely prefixed (`VAR=x cmd`, `env -u GH_TOKEN cmd`, and
+# every role's write as `as-role.sh <role> <repo> -- cmd`), and anchoring
+# straight to the command un-gates all of those. The resolver's role and repo
+# may have been quoted, hence the allowance for them having been masked away.
+COMMAND_PREFIX_RE='(([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|command|time|sudo|env([[:space:]]+(-[^[:space:]]+|[A-Z_][A-Z0-9_]*))*|[^[:space:];&|()]*as-role\.sh([[:space:]]+[^[:space:]]+){0,2}[[:space:]]+--)[[:space:]]+)*'
+
+# Does <command> invoke <command-re> (an ERE), rather than mention it?
+#
+# <keep> is the one word a quoted span may end in and still count: a script run
+# by a quoted path, as the skills run theirs, survives masking as that bare word
+# instead of vanishing with every other quoted span, so it can still sit in
+# command position or in a prefix.
+invokes_command() {  # <command> <keep> <command-re>
+  local keep_re=${2//./\\.}
+  join_line_continuations "$1" \
+    | sed -E "s/\"[^\"]*${keep_re}\"/$2/g; s/'[^']*${keep_re}'/$2/g" \
+    | sed -E "s/\"[^\"]*\"/ /g; s/'[^']*'/ /g" \
+    | grep -qE "(^|[;&|(])[[:space:]]*${COMMAND_PREFIX_RE}$3"
+}
