@@ -69,6 +69,23 @@ Stamp what you publish with \`<!-- $STAMP -->\` — \`reviewer\`, \`git-workflow
 and \`issue-workflow\` each say where it goes.
 EOF
 
+# --- retrospectives off -------------------------------------------------------
+#
+# Off is the default, not an override, but it is still stated, so an agent
+# reads the state rather than inferring it from a missing line. A value the gate
+# cannot read is off, as `check-retrospectives.sh` treats it. It rides with the
+# rules file, so a broken install stays silent, and comes before any
+# configuration note, so it never reads as part of a rejected one.
+RETROSPECTIVES_ON=""
+retrospectives_enabled && RETROSPECTIVES_ON=1
+
+[ -z "$RETROSPECTIVES_ON" ] && [ -f "$RULES" ] && cat <<'EOF'
+
+**Retrospectives are off.** Run no `write-retrospective.sh`; at a close-out,
+surface friction as `Friction:` lines per the Off branch of `process-review`'s
+`references/retrospective.md`, "When a retrospective is written".
+EOF
+
 # --- configuration overrides -------------------------------------------------
 #
 # The skills state the mechanical defaults literally — `.worktrees/`,
@@ -157,10 +174,7 @@ EOF
 # is nothing to override in that case, and a note claiming otherwise would be
 # noise the reader has to work out is a no-op.
 # `retrospectives` joins as a gate: its default is off, so only on is an
-# override, and a value the gate cannot read is off and says nothing, as an unread
-# `version_stamp` does.
-RETROSPECTIVES_ON=""
-retrospectives_enabled && RETROSPECTIVES_ON=1
+# override. Off is stated above, outside every configuration note.
 
 if [ "$WORKTREE_PATH" != "$DEFAULT_WORKTREE_PATH" ] || [ "$CLAIM_LABEL" != "$DEFAULT_CLAIM_LABEL" ] ||
    [ "$RETROSPECTIVE_DIR" != "$DEFAULT_RETROSPECTIVE_DIR" ] || [ "$FINDINGS_DIR" != "$DEFAULT_FINDINGS_DIR" ] ||

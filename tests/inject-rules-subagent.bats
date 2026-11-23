@@ -53,7 +53,7 @@ context_of() {  # <hook stdout>
 @test "carries the payload under additionalContext, the only field this event reads" {
   stub_path jq
   run_hook
-  [ "$(context_of "$output")" = "$RULES_TEXT" ]
+  [ "$(context_of "$output")" = "$DEFAULT_PAYLOAD" ]
 }
 
 # --- the version stamp -------------------------------------------------------
@@ -117,6 +117,16 @@ context_of() {  # <hook stdout>
   [[ "$ctx" == *"\`.worktrees\` instead"* ]]
 }
 
+@test "the retrospectives state reaches subagents, off and on" {
+  stub_path jq
+  run_hook
+  [[ "$(context_of "$output")" == *"Retrospectives are off."* ]]
+  run env -i PATH="$STUB" HOME="$TMP" CLAUDE_PLUGIN_ROOT="$ROOT" \
+    CLAUDE_PLUGIN_OPTION_RETROSPECTIVES=true "$HOOK"
+  [[ "$(context_of "$output")" == *"Retrospectives are on"* ]]
+  [[ "$(context_of "$output")" != *"Retrospectives are off"* ]]
+}
+
 # --- what it deliberately leaves out -----------------------------------------
 
 @test "omits the dependency preflight, which a subagent cannot act on" {
@@ -136,25 +146,31 @@ context_of() {  # <hook stdout>
 # byte. Content that would break a naive `printf` assembly is what makes that
 # observable.
 
+# The default payload is the rules file, a blank line, and the retrospectives-off
+# line, so a byte-exact comparison appends that line to the file it reads.
+expected_payload() {  # <rules-file>
+  cat "$1"; printf '\n%s\n' "$RETROSPECTIVES_OFF_TEXT"
+}
+
 @test "round-trips quotes, backslashes and tabs" {
   printf '%s\n' 'He said "hi" and C:\path\to\thing' > "$ROOT/always-on-rules.md"
   printf '%s\n' 'a	tab and a trailing backslash \' >> "$ROOT/always-on-rules.md"
   stub_path jq
   run_hook
   [ "$status" -eq 0 ]
-  diff <(context_of "$output") "$ROOT/always-on-rules.md"
+  diff <(context_of "$output") <(expected_payload "$ROOT/always-on-rules.md")
 }
 
 @test "round-trips the real rules file" {
   # Pointed at the real plugin, so the bytes under test are the ones a real
   # session gets rather than this suite's two-line fixture. Nothing is configured
   # and the stamp is off, which is a default install — so the payload is the
-  # rules file and nothing else, and the comparison can be exact.
+  # rules file and the retrospectives-off line, and the comparison can be exact.
   local rules="${BATS_TEST_DIRNAME}/../dnbg-workflow/always-on-rules.md"
   stub_path jq
   run_hook "${BATS_TEST_DIRNAME}/../dnbg-workflow"
   [ "$status" -eq 0 ]
-  diff <(context_of "$output") "$rules"
+  diff <(context_of "$output") <(expected_payload "$rules")
 }
 
 @test "escapes control characters rather than emitting them raw" {
@@ -163,7 +179,7 @@ context_of() {  # <hook stdout>
   run_hook
   [ "$status" -eq 0 ]
   printf '%s' "$output" | jq -e . >/dev/null    # raw would be invalid JSON
-  [ "$(context_of "$output")" = "$(printf 'before\001after')" ]
+  [ "$(context_of "$output")" = "$(printf 'before\001after\n\n%s' "$RETROSPECTIVES_OFF_TEXT")" ]
 }
 
 # --- degraded and broken installs --------------------------------------------

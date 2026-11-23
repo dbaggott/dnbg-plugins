@@ -181,7 +181,7 @@ run_hook_retrospectives() {  # [option-value]
   stub_path jq git gh
   run_hook
   [ "$status" -eq 0 ]
-  [ "$output" = "$RULES_TEXT" ]
+  [ "$output" = "$DEFAULT_PAYLOAD" ]
 }
 
 @test "names jq and states enforcement is inactive when jq is missing" {
@@ -285,7 +285,7 @@ run_hook_retrospectives() {  # [option-value]
   stub_path jq git gh
   run_hook
   [ "$status" -eq 0 ]
-  [ "$output" = "$RULES_TEXT" ]
+  [ "$output" = "$DEFAULT_PAYLOAD" ]
 }
 
 @test "says nothing when a knob is set to the value it already had" {
@@ -294,7 +294,7 @@ run_hook_retrospectives() {  # [option-value]
   stub_path jq git gh
   run_hook_configured '.worktrees' 'assigned:agent-session'
   [ "$status" -eq 0 ]
-  [ "$output" = "$RULES_TEXT" ]
+  [ "$output" = "$DEFAULT_PAYLOAD" ]
 }
 
 @test "announces a configured worktree root and names it" {
@@ -325,7 +325,7 @@ run_hook_retrospectives() {  # [option-value]
 @test "says nothing when the retrospective directory is set to its default" {
   stub_path jq git gh
   run_hook_configured '' '' '~/.claude/dnbg/retrospectives/'
-  [ "$output" = "$RULES_TEXT" ]
+  [ "$output" = "$DEFAULT_PAYLOAD" ]
 }
 
 @test "a rejected retrospective directory is reported with its value, reason and fallback" {
@@ -351,7 +351,7 @@ run_hook_retrospectives() {  # [option-value]
 @test "says nothing when the findings directory is set to its default" {
   stub_path jq git gh
   run_hook_configured '' '' '' '~/.claude/dnbg/findings/'
-  [ "$output" = "$RULES_TEXT" ]
+  [ "$output" = "$DEFAULT_PAYLOAD" ]
 }
 
 @test "a rejected findings directory is reported with its value, reason and fallback" {
@@ -443,25 +443,33 @@ run_hook_retrospectives() {  # [option-value]
   [[ "$output" == *"INVALID configuration"*"configuration overrides"* ]]
 }
 
-@test "announces retrospectives when they are on" {
+@test "announces retrospectives when they are on, and does not call them off" {
   stub_path jq git gh
   run_hook_retrospectives true
   [ "$status" -eq 0 ]
   [[ "$output" == *"configuration overrides"* ]]
   [[ "$output" == *"Retrospectives are on"* ]]
+  [[ "$output" != *"Retrospectives are off"* ]]
   [[ "$output" == *"Always do the thing."* ]]
 }
 
-@test "says nothing about retrospectives when they are unset, off, or unreadable" {
-  # Off is the default the skills state, so it is no override; a value the gate
-  # cannot read is off too, and like the stamp's gets no rejection notice.
+@test "states retrospectives are off when they are unset, off, or unreadable" {
+  # Off is the default, so it is no override and opens no overrides note. It is
+  # still stated, so an agent need not infer it from a missing line. A value the
+  # gate cannot read is off, as check-retrospectives.sh blocks the script for it.
   stub_path jq git gh
   run_hook_retrospectives
-  [ "$output" = "$RULES_TEXT" ]
+  [ "$output" = "$DEFAULT_PAYLOAD" ]
   run_hook_retrospectives false
-  [ "$output" = "$RULES_TEXT" ]
+  [ "$output" = "$DEFAULT_PAYLOAD" ]
   run_hook_retrospectives on
-  [ "$output" = "$RULES_TEXT" ]
+  [ "$output" = "$DEFAULT_PAYLOAD" ]
+}
+
+@test "the off line comes before a rejected configuration, not inside it" {
+  stub_path jq git gh
+  run_hook_configured '../escape' ''
+  [[ "$output" == *"Retrospectives are off."*"INVALID configuration"* ]]
 }
 
 @test "still emits the rules when a knob is configured" {

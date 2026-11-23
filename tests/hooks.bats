@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# End-to-end tests for the two blocking hooks, driven through the same interface
+# End-to-end tests for the blocking hooks, driven through the same interface
 # Claude Code uses: a JSON payload on stdin, and an exit code out. 0 allows, 2
 # blocks.
 #
@@ -400,6 +400,122 @@ MSG')"
   [ "$status" -eq 0 ]
 }
 
+# --- check-retrospectives -----------------------------------------------------
+#
+# The skills run the script by a quoted path, so every invocation below does.
+
+RETRO='"/p/dnbg-workflow/scripts/write-retrospective.sh"'
+
+# With no value, the option is unset rather than empty, as in a real session
+# that never set it.
+run_retro_hook() {  # <command> [retrospectives-option-value]
+  if [ "$#" -gt 1 ]; then
+    local CLAUDE_PLUGIN_OPTION_RETROSPECTIVES="$2"
+    export CLAUDE_PLUGIN_OPTION_RETROSPECTIVES
+  else
+    unset CLAUDE_PLUGIN_OPTION_RETROSPECTIVES
+  fi
+  run_hook check-retrospectives.sh "$(bash_payload "$1")"
+}
+
+@test "retrospectives off: blocks --begin" {
+  run_retro_hook "$RETRO --begin"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"BLOCKED by dnbg-workflow:check-retrospectives"* ]]
+  [[ "$output" == *"retrospectives are off"* ]]
+}
+
+@test "retrospectives off: blocks the write form" {
+  run_retro_hook "$RETRO abc123 --role=author --issue=https://github.com/o/r/issues/1 --body=/d/r.md"
+  [ "$status" -eq 2 ]
+}
+
+@test "retrospectives off: blocks --post-usage" {
+  run_retro_hook "$RETRO --post-usage=/d/r.md"
+  [ "$status" -eq 2 ]
+}
+
+@test "retrospectives off: blocks --begin chained after a cleanup with &&" {
+  run_retro_hook "\"/p/scripts/post-merge.sh\" o/r 5 && $RETRO --begin"
+  [ "$status" -eq 2 ]
+}
+
+@test "retrospectives off: blocks --begin chained after a cleanup with ;" {
+  run_retro_hook "\"/p/scripts/post-merge.sh\" o/r 5; $RETRO --begin"
+  [ "$status" -eq 2 ]
+}
+
+@test "retrospectives off: blocks an unquoted path and a single-quoted one" {
+  run_retro_hook "/p/dnbg-workflow/scripts/write-retrospective.sh --begin"
+  [ "$status" -eq 2 ]
+  run_retro_hook "'/p/scripts/write-retrospective.sh' --begin"
+  [ "$status" -eq 2 ]
+}
+
+@test "retrospectives off: blocks the script run through bash" {
+  run_retro_hook "bash $RETRO --begin"
+  [ "$status" -eq 2 ]
+}
+
+@test "unset, empty and unreadable values are off" {
+  run_retro_hook "$RETRO --begin"
+  [ "$status" -eq 2 ]
+  run_retro_hook "$RETRO --begin" ''
+  [ "$status" -eq 2 ]
+  run_retro_hook "$RETRO --begin" on
+  [ "$status" -eq 2 ]
+  run_retro_hook "$RETRO --begin" false
+  [ "$status" -eq 2 ]
+}
+
+@test "retrospectives on: allows all three forms" {
+  run_retro_hook "$RETRO --begin" true
+  [ "$status" -eq 0 ]
+  run_retro_hook "$RETRO abc123 --role=author --issue=https://github.com/o/r/issues/1 --body=/d/r.md" true
+  [ "$status" -eq 0 ]
+  run_retro_hook "$RETRO --post-usage=/d/r.md" true
+  [ "$status" -eq 0 ]
+}
+
+@test "retrospectives off: a mention in a quoted commit message is allowed" {
+  run_retro_hook 'git commit -m "gate write-retrospective.sh --begin on the option"'
+  [ "$status" -eq 0 ]
+}
+
+@test "retrospectives off: a quoted path to another script naming it is allowed" {
+  run_retro_hook '"/p/scripts/session-usage.sh" "/p/write-retrospective.sh.md"'
+  [ "$status" -eq 0 ]
+}
+
+@test "retrospectives off: reading the script is allowed" {
+  run_retro_hook "sed -n 1,60p $RETRO"
+  [ "$status" -eq 0 ]
+}
+
+@test "retrospectives off: a mid-line mention in a heredoc body is allowed" {
+  run_retro_hook 'git commit -F - <<MSG
+block "write-retrospective.sh" when off, and write-retrospective.sh --begin too
+MSG'
+  [ "$status" -eq 0 ]
+}
+
+@test "retrospectives off: an as-role prefix with a quoted path does not hide the script" {
+  run_retro_hook "\"/p/as-role.sh\" author o/r -- $RETRO --begin"
+  [ "$status" -eq 2 ]
+}
+
+@test "retrospectives off: a backticked name after a separator in a heredoc is allowed" {
+  run_retro_hook 'git commit -F - <<MSG
+Off by default; `write-retrospective.sh` is blocked (`write-retrospective.sh`).
+MSG'
+  [ "$status" -eq 0 ]
+}
+
+@test "check-retrospectives ignores non-Bash tools" {
+  run_hook check-retrospectives.sh "$(edit_payload "$REPO/tracked.txt")"
+  [ "$status" -eq 0 ]
+}
+
 # --- missing dependencies: the gates must fail open --------------------------
 #
 # Exit 2 is the *only* status that blocks; Claude Code classes any other
@@ -453,5 +569,10 @@ run_hook_without_jq() {  # <hook-script> <payload>
 
 @test "with jq missing, gh issue create is not blocked" {
   run_hook_without_jq check-issue-create.sh "$(bash_payload 'gh issue create --title x')"
+  [ "$status" -ne 2 ]
+}
+
+@test "with jq missing, write-retrospective.sh is not blocked" {
+  run_hook_without_jq check-retrospectives.sh "$(bash_payload '"/p/write-retrospective.sh" --begin')"
   [ "$status" -ne 2 ]
 }

@@ -22,49 +22,16 @@ TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
 
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 
-# Join shell line-continuations before matching anything below. Every match here
-# is line-based, so a backslash-newline truncates the command and each half
-# fails open: a `gh issue create` split across the break goes undetected, and a
-# `--repo` written on the next line is invisible to the segment search, handing
-# the verdict to the calling directory instead. A bare newline is deliberately
-# left alone — that one genuinely separates commands.
-CMD=${CMD//\\$'\n'/ }
+# Joined here as well as inside `invokes_command`, so a `--repo` written on a
+# continuation line is still in the segment searched below.
+CMD=$(join_line_continuations "$CMD")
 
-# The phrase has to be a command, not a mention of one. Matching it anywhere in
-# the string is content-blind: it fires on any command whose *payload* discusses
-# issue creation, and the payloads most likely to do that are the ones written
-# while working on this repo — review bodies, commit messages, issue text.
-#
-# Two independent narrowings, because neither covers the other:
-#
-#   MASK QUOTED SPANS — text inside "…" or '…' is an argument, so a mention there
-#   is data. Handles `-m "document the gh issue create gate"`.
-#
-#   REQUIRE COMMAND POSITION — start of a line, or after a separator. This is the
-#   half that matters most here, because A HEREDOC BODY IS NOT QUOTED and masking
-#   alone leaves it matching. Heredocs are how commit messages and PR bodies are
-#   written in this repo, so that is the common case, not the exotic one. Prose
-#   names the command mid-sentence; an invocation starts one.
-#
-# Residual, and deliberately accepted: a heredoc line that *begins* with the
-# phrase still matches. The asymmetry is what settles it — a false negative means
-# a skill went unloaded, which `issue-workflow`'s own claim check largely covers,
-# while a false positive blocks real work and points the author at a skill that
-# has nothing to do with what they were doing. Precision over recall.
-# ⚠️ COMMAND POSITION MEANS "AFTER ANY PREFIX RUN", NOT "IMMEDIATELY AFTER THE
-# SEPARATOR". An invocation is routinely prefixed — every role's write runs as
-# `as-role.sh <role> <repo> -- gh …`, `env -u GH_TOKEN gh …` clears a token, and
-# `VAR=x gh …` is ordinary shell. Anchoring straight to `gh` un-gates all of
-# those.
-#
-# The resolver is invoked by a path that is usually quoted, and its role and
-# repo may be, so a quoted span ending in `as-role.sh` is kept as that word
-# before masking, and the prefix allows its two arguments to have been masked
-# away.
-PREFIX='(([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|command|time|sudo|env([[:space:]]+(-[^[:space:]]+|[A-Z_][A-Z0-9_]*))*|[^[:space:];&|()]*as-role\.sh([[:space:]]+[^[:space:]]+){0,2}[[:space:]]+--)[[:space:]]+)*'
-SCAN=$(printf '%s' "$CMD" | sed -E 's/"[^"]*as-role\.sh"/as-role.sh/g; s/'"'"'[^'"'"']*as-role\.sh'"'"'/as-role.sh/g' \
-  | sed -E 's/"[^"]*"/ /g; s/'"'"'[^'"'"']*'"'"'/ /g')
-printf '%s\n' "$SCAN" | grep -qE "(^|[;&|(])[[:space:]]*${PREFIX}gh +issue +create\b" || exit 0
+# The phrase has to be a command, not a mention of one (`invokes_command` in
+# lib.sh). Precision over recall: a false positive blocks real work, while a
+# false negative means a skill went unloaded, which `issue-workflow`'s own claim
+# check largely covers. The resolver is invoked by a path that is usually
+# quoted, so `as-role.sh` is the word kept from masking.
+invokes_command "$CMD" as-role.sh 'gh +issue +create\b' || exit 0
 
 # Target comes from --repo/-R if present, else the calling directory's origin.
 #
