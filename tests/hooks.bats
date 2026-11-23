@@ -504,6 +504,13 @@ MSG'
   [ "$status" -eq 2 ]
 }
 
+@test "retrospectives off: a backticked name after a separator in a heredoc is allowed" {
+  run_retro_hook 'git commit -F - <<MSG
+Off by default; `write-retrospective.sh` is blocked (`write-retrospective.sh`).
+MSG'
+  [ "$status" -eq 0 ]
+}
+
 @test "check-retrospectives ignores non-Bash tools" {
   run_hook check-retrospectives.sh "$(edit_payload "$REPO/tracked.txt")"
   [ "$status" -eq 0 ]

@@ -27,10 +27,10 @@ CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 CMD=$(join_line_continuations "$CMD")
 
 # The phrase has to be a command, not a mention of one (`invokes_command` in
-# lib.sh). Its accepted residual, a heredoc line that begins with the phrase,
-# costs little here: a false negative means a skill went unloaded, which
-# `issue-workflow`'s own claim check largely covers. The resolver is invoked by
-# a path that is usually quoted, so `as-role.sh` is the word kept from masking.
+# lib.sh). Precision over recall: a false positive blocks real work, while a
+# false negative means a skill went unloaded, which `issue-workflow`'s own claim
+# check largely covers. The resolver is invoked by a path that is usually
+# quoted, so `as-role.sh` is the word kept from masking.
 invokes_command "$CMD" as-role.sh 'gh +issue +create\b' || exit 0
 
 # Target comes from --repo/-R if present, else the calling directory's origin.

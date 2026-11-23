@@ -55,7 +55,7 @@ types, including in repos this project has nothing to do with.
 forwards what it sees.
 
 **`check-issue-create.sh` also reads your session transcript**, which is the
-most sensitive thing either hook touches and so the one most worth stating
+most sensitive thing any of these hooks touches and so the one most worth stating
 outright. It happens only *after* a command has already matched `gh issue
 create` against a covered repo: the hook takes `transcript_path` from the
 payload and greps that file for a single pattern, to find out whether the

@@ -328,9 +328,9 @@ retrospectives_enabled() {
 #   written, so masking alone leaves the common case matching. Prose names a
 #   command mid-sentence; an invocation starts one.
 #
-# Residual, accepted: a heredoc line that *begins* with the command still
-# matches. A false positive blocks real work, so precision beats recall here,
-# and that line is the one case the two narrowings cannot separate.
+# Residual, accepted: a heredoc body is unquoted text, so a line there that
+# begins with the command, or names it bare right after a `;`, `&`, `|` or `(`
+# mid-sentence, still matches and blocks. A name in backticks does not.
 
 # <command> with every backslash-newline joined to a space. Each match is
 # line-based, so an unjoined continuation splits an invocation in two and both
