@@ -31,9 +31,11 @@ hook_env_setup() {
 Always do the thing.'
   printf '%s\n' "$RULES_TEXT" > "$ROOT/always-on-rules.md"
   # Every run that does not turn retrospectives on gets this after the rules.
+  # shellcheck disable=SC2016  # the backticks are markdown, not expansions
   RETROSPECTIVES_OFF_TEXT='**Retrospectives are off.** Run no `write-retrospective.sh`; at a close-out,
 surface friction as `Friction:` lines per the Off branch of `process-review`'\''s
 `references/retrospective.md`, "When a retrospective is written".'
+  # shellcheck disable=SC2034  # read by the suites that load this file
   DEFAULT_PAYLOAD="$RULES_TEXT"$'\n\n'"$RETROSPECTIVES_OFF_TEXT"
 }
 
