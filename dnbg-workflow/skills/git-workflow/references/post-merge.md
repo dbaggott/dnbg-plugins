@@ -17,10 +17,6 @@ script reads the state itself, so run it from any checkout of the repo:
 "<skill-dir>/../../scripts/post-merge.sh" <owner>/<repo> <num>
 ```
 
-With retrospectives on, add `"<skill-dir>/../../scripts/write-retrospective.sh"
---begin` to the same Bash call: a merge or a close without one is your
-close-out, below, and on an open PR its nonce goes unused.
-
 - **`result=NOT-MERGED state=CLOSED`** — nothing was removed, which leaves the
   worktree in case they reopen; close out as "Then close out" below says.
 - **`result=NOT-MERGED state=OPEN auto_merge=scheduled`** — auto-merge is
@@ -49,4 +45,5 @@ handoff report `references/merge.md` gave, with Summary opening with the PR's
 full URL and the cleanup, or the close. Close out per
 `<skill-dir>/../process-review/references/retrospective.md`, "When a
 retrospective is written", with `role: author`. With retrospectives on, that is
-what `write-retrospective.sh --begin` printed above, followed as it says.
+`"<skill-dir>/../../scripts/write-retrospective.sh" --begin`, followed as it
+prints.

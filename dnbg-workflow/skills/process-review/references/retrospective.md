@@ -20,8 +20,8 @@ agent sent here by path, the directory holding this file's `references/`.
 ## When a retrospective is written
 
 Retrospectives are **off**, unless a `dnbg-workflow` note at session start says
-they are on. Either way, answer the prompt below for your run; the state decides
-where the answers go.
+they are on. On answers the prompt `--begin` prints; off answers only the two
+questions its branch names.
 
 - **On**: write the file with `write-retrospective.sh`, at
   `<skill-dir>/../../scripts/write-retrospective.sh`. Its `--begin` prints a
@@ -33,21 +33,27 @@ where the answers go.
   always-on rule's offer to file upstream ("When shipped tooling
   doesn't fit, tell the user") is for friction that stopped the task from
   finishing; the rest waits in the file for `process-review`.
-- **Off**: write no file, and give the report no **Retrospective** section.
-  Under its **Observations**, put each item that would have gone under
-  **Skill wrong or missing** or **Worked around**, both headings whole, as one
-  line opening `Friction:`. Nothing from **Slowed or blocked**, **Wished to
-  ask** or **Read but not used** is surfaced. After those lines comes the
+- **Off**: run no `write-retrospective.sh`, write no file, and give the report
+  no **Retrospective** section. Answer these two questions from this run only:
+
+  - **Skill wrong or missing**: what did a skill tell you that was wrong,
+    missing, or contradicted by the tree? Name the skill and step, and quote the
+    line.
+  - **Worked around**: what did you work around?
+
+  Under the report's **Observations**, put each answer as one line opening
+  `Friction:`, naming what it is about. After those lines comes the
   always-on rule's offer to file upstream, with the operator approving the
-  exact text first. With nothing
-  under either heading, there are no lines and no offer.
+  exact text first. With no answer to either question,
+  there are no lines and no offer.
 
   A dispatched agent has no one to offer to: it puts the lines in its report
   and leaves the offer out. Its dispatcher relays them under its own
   Observations, and the offer is the main session's.
 
   "Asking the agents for one" below does not apply, and a dispatcher's report
-  names no role as having left none: there is no file to ask for.
+  names no role as having left none: there is no file to ask for. Nothing from
+  "The prompt" onward applies either, so stop reading here.
 
 ## The prompt
 

@@ -126,6 +126,7 @@ Hooks, all in `dnbg-workflow`:
 | `setup-nudge.sh` | tells you to update Claude Code when it is older than the plugins support, and otherwise that setup is not finished, until it is or you turn the notice off |
 | `check-worktree.sh` | blocks edits to tracked files in a configured repo’s main checkout |
 | `check-issue-create.sh` | blocks `gh issue create` in a configured repo until `issue-workflow` is loaded |
+| `check-retrospectives.sh` | blocks `write-retrospective.sh` while the `retrospectives` option is off |
 
 These hooks make no network calls, write no files and hold no credentials. They fail open: if a tool they need is missing, they stop protecting rather than stop you.
 

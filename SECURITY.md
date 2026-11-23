@@ -46,11 +46,13 @@ once the marketplace is trusted:
 | `inject-rules-subagent.sh` | subagent start | The same text, into each subagent's context. |
 | `check-worktree.sh` | before every `Edit`/`Write`/`NotebookEdit` | Reads the target path and the repo's `origin`; **blocks** edits to tracked files in the main checkout of a covered repo. |
 | `check-issue-create.sh` | before every `Bash` | Reads the command string; **blocks** `gh issue create` against a covered repo unless the `issue-workflow` skill is loaded. |
+| `check-retrospectives.sh` | before every `Bash` | Reads the command string; **blocks** `write-retrospective.sh` while the `retrospectives` option is off. |
 
-The two `PreToolUse` hooks see the tool payload for **every** call of those
+The `PreToolUse` hooks see the tool payload for **every** call of those
 types, including in repos this project has nothing to do with.
-`check-worktree.sh` takes a file path out of it; `check-issue-create.sh` takes
-the command string. Neither logs, stores, or forwards what it sees.
+`check-worktree.sh` takes a file path out of it; `check-issue-create.sh` and
+`check-retrospectives.sh` take the command string. None logs, stores, or
+forwards what it sees.
 
 **`check-issue-create.sh` also reads your session transcript**, which is the
 most sensitive thing either hook touches and so the one most worth stating
@@ -111,11 +113,11 @@ and environment only, never the working directory.
 
 ### The enforcement hooks are not a security boundary
 
-`check-worktree.sh` and `check-issue-create.sh` block things, so it is easy to
-read them as a control. They are not, and treating them as one is the mistake
+`check-worktree.sh`, `check-issue-create.sh` and `check-retrospectives.sh`
+block things, so it is easy to read them as a control. They are not, and treating them as one is the mistake
 this section exists to prevent:
 
-- **They fail open.** Without `jq` (both) or `git` (`check-worktree.sh`) they
+- **They fail open.** Without `jq` (all three) or `git` (`check-worktree.sh`) they
   cannot parse or resolve, and the action proceeds either way — by two different
   routes. A missing `jq` kills the hook under `set -e`, and Claude Code classes a
   hook exiting non-zero and non-2 as a non-blocking error. A missing `git` is an
