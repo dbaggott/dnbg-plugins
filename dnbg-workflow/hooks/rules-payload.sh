@@ -157,10 +157,19 @@ EOF
 # is nothing to override in that case, and a note claiming otherwise would be
 # noise the reader has to work out is a no-op.
 # `retrospectives` joins as a gate: its default is off, so only on is an
-# override, and a value the gate cannot read is off and says nothing, as an unread
-# `version_stamp` does.
+# override. Off is still stated, outside the overrides, so an agent reads the
+# state rather than inferring it from a missing line; a value the gate cannot
+# read is off, as `check-retrospectives.sh` treats it. It rides with the rules
+# file, so a broken install stays silent.
 RETROSPECTIVES_ON=""
 retrospectives_enabled && RETROSPECTIVES_ON=1
+
+[ -z "$RETROSPECTIVES_ON" ] && [ -f "$RULES" ] && cat <<'EOF'
+
+**Retrospectives are off.** Run no `write-retrospective.sh`; at a close-out,
+surface friction as `Friction:` lines per the Off branch of `process-review`'s
+`references/retrospective.md`, "When a retrospective is written".
+EOF
 
 if [ "$WORKTREE_PATH" != "$DEFAULT_WORKTREE_PATH" ] || [ "$CLAIM_LABEL" != "$DEFAULT_CLAIM_LABEL" ] ||
    [ "$RETROSPECTIVE_DIR" != "$DEFAULT_RETROSPECTIVE_DIR" ] || [ "$FINDINGS_DIR" != "$DEFAULT_FINDINGS_DIR" ] ||

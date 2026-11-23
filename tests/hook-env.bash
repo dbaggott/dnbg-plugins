@@ -30,6 +30,11 @@ hook_env_setup() {
   RULES_TEXT='## Test rule
 Always do the thing.'
   printf '%s\n' "$RULES_TEXT" > "$ROOT/always-on-rules.md"
+  # Every run that does not turn retrospectives on gets this after the rules.
+  RETROSPECTIVES_OFF_TEXT='**Retrospectives are off.** Run no `write-retrospective.sh`; at a close-out,
+surface friction as `Friction:` lines per the Off branch of `process-review`'\''s
+`references/retrospective.md`, "When a retrospective is written".'
+  DEFAULT_PAYLOAD="$RULES_TEXT"$'\n\n'"$RETROSPECTIVES_OFF_TEXT"
 }
 
 teardown() { rm -rf "$TMP"; }
