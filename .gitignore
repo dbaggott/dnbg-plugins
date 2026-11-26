@@ -1,3 +1,6 @@
 .worktrees/
 __pycache__/
 **/evals/results/
+
+# JetBrains IDEs
+.idea/
